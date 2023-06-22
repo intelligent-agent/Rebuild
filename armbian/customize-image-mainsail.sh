@@ -25,7 +25,7 @@ install_ansible(){
 
 run_ansible_playbook(){
     cd /usr/src/Refactor
-    ansible-playbook SYSTEM_klipper_mainsail-DEFAULT.yml
+    ansible-playbook SYSTEM_klipper_mainsail-DEFAULT.yml --extra-vars='{"platform":"recore"}'
 }
 
 prepare_build() {
