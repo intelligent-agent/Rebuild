@@ -25,6 +25,15 @@ if test -e ${devtype} ${devnum} ${prefix}armbianEnv.txt; then
 	env import -t ${load_addr} ${filesize}
 fi
 
+# Configure PB3 as pull-down
+mw 0x01c20840 0x00000080
+gpio input PB3
+setenv usb_button $?
+if test ${usb_button} = 1; then
+	echo "USB button pressed during boot"
+	setenv rootdev "/dev/sda2"
+fi
+
 if test "${rootdev}" = "/dev/sda2"; then
 	echo "Booting from USB"
 	regulator status
