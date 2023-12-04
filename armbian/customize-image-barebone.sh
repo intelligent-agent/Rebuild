@@ -35,8 +35,14 @@ fix_netplan(){
 	EOF
 }
 
+prepare_build() {
+    echo "ttyGS0" >> /etc/securetty
+    systemctl enable serial-getty@ttyGS0.service
+}
+
 echo "🍰 Rebuild starting..."
 
+prepare_build
 install_bins
 add_overlays
 fix_netplan

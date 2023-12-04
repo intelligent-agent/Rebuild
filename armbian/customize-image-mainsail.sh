@@ -156,6 +156,7 @@ prepare_build() {
     systemctl disable ssh
 
     echo "ttyGS0" >> /etc/securetty
+    systemctl enable serial-getty@ttyGS0.service
 
     cp /tmp/overlay/rebuild/rebuild-version /etc/
 }

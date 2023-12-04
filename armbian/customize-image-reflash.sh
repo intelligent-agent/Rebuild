@@ -28,6 +28,10 @@ prepare_install(){
     cd /boot
     mklost+found
     chmod +r /boot/lost+found
+
+    echo "ttyGS0" >> /etc/securetty
+    systemctl enable serial-getty@ttyGS0.service
+
 }
 
 install_reflash() {
