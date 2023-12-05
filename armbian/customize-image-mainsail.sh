@@ -22,17 +22,17 @@ PREP_PACKAGE_LIST="avahi-daemon nginx git unzip iptables dnsmasq-base \
                     libusb-dev stm32flash libnewlib-arm-none-eabi gcc-arm-none-eabi\
                     binutils-arm-none-eabi"
 
-source install_components/prep_install.sh
-source install_components/klipper.sh
-source install_components/moonraker.sh
-source install_components/mainsail.sh
-source install_components/klipperscreen.sh
-source install_components/recore_binaries.sh
-source install_components/ustreamer.sh
-source install_components/autohotspot.sh
-source install_components/post_build.sh
-source install_components/add_overlays.sh
-source install_components/fix_netplan.sh
+source /tmp/install_components/prep_install.sh
+source /tmp/install_components/klipper.sh
+source /tmp/install_components/moonraker.sh
+source /tmp/install_components/mainsail.sh
+source /tmp/install_components/klipperscreen.sh
+source /tmp/install_components/recore_binaries.sh
+source /tmp/install_components/ustreamer.sh
+source /tmp/install_components/autohotspot.sh
+source /tmp/install_components/post_build.sh
+source /tmp/install_components/add_overlays.sh
+source /tmp/install_components/fix_netplan.sh
 
 set -e
 echo "🍰 Rebuild starting..."
