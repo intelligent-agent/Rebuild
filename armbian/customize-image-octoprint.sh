@@ -18,15 +18,15 @@ BOARD=$3
 BUILD_DESKTOP=$4
 PREP_PACKAGE_LIST="avahi-daemon git iptables dnsmasq-base"
 
-source /tmp/install_components/klipper.sh
-source /tmp/install_components/octoprint.sh
-source /tmp/install_components/recore_binaries.sh
-source /tmp/install_components/autohotspot.sh
-source /tmp/install_components/ustreamer.sh
-source /tmp/install_components/prep_install.sh
-source /tmp/install_components/add_overlays.sh
-source /tmp/install_components/fix_netplan.sh
-source /tmp/install_components/post_build.sh
+source /tmp/overlay/install_components/klipper.sh
+source /tmp/overlay/install_components/octoprint.sh
+source /tmp/overlay/install_components/recore_binaries.sh
+source /tmp/overlay/install_components/autohotspot.sh
+source /tmp/overlay/install_components/ustreamer.sh
+source /tmp/overlay/install_components/prep_install.sh
+source /tmp/overlay/install_components/add_overlays.sh
+source /tmp/overlay/install_components/fix_netplan.sh
+source /tmp/overlay/install_components/post_build.sh
 
 set -e
 
