@@ -21,17 +21,17 @@ PREP_PACKAGE_LIST="avahi-daemon nginx git unzip iptables dnsmasq-base \
                    python3-cffi python3-libxml2 libncurses-dev libusb-dev stm32flash \
                    libnewlib-arm-none-eabi gcc-arm-none-eabi binutils-arm-none-eabi"
 
-source "install_components/klipper.sh"
-source "install_components/moonraker.sh"
-source "install_components/fluidd.sh"
-source "install_components/klipperscreen.sh"
-source "install_components/recore_binaries.sh"
-source "install_components/ustreamer.sh"
-source "install_components/autohotspot.sh"
-source "install_components/prep_install.sh"
-source "install_components/add_overlays.sh"
-source "install_components/fix_netplan.sh"
-source "install_components/post_build.sh"
+source install_components/klipper.sh
+source install_components/moonraker.sh
+source install_components/fluidd.sh
+source install_components/klipperscreen.sh
+source install_components/recore_binaries.sh
+source install_components/ustreamer.sh
+source install_components/autohotspot.sh
+source install_components/prep_install.sh
+source install_components/add_overlays.sh
+source install_components/fix_netplan.sh
+source install_components/post_build.sh
 
 echo "🍰 Rebuild starting..."
 
