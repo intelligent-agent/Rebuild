@@ -29,45 +29,43 @@ jobs:
         token: ${{ secrets.GITHUB_TOKEN }}
         prerelease: true
 
-  # build-mainsail:
-  #   runs-on: self-hosted
-  #   steps:
-  #   - uses: actions/checkout@v3
+  build-mainsail:
+    runs-on: self-hosted
+    steps:
+    - uses: actions/checkout@v3
 
-  #   - name: Remove old images
-  #     run: rm -f ../images/rebuild-mainsail-*.img.xz
+    - name: Remove old images
+      run: rm -f ../images/rebuild-mainsail-*.img.xz
 
-  #   - name: Run build
-  #     run: ./rebuild.sh mainsail
+    - name: Run build
+      run: ./rebuild.sh mainsail
 
-  #   - name: Release if tagged
-  #     uses: ncipollo/release-action@v1
-  #     if: startsWith(github.ref, 'refs/tags/')
-  #     with:
-  #       allowUpdates: true
-  #       artifacts: ../images/rebuild-mainsail-v*.img.xz
-  #       token: ${{ secrets.GITHUB_TOKEN }}
-  #       prerelease: true
+    - name: Release if tagged
+      uses: ncipollo/release-action@v1
+      if: startsWith(github.ref, 'refs/tags/')
+      with:
+        allowUpdates: true
+        artifacts: ../images/rebuild-mainsail-v*.img.xz
+        token: ${{ secrets.GITHUB_TOKEN }}
+        prerelease: true
 
-  # build-octoprint:
-  #   runs-on: self-hosted
-  #   steps:
-  #   - uses: actions/checkout@v3
+  build-octoprint:
+    runs-on: self-hosted
+    steps:
+    - uses: actions/checkout@v3
+    - name: Remove old images
+      run: rm -f ../images/rebuild-octoprint-*.img.xz
 
-  #   - name: Remove old images
-  #     run: rm -f ../images/rebuild-octoprint-*.img.xz
-
-  #   - name: Run build
-  #     run: ./rebuild.sh octoprint
-
-  #   - name: Release if tagged
-  #     uses: ncipollo/release-action@v1
-  #     if: startsWith(github.ref, 'refs/tags/')
-  #     with:
-  #       allowUpdates: true
-  #       artifacts: ../images/rebuild-octoprint-v*.img.xz
-  #       token: ${{ secrets.GITHUB_TOKEN }}
-  #       prerelease: true
+    - name: Run build
+      run: ./rebuild.sh octoprint
+    - name: Release if tagged
+      uses: ncipollo/release-action@v1
+      if: startsWith(github.ref, 'refs/tags/')
+      with:
+        allowUpdates: true
+        artifacts: ../images/rebuild-octoprint-v*.img.xz
+        token: ${{ secrets.GITHUB_TOKEN }}
+        prerelease: true
 
   build-fluidd:
     runs-on: self-hosted
@@ -89,22 +87,21 @@ jobs:
         token: ${{ secrets.GITHUB_TOKEN }}
         prerelease: true
 
-  # build-reflash:
-  #   runs-on: self-hosted
-  #   steps:
-  #   - uses: actions/checkout@v3
+  build-reflash:
+    runs-on: self-hosted
+    steps:
+    - uses: actions/checkout@v3
 
-  #   - name: Remove old images
-  #     run: rm -f ../images/rebuild-reflash-*.img.xz
+    - name: Remove old images
+      run: rm -f ../images/rebuild-reflash-*.img.xz
+    - name: Run build
+      run: ./rebuild.sh reflash
 
-  #   - name: Run build
-  #     run: ./rebuild.sh reflash
-
-  #   - name: Release if tagged
-  #     uses: ncipollo/release-action@v1
-  #     if: startsWith(github.ref, 'refs/tags/')
-  #     with:
-  #       allowUpdates: true
-  #       artifacts: ../images/rebuild-reflash-v*.img.xz
-  #       token: ${{ secrets.GITHUB_TOKEN }}
-  #       prerelease: true
+    - name: Release if tagged
+      uses: ncipollo/release-action@v1
+      if: startsWith(github.ref, 'refs/tags/')
+      with:
+        allowUpdates: true
+        artifacts: ../images/rebuild-reflash-v*.img.xz
+        token: ${{ secrets.GITHUB_TOKEN }}
+        prerelease: true
