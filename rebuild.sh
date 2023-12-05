@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -e
+set -e -x
 
 VERSION=$1
 cores=$2 # Allow define No cores
@@ -60,7 +60,7 @@ rm -rf "userpatches"
 cd "$ROOT_DIR"
 cp -r "userpatches" "${BUILD_DIR}"
 cp armbian/customize-image-"${VERSION}".sh "${BUILD_DIR}"/userpatches/customize-image.sh
-cp -r armbian/install_components "${BUILD_DIR}"/userpatches/
+cp -r armbian/install_components/ "${BUILD_DIR}"/userpatches/install_components/
 cp armbian/recore.csc "${BUILD_DIR}"/config/boards
 rm -f "${BUILD_DIR}/patch/u-boot/u-boot-sunxi/allwinner-boot-splash.patch"
 
