@@ -16,7 +16,8 @@ RELEASE=$1
 LINUXFAMILY=$2
 BOARD=$3
 BUILD_DESKTOP=$4
-PREP_PACKAGE_LIST="avahi-daemon git iptables dnsmasq-base"
+PREP_PACKAGE_LIST="git unzip"
+ADD_PACKAGE_LIST="avahi-daemon"
 
 source /tmp/overlay/install_components/klipper.sh
 source /tmp/overlay/install_components/octoprint.sh
@@ -26,7 +27,6 @@ source /tmp/overlay/install_components/autohotspot.sh
 source /tmp/overlay/install_components/ustreamer.sh
 source /tmp/overlay/install_components/prep_install.sh
 source /tmp/overlay/install_components/add_overlays.sh
-source /tmp/overlay/install_components/fix_netplan.sh
 source /tmp/overlay/install_components/post_build.sh
 
 set -e
@@ -42,7 +42,6 @@ install_ustreamer
 install_bins
 install_autohotspot
 add_overlays
-fix_netplan
 post_build
 
 echo "🍰 Rebuild finished"

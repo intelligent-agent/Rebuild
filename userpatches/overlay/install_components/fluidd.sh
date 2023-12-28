@@ -8,11 +8,3 @@ install_fluidd(){
     chown -R debian:debian fluidd
     cp /tmp/overlay/fluidd/fluidd.cfg /home/debian/printer_data/config
 }
-
-install_fluidd_nginx(){
-    cp /tmp/overlay/nginx/upstreams.conf /etc/nginx/conf.d/
-    cp /tmp/overlay/nginx/common_vars.conf /etc/nginx/conf.d/
-    cp /tmp/overlay/nginx/fluidd /etc/nginx/sites-available
-    rm /etc/nginx/sites-enabled/default
-    ln -s /etc/nginx/sites-available/fluidd /etc/nginx/sites-enabled/fluidd
-}

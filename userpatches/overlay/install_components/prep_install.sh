@@ -17,19 +17,6 @@ prepare_build() {
     # Remove "dubious ownership" message when running git commands
     git config --global --add safe.directory '*'
 
-    # Disable SSH root access
-    sed -i 's/^PermitRootLogin.*$/#PermitRootLogin/g' /etc/ssh/sshd_config
-
-    # Disable SSH. Can be enabled in Reflash
-    systemctl disable ssh
-
-    echo "ttyGS0" >> /etc/securetty
-    systemctl enable serial-getty@ttyGS0.service
-
-    cp /tmp/overlay/rebuild/rebuild-version /etc/
-    # Backwards compatibility with refactor
-    cp /tmp/overlay/rebuild/rebuild-version /etc/refactor.version
-
     # Make folder for configs
     mkdir -p /home/debian/printer_data/config
     chown -R debian:debian /home/debian/printer_data

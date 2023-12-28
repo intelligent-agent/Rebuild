@@ -16,11 +16,10 @@ RELEASE=$1
 LINUXFAMILY=$2
 BOARD=$3
 BUILD_DESKTOP=$4
-
+PREP_PACKAGE_LIST=""
 ADD_PACKAGE_LIST="avahi-daemon"
 
 source /tmp/overlay/install_components/add_overlays.sh
-source /tmp/overlay/install_components/fix_netplan.sh
 
 post_build() {
     echo "ttyGS0" >> /etc/securetty
@@ -34,7 +33,6 @@ post_build() {
 echo "🍰 Rebuild starting..."
 
 add_overlays
-fix_netplan
 post_build
 
 echo "🍰 Rebuild finished"
