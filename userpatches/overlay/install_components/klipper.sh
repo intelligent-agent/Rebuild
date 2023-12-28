@@ -26,10 +26,14 @@ install_klipper(){
     chown -R debian:debian klipper
     chmod +x /home/debian/klipper/scripts/install-recore.sh
     su -c "/home/debian/klipper/scripts/install-recore.sh" debian
+
+    # Install AR100 toolchain
     wget http://feeds.iagent.no/toolchains/or1k-linux-musl-11.2.0.tar.xz -P /opt
     cd /opt
     tar -xf /opt/or1k-linux-musl-11.2.0.tar.xz
     rm /opt/or1k-linux-musl-11.2.0.tar.xz
+
+    # Compile AR100
     cp /tmp/overlay/klipper/ar100.config /home/debian/klipper/.config
     cd /home/debian/klipper/
     export PATH=$PATH:/opt/output/bin
@@ -37,10 +41,26 @@ install_klipper(){
     make olddefconfig
     make -j
     cp /home/debian/klipper/out/ar100.bin /opt/firmware
-    cp /tmp/overlay/klipper/stm32f0.config /home/debian/klipper/.config
+
+    # Compile STM32
+    cp /tmp/overlay/klipper/stm32f031-serial.config /home/debian/klipper/.config
+    make clean
     make olddefconfig
     make -j
     cp /home/debian/klipper/out/klipper.bin /opt/firmware/stm32.bin
+
+    # Compile STM32-32KB
+    cp /tmp/overlay/klipper/enable-i2c.patch /home/debian/klipper/
+    patch -p1 < enable-i2c.patch
+    cp /tmp/overlay/klipper/stm32f031-32KB-serial.config /home/debian/klipper/.config
+    make clean
+    make olddefconfig
+    make -j
+    cp /home/debian/klipper/out/klipper.bin /opt/firmware/stm32-32KB.bin
+    
+    # Revert the patch to get rid of the warning
+    git reset --hard
+
     chown -R debian:debian /home/debian/klipper
 	systemctl enable flash-stm32.service
 }

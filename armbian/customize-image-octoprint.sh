@@ -20,6 +20,7 @@ PREP_PACKAGE_LIST="avahi-daemon git iptables dnsmasq-base"
 
 source /tmp/overlay/install_components/klipper.sh
 source /tmp/overlay/install_components/octoprint.sh
+source /tmp/overlay/install_components/toggle.sh
 source /tmp/overlay/install_components/recore_binaries.sh
 source /tmp/overlay/install_components/autohotspot.sh
 source /tmp/overlay/install_components/ustreamer.sh
@@ -27,7 +28,6 @@ source /tmp/overlay/install_components/prep_install.sh
 source /tmp/overlay/install_components/add_overlays.sh
 source /tmp/overlay/install_components/fix_netplan.sh
 source /tmp/overlay/install_components/post_build.sh
-source /tmp/overlay/install_components/reflash.sh
 
 set -e
 
@@ -36,10 +36,11 @@ echo "🍰 Rebuild starting..."
 prepare_build
 install_klipper
 install_octoprint
+install_weston
+install_toggle
 install_ustreamer
 install_bins
 install_autohotspot
-install_reflash_board
 add_overlays
 fix_netplan
 post_build

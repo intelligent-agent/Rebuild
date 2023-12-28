@@ -1,0 +1,25 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Elias Bakken <elias@iagent.no>
+Date: Mon, 25 Dec 2023 01:56:11 +0000
+Subject: Patching u-boot sunxi64 files configs/recore_defconfig
+
+Signed-off-by: Elias Bakken <elias@iagent.no>
+---
+ configs/recore_defconfig | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/configs/recore_defconfig b/configs/recore_defconfig
+index 0162a4ae39..97e6957e4b 100644
+--- a/configs/recore_defconfig
++++ b/configs/recore_defconfig
+@@ -28,5 +28,7 @@ CONFIG_BMP_24BPP=y
+ CONFIG_BMP_32BPP=y
+ CONFIG_VIDEO_BMP_RLE8=y
+ CONFIG_DM_REGULATOR=y
+ CONFIG_DM_REGULATOR_FIXED=y
+ CONFIG_CMD_REGULATOR=y
++CONFIG_USE_PREBOOT=y
++CONFIG_PREBOOT="regulator status; usb reset; run bootcmd_usb0"
+-- 
+Created with Armbian build tools https://github.com/armbian/build
+

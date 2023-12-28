@@ -1,0 +1,16 @@
+#!/bin/bash
+
+set -e
+
+mkdir -p /mnt/config
+umount -q /mnt/config || true
+LODEV=$(losetup -f)
+losetup -P "$LODEV" /dev/mmcblk2boot0
+mount -r "$LODEV"p1 /mnt/config/
+
+CONFIG=$(ls /mnt/config/*.json)
+REVISION=$(grep Revision "$CONFIG" | cut -d '"' -f 4 | tr '[:upper:]' '[:lower:]')
+
+umount /mnt/config
+losetup -d "$LODEV"
+echo "$REVISION"

@@ -6,12 +6,12 @@ VERSION=$1
 cores=$2 # Allow define No cores
 
 case $VERSION in
-    barebone|mainsail|fluidd|octoprint|reflash)
+    barebone|mainsail|fluidd|octoprint)
         echo "🍰 Building $VERSION"
         ;;
     *)
         echo "Wrong argument '$1'"
-        echo "Usage: $0 <barebone|mainsail|fluidd|octoprint|reflash>"
+        echo "Usage: $0 <barebone|mainsail|fluidd|octoprint>"
         exit 1
     ;;
 esac
@@ -54,7 +54,7 @@ NAME="rebuild-${VERSION}-${TAG}"
 cd $BUILD_DIR
 git reset --hard
 git pull
-git checkout v23.08
+git checkout main
 rm -rf "userpatches"
 
 cd "$ROOT_DIR"

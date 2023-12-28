@@ -7,8 +7,6 @@ Armbian images for Recore.
 * Rebuild-Mainsail - Comes with Klipper, Moonraker and Mainsail
 * Rebuild-Fluidd - Comes with Klipper, Moonraker and Fluidd
 * Rebuild-OctoPrint - Comes with Klipper and OctoPrint
-    - No embeded screen program
-* Reflash - A flasher application for choosing one of the above.
 
 To build a barebone version:
 `./rebuild barebone`

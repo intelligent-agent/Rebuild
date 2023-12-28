@@ -10,6 +10,8 @@ plugins:
         checkout_folder: /home/debian/OctoPrint
         prerelease: false
   klipper:
+    _config_version: 4
+    connection: {}
     configuration:
       config_path: ~/printer_data/config
       logpath: /var/log/klipper_logs/klippy.log
@@ -106,6 +108,10 @@ plugins:
     - cu2
     - cu3
     - cu4
+  classicwebcam:
+    _config_version: 1
+    snapshot: http://recore.local:8080/?action=snapshot
+    stream: http://recore.local:8080/?action=stream
 server:
   firstRun: true
   commands:
@@ -113,8 +119,6 @@ server:
     systemRestartCommand: sudo reboot
     systemShutdownCommand: sudo shutdown -h now
 webcam:
-  stream: http://recore.local:8080/?action=stream
-  snapshot: http://recore.local:8080/?action=snapshot
   ffmpeg: /usr/bin/avconv
 serial:
     additionalPorts:

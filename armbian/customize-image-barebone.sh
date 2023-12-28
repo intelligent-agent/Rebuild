@@ -17,9 +17,8 @@ LINUXFAMILY=$2
 BOARD=$3
 BUILD_DESKTOP=$4
 
-PREP_PACKAGE_LIST="avahi-daemon iptables dnsmasq-base"
+ADD_PACKAGE_LIST="avahi-daemon"
 
-source /tmp/overlay/install_components/reflash.sh
 source /tmp/overlay/install_components/add_overlays.sh
 source /tmp/overlay/install_components/fix_netplan.sh
 
@@ -28,13 +27,14 @@ post_build() {
     systemctl enable serial-getty@ttyGS0.service
 
     cp /tmp/overlay/rebuild/rebuild-version /etc/
+    apt update
+    apt install -y "$ADD_PACKAGE_LIST"
 }
 
 echo "🍰 Rebuild starting..."
 
 add_overlays
 fix_netplan
-install_reflash_board
 post_build
 
 echo "🍰 Rebuild finished"

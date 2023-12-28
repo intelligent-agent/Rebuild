@@ -1,0 +1,4 @@
+#!/bin/bash
+
+REVISION=`get-recore-revision`
+set-recore-revision $REVISION
