@@ -41,8 +41,7 @@ class recore:
                                 pins[self.revision]['enable_pin'])
         mcu_power_enable = ppins.setup_pin('digital_out', enable_pin)
         mcu_power_enable.setup_start_value(start_value=0.,
-                                           shutdown_value=1.,
-                                           is_static=False)
+                                           shutdown_value=1.)
         mcu_power_enable.setup_max_duration(0.)
 
         # Reset over current alarm
@@ -66,8 +65,7 @@ class recore:
                 pin = ppins.setup_pin('digital_out', pin_name)
                 value = 1.0
                 pin.setup_start_value(start_value=value,
-                                      shutdown_value=value,
-                                      is_static=True)
+                                      shutdown_value=value)
 
             pullup = config.get('pullup_t' + str(idx), '1')
             if pullup not in ['0', '1']:
@@ -78,8 +76,7 @@ class recore:
             else:
                 pin = ppins.setup_pin('digital_out', pin_name)
                 pin.setup_start_value(start_value=1.,
-                                      shutdown_value=1.,
-                                      is_static=True)
+                                      shutdown_value=1.)
             offset = config.get('offset_t' + str(idx), '1')
             if offset not in ['0', '1']:
                 raise Exception("Offset not 0 or 1")
@@ -89,8 +86,7 @@ class recore:
             else:
                 pin = ppins.setup_pin('digital_out', pin_name)
                 pin.setup_start_value(start_value=1.,
-                                      shutdown_value=1.,
-                                      is_static=True)
+                                      shutdown_value=1.)
 
 
 def load_config(config):

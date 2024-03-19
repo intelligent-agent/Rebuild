@@ -1,9 +1,12 @@
 #!/bin/bash
 
-partprobe
 mkdir -p /mnt/config
-if ! grep -qs '/mnt/config ' /proc/mounts; then
-    EMMC=`lsblk -n -o NAME | grep 'mmcblk[0-2]$'`
-    mount -r /dev/${EMMC}boot0p1 /mnt/config/
-fi
+umount -q /mnt/config || true
+LODEV=$(losetup -f)
+losetup -P "$LODEV" /dev/mmcblk2boot0
+mount -r "$LODEV"p1 /mnt/config/ 2>/dev/null
+
 cat /mnt/config/serial_number
+
+umount /mnt/config
+losetup -d "$LODEV"

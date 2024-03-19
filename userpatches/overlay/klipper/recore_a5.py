@@ -36,8 +36,7 @@ class recore_a5:
                                 pins[self.revision]['enable_pin'])
         mcu_power_enable = ppins.setup_pin('digital_out', enable_pin)
         mcu_power_enable.setup_start_value(start_value=0.,
-                                           shutdown_value=1.,
-                                           is_static=False)
+                                           shutdown_value=1.)
         mcu_power_enable.setup_max_duration(0.)
 
         # Reset over current alarm
@@ -61,8 +60,7 @@ class recore_a5:
                 pin = ppins.setup_pin('digital_out', pin_name)
                 value = 0.0
                 pin.setup_start_value(start_value=value,
-                                      shutdown_value=value,
-                                      is_static=True)
+                                      shutdown_value=value)
 
             pullup = config.get('pullup_t' + str(idx), '1')
             if pullup not in ['0', '1']:
@@ -73,8 +71,7 @@ class recore_a5:
             else:
                 pin = ppins.setup_pin('digital_out', pin_name)
                 pin.setup_start_value(start_value=1.,
-                                      shutdown_value=1.,
-                                      is_static=True)
+                                      shutdown_value=1.)
 
 def load_config(config):
     return recore_a5(config)
