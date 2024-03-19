@@ -90,7 +90,7 @@ new file mode 100644
 index 000000000000..6ecfe538e9b5
 --- /dev/null
 +++ b/arch/arm64/boot/dts/allwinner/sun50i-a64-recore-a6.dts
-@@ -0,0 +1,28 @@
+@@ -0,0 +1,26 @@
 +// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
 +
 +/dts-v1/;
@@ -113,10 +113,8 @@ index 000000000000..6ecfe538e9b5
 +	pinctrl-0 = <&uart4_pins>;
 +	status = "okay";
 +};
-+&gpu_opp_table {
-+	status="disabled";
-+};
 +&mali {
++	/delete-property/ operating-points-v2;
 +	assigned-clock-rates = <120000000>;
 +};
 diff --git a/arch/arm64/boot/dts/allwinner/sun50i-a64-recore-a7.dts b/arch/arm64/boot/dts/allwinner/sun50i-a64-recore-a7.dts
