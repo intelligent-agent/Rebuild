@@ -74,7 +74,12 @@ EOF
     sudo systemctl enable klipper.service
 }
 
-# Step 4: Start host software
+# Step 4: Install numpy after creating virtualenv
+install_numpy(){
+    /home/debian/klippy-env/bin/pip install -v numpy
+}
+
+# Step 5: Start host software
 start_software()
 {
     report_status "Launching Klipper host software..."
@@ -106,4 +111,5 @@ verify_ready
 install_packages
 create_virtualenv
 install_script
+install_numpy
 start_software

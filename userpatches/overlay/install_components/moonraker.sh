@@ -9,4 +9,5 @@ install_moonraker(){
     su -c "/home/debian/moonraker/scripts/install-moonraker.sh" debian
     su -c "/home/debian/moonraker/scripts/set-policykit-rules.sh" debian
     cp /tmp/overlay/moonraker/moonraker-"${UI}".conf /home/debian/printer_data/config/moonraker.conf
+    echo "ssh" >> /home/debian/printer_data/moonraker.asvc
 }
