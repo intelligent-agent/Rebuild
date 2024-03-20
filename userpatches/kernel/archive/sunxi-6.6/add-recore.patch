@@ -18,7 +18,7 @@ new file mode 100644
 index 000000000000..b99cc90ff099
 --- /dev/null
 +++ b/arch/arm64/boot/dts/allwinner/sun50i-a64-recore-a5.dts
-@@ -0,0 +1,65 @@
+@@ -0,0 +1,69 @@
 +// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
 +
 +/dts-v1/;
@@ -83,6 +83,10 @@ index 000000000000..b99cc90ff099
 +	pinctrl-names = "default";
 +	pinctrl-0 = <&uart4_pins>;
 +	status = "okay";
++};
++&mali {
++	/delete-property/ operating-points-v2;
++	assigned-clock-rates = <120000000>;
 +};
 \ No newline at end of file
 diff --git a/arch/arm64/boot/dts/allwinner/sun50i-a64-recore-a6.dts b/arch/arm64/boot/dts/allwinner/sun50i-a64-recore-a6.dts
@@ -181,7 +185,7 @@ new file mode 100644
 index 000000000000..23f3aa40f86e
 --- /dev/null
 +++ b/arch/arm64/boot/dts/allwinner/sun50i-a64-recore.dts
-@@ -0,0 +1,31 @@
+@@ -0,0 +1,35 @@
 +// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
 +
 +/dts-v1/;
@@ -213,12 +217,16 @@ index 000000000000..23f3aa40f86e
 +   	vin-supply = <&reg_5v>;
 +   };
 +};
++&mali {
++	/delete-property/ operating-points-v2;
++	assigned-clock-rates = <120000000>;
++};
 diff --git a/arch/arm64/boot/dts/allwinner/sun50i-a64-recore.dtsi b/arch/arm64/boot/dts/allwinner/sun50i-a64-recore.dtsi
 new file mode 100644
 index 000000000000..e91874c1db8f
 --- /dev/null
 +++ b/arch/arm64/boot/dts/allwinner/sun50i-a64-recore.dtsi
-@@ -0,0 +1,398 @@
+@@ -0,0 +1,394 @@
 +// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
 +
 +/dts-v1/;
@@ -612,8 +620,4 @@ index 000000000000..e91874c1db8f
 +
 +&mbus{
 +    status="disabled";
-+};
-+
-+&mali {
-+	assigned-clock-rates = <297000000>;
 +};
