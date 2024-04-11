@@ -18,7 +18,7 @@ new file mode 100644
 index 000000000000..b99cc90ff099
 --- /dev/null
 +++ b/arch/arm64/boot/dts/allwinner/sun50i-a64-recore-a5.dts
-@@ -0,0 +1,69 @@
+@@ -0,0 +1,73 @@
 +// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
 +
 +/dts-v1/;
@@ -78,6 +78,10 @@ index 000000000000..b99cc90ff099
 +	regulator-name = "vcc-vref-e3";
 +};
 +
++&reg_dcdc5 {
++	regulator-min-microvolt = <1500000>;
++	regulator-max-microvolt = <1500000>;
++};
 +/* STM32 */
 +&uart4 {
 +	pinctrl-names = "default";
@@ -94,7 +98,7 @@ new file mode 100644
 index 000000000000..6ecfe538e9b5
 --- /dev/null
 +++ b/arch/arm64/boot/dts/allwinner/sun50i-a64-recore-a6.dts
-@@ -0,0 +1,26 @@
+@@ -0,0 +1,30 @@
 +// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
 +
 +/dts-v1/;
@@ -111,6 +115,10 @@ index 000000000000..6ecfe538e9b5
 +	regulator-min-microvolt = <3300000>;
 +	regulator-max-microvolt = <3300000>;
 +	regulator-name = "vcc-ext";
++};
++&reg_dcdc5 {
++	regulator-min-microvolt = <1500000>;
++	regulator-max-microvolt = <1500000>;
 +};
 +&uart4 {
 +	pinctrl-names = "default";
