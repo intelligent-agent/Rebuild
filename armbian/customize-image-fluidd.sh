@@ -36,7 +36,7 @@ echo "🍰 Rebuild starting..."
 set -e
 
 prepare_build
-install_klipper
+install_klipper "fluidd"
 install_moonraker "fluidd"
 install_nginx "fluidd"
 install_fluidd

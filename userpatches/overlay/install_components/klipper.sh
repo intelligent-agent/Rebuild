@@ -1,20 +1,19 @@
 #!/bin/bash
 
 install_klipper(){
+    UI=$1
     echo "🍰 install Klipper"
     cd /home/debian
     git clone https://github.com/Klipper3d/klipper
     cp /tmp/overlay/klipper/install-recore.sh /home/debian/klipper/scripts/
-    cp /tmp/overlay/klipper/recore.py /home/debian/klipper/klippy/extras/
-    cp /tmp/overlay/klipper/thermocouple.py /home/debian/klipper/klippy/extras/
+    cp /tmp/overlay/klipper/ina381.py /home/debian/klipper/klippy/extras/
     cp /tmp/overlay/klipper/generic-recore-a6.cfg /home/debian/klipper/config/
     cp /tmp/overlay/klipper/generic-recore-a7.cfg /home/debian/klipper/config/
     cp /tmp/overlay/klipper/generic-recore-a8.cfg /home/debian/klipper/config/
     # Add compatibility with A5. 
-    cp /tmp/overlay/klipper/recore_a5.py /home/debian/klipper/klippy/extras/
+    cp /tmp/overlay/klipper/generic-recore-a5.cfg /home/debian/klipper/config/
     cp /tmp/overlay/klipper/recore_adc_temperature.py /home/debian/klipper/klippy/extras/
     cp /tmp/overlay/klipper/recore_thermistor.py /home/debian/klipper/klippy/extras/
-    cp /tmp/overlay/klipper/generic-recore-a5.cfg /home/debian/klipper/config/
     cp /tmp/overlay/klipper/tmc2209_a5.py /home/debian/klipper/klippy/extras/
     cp /tmp/overlay/klipper/tmc2130_a5.py /home/debian/klipper/klippy/extras/
 
@@ -64,4 +63,11 @@ install_klipper(){
 
     chown -R debian:debian /home/debian/klipper
 	systemctl enable flash-stm32.service
+
+    if [ "${UI}" != "" ]; then
+        sed -i 's:\(\# See docs.*\):\1\n\n\[include '${UI}'.cfg\]:' /home/debian/klipper/config/generic-recore-a5.cfg
+        sed -i 's:\(\# See docs.*\):\1\n\n\[include '${UI}'.cfg\]:' /home/debian/klipper/config/generic-recore-a6.cfg
+        sed -i 's:\(\# See docs.*\):\1\n\n\[include '${UI}'.cfg\]:' /home/debian/klipper/config/generic-recore-a7.cfg
+        sed -i 's:\(\# See docs.*\):\1\n\n\[include '${UI}'.cfg\]:' /home/debian/klipper/config/generic-recore-a8.cfg
+    fi
 }

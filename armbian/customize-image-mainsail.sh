@@ -34,7 +34,7 @@ source /tmp/overlay/install_components/add_overlays.sh
 set -e
 echo "🍰 Rebuild starting..."
 prepare_build
-install_klipper
+install_klipper "mainsail"
 install_moonraker "mainsail"
 install_nginx "mainsail"
 install_mainsail
