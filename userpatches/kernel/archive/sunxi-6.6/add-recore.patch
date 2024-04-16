@@ -2,7 +2,7 @@ diff --git a/arch/arm64/boot/dts/allwinner/Makefile b/arch/arm64/boot/dts/allwin
 index 83ab07b7f18a..efb4c8a03379 100644
 --- a/arch/arm64/boot/dts/allwinner/Makefile
 +++ b/arch/arm64/boot/dts/allwinner/Makefile
-@@ -21,6 +21,10 @@ dtb-$(CONFIG_ARCH_SUNXI) += sun50i-a64-pinephone-1.2b.dtb
+@@ -21,6 +21,11 @@ dtb-$(CONFIG_ARCH_SUNXI) += sun50i-a64-pinephone-1.2b.dtb
  dtb-$(CONFIG_ARCH_SUNXI) += sun50i-a64-pinetab.dtb
  dtb-$(CONFIG_ARCH_SUNXI) += sun50i-a64-pinetab-early-adopter.dtb
  dtb-$(CONFIG_ARCH_SUNXI) += sun50i-a64-sopine-baseboard.dtb
@@ -10,6 +10,7 @@ index 83ab07b7f18a..efb4c8a03379 100644
 +dtb-$(CONFIG_ARCH_SUNXI) += sun50i-a64-recore-a5.dtb
 +dtb-$(CONFIG_ARCH_SUNXI) += sun50i-a64-recore-a6.dtb
 +dtb-$(CONFIG_ARCH_SUNXI) += sun50i-a64-recore-a7.dtb
++dtb-$(CONFIG_ARCH_SUNXI) += sun50i-a64-recore-a8.dtb
  dtb-$(CONFIG_ARCH_SUNXI) += sun50i-a64-teres-i.dtb
  dtb-$(CONFIG_ARCH_SUNXI) += sun50i-a100-allwinner-perf1.dtb
  dtb-$(CONFIG_ARCH_SUNXI) += sun50i-h5-bananapi-m2-plus.dtb
@@ -188,6 +189,154 @@ index 000000000000..92677c160594
 +	pinctrl-0 = <&uart2_pins>;
 +	status = "okay";
 +};
+diff --git a/arch/arm64/boot/dts/allwinner/sun50i-a64-recore-a8.dts b/arch/arm64/boot/dts/allwinner/sun50i-a64-recore-a8.dts
+new file mode 100644
+index 000000000000..92677c160594
+--- /dev/null
++++ b/arch/arm64/boot/dts/allwinner/sun50i-a64-recore-a8.dts
+@@ -0,0 +1,141 @@
++// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
++
++/dts-v1/;
++
++#include "sun50i-a64-recore.dtsi"
++#include <dt-bindings/usb/pd.h>
++
++/ {
++	model = "Recore-A8";
++	compatible = "iagent,recore-a8", "allwinner,sun50i-a64";
++
++	reg_usb0_vbus: usb0-vbus {
++		compatible = "regulator-fixed";
++		regulator-name = "usb0-vbus0";
++		regulator-type = "voltage";
++		gpio = <&pio 3 7 GPIO_ACTIVE_HIGH>; // PD7: EN-USB-OTG
++		regulator-min-microvolt = <5000000>;
++		regulator-max-microvolt = <5000000>;
++		enable-active-high;
++		status = "okay";
++	};
++};
++
++&pio{
++	reg_usb1_vbus4_pins: reg-usb1-vbus4-pins {
++		pins = "PD5";
++		function = "reg_usb1_vbus4";
++	};
++	reg_usb1_vbus3_pins: reg-usb1-vbus3-pins {
++		pins = "PD6";
++		function = "reg_usb1_vbus3";
++	};
++	reg_usb0_vbus_pins: reg-usb0-vbus-pins {
++		pins = "PD7";
++		function = "reg_usb0_vbus";
++	};
++	fusb0_int_pin: fusb0-int-pin {
++		pins = "PH10";
++		function = "gpio_in";
++	};
++};
++
++&reg_usb1_vbus3 {
++	gpio = <&pio 3 5 GPIO_ACTIVE_HIGH>;
++};
++
++&reg_usb1_vbus4 {
++	gpio = <&pio 3 6 GPIO_ACTIVE_HIGH>;
++};
++
++&reg_aldo1 {
++	regulator-always-on;
++	regulator-min-microvolt = <3300000>;
++	regulator-max-microvolt = <3300000>;
++	regulator-name = "vcc-ext";
++};
++
++/* Set over current to lowest value: 30 A = 1200 mV */
++&reg_dldo2 {
++	regulator-min-microvolt = <1200000>;
++	regulator-max-microvolt = <1200000>;
++};
++
++/* stm32 mcu */
++&uart2 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&uart2_pins>;
++	status = "okay";
++};
++
++&usb_otg {
++	dr_mode = "otg";
++	status = "okay";
++};
++
++&usb_power_supply {
++	regulator-name = "usb-power-supply";
++	status = "okay";
++};
++
++
++&usbphy {
++	status = "okay";
++	usb0_id_det-gpios = <&pio 4 7 GPIO_ACTIVE_HIGH>;
++    usb0_vbus_det-gpios = <&pio 4 6 GPIO_ACTIVE_HIGH>;
++	/*usb0_vbus_power-supply = <&usb_power_supply>;*/
++	/*usb0_vbus-supply = <&reg_usb0_vbus>;*/
++	/*usb1_vbus-supply = <&reg_5v>;*/
++	ports {
++		port@0 {
++			usb0_role_switch: endpoint {
++				remote-endpoint = <&fusb302_ep>;
++			};
++		};
++	};
++};
++
++
++
++&i2c1 {
++	status = "okay";
++
++	fusb0: fusb30x@22 {
++		compatible = "fcs,fusb302";
++		reg = <0x22>;
++		pinctrl-names = "default";
++		pinctrl-0 = <&fusb0_int_pin>;
++		vbus-supply = <&reg_usb0_vbus>;
++		interrupt-parent = <&pio>;
++		interrupts = <7 10 IRQ_TYPE_EDGE_FALLING>; // PH10
++
++		/*port {
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			usb_hs: endpoint@0 {
++				reg = <0>;
++				remote-endpoint = <&usb0_hs>;
++			};
++		};*/
++
++		usb_con: connector {
++			compatible = "usb-c-connector";
++			data-role = "dual";
++			label = "USB-C";
++			op-sink-microwatt = <1000000>;
++			power-role = "dual";
++			sink-pdos =	<PDO_FIXED(5000, 1000, PDO_FIXED_USB_COMM)>;
++			source-pdos =	<PDO_FIXED(5000, 1000, PDO_FIXED_USB_COMM)>;
++			try-power-role = "sink";
++
++			ports {
++				port@0 {
++					fusb302_ep: endpoint {
++						remote-endpoint = <&usb0_role_switch>;
++					};
++				};
++			};
++		};
++	};
++};
++
 diff --git a/arch/arm64/boot/dts/allwinner/sun50i-a64-recore.dts b/arch/arm64/boot/dts/allwinner/sun50i-a64-recore.dts
 new file mode 100644
 index 000000000000..23f3aa40f86e
