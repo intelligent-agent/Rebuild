@@ -6,7 +6,6 @@ install_klipper(){
     cd /home/debian
     git clone https://github.com/Klipper3d/klipper
     cp /tmp/overlay/klipper/install-recore.sh /home/debian/klipper/scripts/
-    cp /tmp/overlay/klipper/ina381.py /home/debian/klipper/klippy/extras/
     cp /tmp/overlay/klipper/generic-recore-a6.cfg /home/debian/klipper/config/
     cp /tmp/overlay/klipper/generic-recore-a7.cfg /home/debian/klipper/config/
     cp /tmp/overlay/klipper/generic-recore-a8.cfg /home/debian/klipper/config/
