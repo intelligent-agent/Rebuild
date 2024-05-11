@@ -30,8 +30,13 @@ post_build() {
     apt install -y "$ADD_PACKAGE_LIST"
 }
 
+prep_install() {
+    echo root:temppwd | chpasswd
+}
+
 echo "🍰 Rebuild starting..."
 
+prep_install
 add_overlays
 post_build
 
