@@ -194,7 +194,7 @@ new file mode 100644
 index 000000000000..92677c160594
 --- /dev/null
 +++ b/arch/arm64/boot/dts/allwinner/sun50i-a64-recore-a8.dts
-@@ -0,0 +1,141 @@
+@@ -0,0 +1,154 @@
 +// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
 +
 +/dts-v1/;
@@ -306,7 +306,7 @@ index 000000000000..92677c160594
 +		interrupt-parent = <&pio>;
 +		interrupts = <7 10 IRQ_TYPE_EDGE_FALLING>; // PH10
 +
-+		/*port {
++		port {
 +			#address-cells = <1>;
 +			#size-cells = <0>;
 +
@@ -314,7 +314,7 @@ index 000000000000..92677c160594
 +				reg = <0>;
 +				remote-endpoint = <&usb0_hs>;
 +			};
-+		};*/
++		};
 +
 +		usb_con: connector {
 +			compatible = "usb-c-connector";
@@ -333,6 +333,19 @@ index 000000000000..92677c160594
 +					};
 +				};
 +			};
++		};
++	};
++};
++
++&ohci0 {
++	status = "okay";
++};
++
++&ehci0 {
++	status = "okay";
++	port {
++		usb0_hs: endpoint {
++			remote-endpoint = <&usb_hs>;
 +		};
 +	};
 +};
