@@ -9,6 +9,7 @@ create_hotspot() {
   nmcli con add type wifi ifname "$wifidev" con-name Hotspot ssid "$hotspot_SSID"
   nmcli con modify Hotspot 802-11-wireless.mode ap
   nmcli con modify Hotspot 802-11-wireless.band bg
+  nmcli con modify Hotspot 802-11-wireless.channel 1
   nmcli con modify Hotspot ipv4.method shared
   nmcli con modify Hotspot ipv4.addresses 192.168.50.1/24
   nmcli con modify Hotspot connection.autoconnect-priority -10
