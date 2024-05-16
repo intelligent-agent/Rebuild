@@ -9,5 +9,7 @@ install_autohotspot() {
     # Install autohotspot service file
     cp /tmp/overlay/autohotspot/autohotspot.service /etc/systemd/system/
 
+    apt install -y dnsmasq-base
+
     systemctl enable autohotspot.service
 }
