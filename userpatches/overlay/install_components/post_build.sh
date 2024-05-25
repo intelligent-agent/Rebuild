@@ -22,4 +22,7 @@ post_build() {
     # Force debian to change password
     # Must be done as a final step
     chage -d 0 debian
+
+    TAG=$(cat /tmp/overlay/rebuild/rebuild-tag)
+    sed -i "s/PRETTY_NAME=\"/PRETTY_NAME=\"Rebuild ${TAG}\//" /etc/os-release
 }

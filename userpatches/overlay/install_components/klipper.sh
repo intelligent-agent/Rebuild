@@ -5,6 +5,9 @@ install_klipper(){
     echo "🍰 install Klipper"
     cd /home/debian
     git clone https://github.com/Klipper3d/klipper
+
+    sed -i 's/select HAVE_GPIO_I2C if !MACH_STM32F031/select HAVE_GPIO_I2C/' klipper/src/stm32/Kconfig
+
     cp /tmp/overlay/klipper/install-recore.sh /home/debian/klipper/scripts/
     cp /tmp/overlay/klipper/generic-recore-a6.cfg /home/debian/klipper/config/
     cp /tmp/overlay/klipper/generic-recore-a7.cfg /home/debian/klipper/config/
@@ -49,8 +52,6 @@ install_klipper(){
     cp /home/debian/klipper/out/klipper.bin /opt/firmware/stm32.bin
 
     # Compile STM32-32KB
-    cp /tmp/overlay/klipper/enable-i2c.patch /home/debian/klipper/
-    patch -p1 < enable-i2c.patch
     cp /tmp/overlay/klipper/stm32f031-32KB-serial.config /home/debian/klipper/.config
     make clean
     make olddefconfig

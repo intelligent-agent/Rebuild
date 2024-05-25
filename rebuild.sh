@@ -67,6 +67,7 @@ cp armbian/watermark.png "${BUILD_DIR}"/packages/plymouth-theme-armbian/watermar
 
 mkdir -p "${BUILD_DIR}"/userpatches/overlay/rebuild/
 echo "${NAME}" >"${BUILD_DIR}"/userpatches/overlay/rebuild/rebuild-version
+echo "${TAG}" >"${BUILD_DIR}"/userpatches/overlay/rebuild/rebuild-tag
 
 cd "$BUILD_DIR"
 DOCKER_EXTRA_ARGS="--cpus=${cores}" ./compile.sh rebuild

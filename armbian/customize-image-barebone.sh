@@ -28,6 +28,9 @@ post_build() {
     cp /tmp/overlay/rebuild/rebuild-version /etc/
     apt update
     apt install -y "$ADD_PACKAGE_LIST"
+
+    TAG=$(cat /tmp/overlay/rebuild/rebuild-tag)
+    sed -i "s/PRETTY_NAME=\"/PRETTY_NAME=\"Rebuild ${TAG}\//" /etc/os-release
 }
 
 prep_install() {
