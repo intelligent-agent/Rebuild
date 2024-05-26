@@ -1,0 +1,36 @@
+#!/bin/bash
+
+# If SSH is enabled and password has not been changed, disable SSH access
+
+# Create install time file first time script is run
+if [ ! -f /etc/install-time ]; then
+    date -Iseconds > /etc/install-time
+    exit 0
+fi
+
+# Check if password has been changed for user Debian
+CHAGE_DATE=$(passwd debian --status | cut -d ' ' -f 3)
+if [ "$CHAGE_DATE" != "1970-01-01" ]; then
+    echo "Password been changed since install"
+    exit 0
+fi
+
+# Check if SSH serivce is active
+SSH_STATE=$(systemctl is-active ssh)
+if [ "$SSH_STATE" != "active" ]; then
+    echo "The SSH service is not active"
+    exit 0
+fi
+
+# Check if enough time has passed
+INSTALL_TIME=$(cat /etc/install-time)
+CURRENT_TIME=$(date -Iseconds)
+MINUTES_SINCE_INSTALL=$(( ($(date -d $CURRENT_TIME +%s) - $(date -d $INSTALL_TIME +%s)) / (60) ))
+if [ "$MINUTES_SINCE_INSTALL" < 60 ]; then
+    echo "Only $MINUTES_SINCE_INSTALL has passed since install"
+    exit 0
+fi
+
+echo "The SSH service is active, but the password has not been changed, and enough time has passed. Disabling SSH"
+systemctl stop ssh
+systemctl disable ssh

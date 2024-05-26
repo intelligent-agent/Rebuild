@@ -27,6 +27,7 @@ source /tmp/overlay/install_components/klipperscreen.sh
 source /tmp/overlay/install_components/recore_binaries.sh
 source /tmp/overlay/install_components/ustreamer.sh
 source /tmp/overlay/install_components/autohotspot.sh
+source /tmp/overlay/install_components/auto_disable_ssh.sh
 source /tmp/overlay/install_components/prep_install.sh
 source /tmp/overlay/install_components/add_overlays.sh
 source /tmp/overlay/install_components/post_build.sh
@@ -44,6 +45,7 @@ install_klipperscreen
 install_ustreamer
 install_bins
 install_autohotspot
+install_auto_disable_ssh
 add_overlays
 post_build
 
