@@ -7,14 +7,14 @@ reset_timer(){
 }
 
 increase_timer(){
-    CURRENT_TIME=$(cat /etc/ssh-active-without-pw-change)
+    CURRENT_TIME=$(< /etc/ssh-active-without-pw-change)
     NEW_TIME=$(($CURRENT_TIME + 10 ))
     echo $NEW_TIME > /etc/ssh-active-without-pw-change
 }
 
 # Create install time file first time script is run
 if [ ! -f /etc/ssh-active-without-pw-change ]; then
-    reset_timer()
+    reset_timer
     exit 0
 fi
 
@@ -35,8 +35,8 @@ if [ "$SSH_STATE" != "active" ]; then
 fi
 
 # Check if enough time has passed
-MINUTES_ACTIVE=$(cat /etc/ssh-active-without-pw-change)
-if [ "$MINUTES_ACTIVE" < 70 ]; then
+MINUTES_ACTIVE=$(< /etc/ssh-active-without-pw-change)
+if [ "$MINUTES_ACTIVE" -lt 70 ]; then
     echo "Only $MINUTES_ACTIVE has passed since install"
     increase_timer
     exit 0
