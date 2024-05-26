@@ -1,6 +1,7 @@
 #!/bin/bash
 
 # If SSH is enabled and password has not been changed, disable SSH access
+# We use a monotonic timer that can work even without a valid clock.
 
 reset_timer(){
     echo 0 > /etc/ssh-active-without-pw-change
