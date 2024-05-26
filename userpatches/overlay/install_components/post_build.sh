@@ -9,6 +9,9 @@ post_build() {
     # Disable SSH. Can be enabled in Reflash
     systemctl disable ssh
 
+    # Reload daemon after change. Might help with Rebuild isue #27
+    systemctl daemon-reload
+
     # Disable SSH root access
     sed -i 's/^PermitRootLogin.*$/#PermitRootLogin/g' /etc/ssh/sshd_config
 
@@ -24,5 +27,5 @@ post_build() {
     chage -d 0 debian
 
     TAG=$(cat /tmp/overlay/rebuild/rebuild-tag)
-    sed -i "s/PRETTY_NAME=\"/PRETTY_NAME=\"Rebuild ${TAG}\//" /etc/os-release
+    sed -i "s/PRETTY_NAME=\"/PRETTY_NAME=\"Rebuild ${TAG}\//" /etc/os-release    
 }
