@@ -1,6 +1,0 @@
-[Unit]
-Description=Disables SSH if password has not been changed
-
-[Service]
-Type=oneshot
-ExecStart=/usr/local/bin/auto-disable-ssh
