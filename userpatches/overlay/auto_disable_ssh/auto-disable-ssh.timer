@@ -1,0 +1,9 @@
+[Unit]
+Description=Run on boot and every hour to check for unchanged password for SSH
+
+[Timer]
+OnUnitActiveSec=10m
+OnBootSec=10s
+
+[Install]
+WantedBy=timers.target
