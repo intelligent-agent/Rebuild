@@ -1,0 +1,9 @@
+[Unit]
+Description=Timer that checks for usb direction changes                       
+
+[Timer]
+OnUnitActiveSec=10s
+OnBootSec=10s
+
+[Install]
+WantedBy=timers.target
