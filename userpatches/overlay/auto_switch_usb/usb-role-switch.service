@@ -1,0 +1,7 @@
+[Unit]
+Description=Switches USB role
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/usb-role-switch
+LogLevelMax=warning

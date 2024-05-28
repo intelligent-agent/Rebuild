@@ -1,0 +1,18 @@
+#!/bin/bash
+
+# This script checks the status of the USB PD chip and changes the USB OTG port based on the status
+
+ROLE=$(< /sys/devices/platform/soc/1c2b000.i2c/i2c-1/1-0022/typec/port0/data_role)
+NOW=$(< /sys/devices/platform/soc/1c19000.usb/musb-hdrc.*.auto/mode)
+if [ "$ROLE" == "host [device]" ]; then
+        if [ "$NOW" != "b_peripheral" ]; then
+                echo "Changing role to peripheral"
+                echo "peripheral" > /sys/devices/platform/soc/1c19000.usb/musb-hdrc.*.auto/mode
+        fi
+else
+        if [ "$NOW" != "a_wait_vrise" ]; then
+                echo "changing role to host"
+                echo "host" > /sys/devices/platform/soc/1c19000.usb/musb-hdrc.*.auto/mode
+        fi
+fi
+

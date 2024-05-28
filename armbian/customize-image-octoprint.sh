@@ -24,6 +24,8 @@ source /tmp/overlay/install_components/octoprint.sh
 source /tmp/overlay/install_components/toggle.sh
 source /tmp/overlay/install_components/recore_binaries.sh
 source /tmp/overlay/install_components/autohotspot.sh
+source /tmp/overlay/install_components/auto_disable_ssh.sh
+source /tmp/overlay/install_components/auto_switch_usb.sh
 source /tmp/overlay/install_components/ustreamer.sh
 source /tmp/overlay/install_components/prep_install.sh
 source /tmp/overlay/install_components/add_overlays.sh
@@ -41,6 +43,8 @@ install_toggle
 install_ustreamer
 install_bins
 install_autohotspot
+install_auto_disable_ssh
+install_auto_switch_usb
 add_overlays
 post_build
 

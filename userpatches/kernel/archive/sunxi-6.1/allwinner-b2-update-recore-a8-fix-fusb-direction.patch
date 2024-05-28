@@ -1,0 +1,127 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: John Doe <john.doe@somewhere.on.planet>
+Date: Tue, 28 May 2024 21:05:27 +0000
+Subject: Patching kernel sunxi64 files
+ arch/arm64/boot/dts/allwinner/sun50i-a64-recore-a8.dts
+
+Signed-off-by: John Doe <john.doe@somewhere.on.planet>
+---
+ arch/arm64/boot/dts/allwinner/sun50i-a64-recore-a8.dts | 46 ++++++----
+ 1 file changed, 28 insertions(+), 18 deletions(-)
+
+diff --git a/arch/arm64/boot/dts/allwinner/sun50i-a64-recore-a8.dts b/arch/arm64/boot/dts/allwinner/sun50i-a64-recore-a8.dts
+index 6c74773e23ae..be2019cfeb14 100644
+--- a/arch/arm64/boot/dts/allwinner/sun50i-a64-recore-a8.dts
++++ b/arch/arm64/boot/dts/allwinner/sun50i-a64-recore-a8.dts
+@@ -69,36 +69,37 @@ &uart2 {
+ };
+ 
+ &usb_otg {
+ 	dr_mode = "otg";
+ 	status = "okay";
++	port {
++		usb0_usbotg: endpoint {
++			remote-endpoint = <&fusb_ep>;
++		};
++	};
+ };
+ 
+ &usb_power_supply {
+ 	regulator-name = "usb-power-supply";
+ 	status = "okay";
+ };
+ 
+-
+ &usbphy {
+ 	status = "okay";
+-	usb0_id_det-gpios = <&pio 4 7 GPIO_ACTIVE_HIGH>;
++	usb0_id_det-gpios = <&pio 4 7 GPIO_ACTIVE_LOW>;
++	usb0_vbus_power-supply = <&usb_power_supply>;
+     usb0_vbus_det-gpios = <&pio 4 6 GPIO_ACTIVE_HIGH>;
+-	/*usb0_vbus_power-supply = <&usb_power_supply>;*/
+-	/*usb0_vbus-supply = <&reg_usb0_vbus>;*/
+-	/*usb1_vbus-supply = <&reg_5v>;*/
+-	ports {
+-		port@0 {
+-			usb0_role_switch: endpoint {
+-				remote-endpoint = <&fusb302_ep>;
+-			};
++	usb1_vbus-supply = <&reg_5v>;
++	
++	usb-role-switch;
++	port {
++		usb0_role_switch: endpoint {
++			remote-endpoint = <&usb0_usbphy>;
+ 		};
+ 	};
+ };
+ 
+-
+-
+ &i2c1 {
+ 	status = "okay";
+ 
+ 	fusb0: fusb30x@22 {
+ 		compatible = "fcs,fusb302";
+@@ -111,13 +112,13 @@ fusb0: fusb30x@22 {
+ 
+ 		port {
+ 			#address-cells = <1>;
+ 			#size-cells = <0>;
+ 
+-			usb_hs: endpoint@0 {
++			fusb_ep: endpoint@0 {
+ 				reg = <0>;
+-				remote-endpoint = <&usb0_hs>;
++				remote-endpoint = <&usb0_usbotg>;
+ 			};
+ 		};
+ 
+ 		usb_con: connector {
+ 			compatible = "usb-c-connector";
+@@ -128,28 +129,37 @@ usb_con: connector {
+ 			sink-pdos =	<PDO_FIXED(5000, 1000, PDO_FIXED_USB_COMM)>;
+ 			source-pdos =	<PDO_FIXED(5000, 1000, PDO_FIXED_USB_COMM)>;
+ 			try-power-role = "sink";
+ 
+ 			ports {
++				#address-cells = <1>;
++				#size-cells = <0>;
++	
+ 				port@0 {
+-					fusb302_ep: endpoint {
++					reg = <0>;
++					usb0_hs: endpoint {
++						remote-endpoint = <&usb0_ehci>;
++					};
++				};
++				port@1{
++					reg = <1>;
++					usb0_usbphy: endpoint {
+ 						remote-endpoint = <&usb0_role_switch>;
+ 					};
+ 				};
+ 			};
+ 		};
+ 	};
+ };
+ 
+-
+ &ohci0 {
+ 	status = "okay";
+ };
+ 
+ &ehci0 {
+ 	status = "okay";
+ 	port {
+-		usb0_hs: endpoint {
+-			remote-endpoint = <&usb_hs>;
++		usb0_ehci: endpoint {
++			remote-endpoint = <&usb0_hs>;
+ 		};
+ 	};
+ };
+\ No newline at end of file
+-- 
+Created with Armbian build tools https://github.com/armbian/build
+
