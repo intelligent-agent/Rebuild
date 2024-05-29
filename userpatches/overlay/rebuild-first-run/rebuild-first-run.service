@@ -6,6 +6,8 @@ After=var-log.hdd.mount
 Type=oneshot
 RemainAfterExit=yes
 ExecStart=/usr/local/bin/rebuild-first-run
+Restart=on-failure
+RestartSec=10s
 
 [Install]
 WantedBy=basic.target
