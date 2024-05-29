@@ -1,5 +1,6 @@
 [Unit]
 Description=Runs on first boot after flashing
+After=var-log.hdd.mount
 
 [Service]
 Type=oneshot
