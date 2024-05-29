@@ -3,10 +3,12 @@
 # This script is run only once, the first time Rebuild boots after being flashed
 
 log() {
-    echo "$1" | tee /var/log.hdd/rebuild-first-run.log
+    echo "$1" | tee -a /var/log.hdd/rebuild-first-run.log
 }
 
-log "Starting rebuild first run script"
+echo "Starting rebuild first run script"
+echo "--Beginning of first run script--" > /var/log.hdd/rebuild-first-run.log
+
 HARDWARE_REVISION=$(get-recore-revision)
 log "Found Recore hardware revision ${HARDWARE_REVISION}"
 if [ "${HARDWARE_REVISION}" == "a8" ]; then
