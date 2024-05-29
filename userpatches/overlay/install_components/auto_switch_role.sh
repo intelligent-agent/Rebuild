@@ -9,6 +9,4 @@ install_auto_switch_role() {
     # Install autohotspot service file
     cp /tmp/overlay/auto_switch_usb/usb-role-switch.service /etc/systemd/system/
     cp /tmp/overlay/auto_switch_usb/usb-role-switch.timer /etc/systemd/system/
-
-    systemctl enable usb-role-switch.timer
 }
