@@ -1,0 +1,10 @@
+[Unit]
+Description=Runs on first boot after flashing
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/rebuild-first-run
+
+[Install]
+WantedBy=basic.target
