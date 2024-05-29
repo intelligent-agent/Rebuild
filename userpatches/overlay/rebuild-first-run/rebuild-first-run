@@ -2,14 +2,18 @@
 
 # This script is run only once, the first time Rebuild boots after being flashed
 
-echo "Starting rebuild first run script"
+log() {
+    echo "$1" | tee /var/log.hdd/rebuild-first-run.log
+}
+
+log "Starting rebuild first run script"
 HARDWARE_REVISION=$(get-recore-revision)
-echo "Found Recore hardware revision ${HARDWARE_REVISION}"
+log "Found Recore hardware revision ${HARDWARE_REVISION}"
 if [ "${HARDWARE_REVISION}" == "a8" ]; then
-    echo "Starting and enabling usb-role-switch.timer"
+    log "Starting and enabling usb-role-switch.timer"
     systemctl enable usb-role-switch.timer
     systemctl start usb-role-switch.timer
 fi
 
-echo "Disabling rebuild-first-run.service"
+log "Disabling rebuild-first-run.service"
 systemctl disable rebuild-first-run.service
