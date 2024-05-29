@@ -10,7 +10,7 @@ echo "Starting rebuild first run script"
 echo "--Beginning of first run script--" > /var/log.hdd/rebuild-first-run.log
 
 HARDWARE_REVISION=$(get-recore-revision)
-if [ "${HARDWARE_REVISION}" != @(a5|a6|a7|a8) ]; then
+if [[ "${HARDWARE_REVISION}" != @(a5|a6|a7|a8) ]]; then
     log "Error getting hardware revision"
     exit 1
 fi
