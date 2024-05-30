@@ -21,5 +21,4 @@ stm32flash -w ${STM32_BINARY} -v -g 0 ${FLASH_DEVICE}
 gpioset 1 197=0
 gpioget 1 196
 
-systemctl disable flash-stm32
 systemctl restart klipper
