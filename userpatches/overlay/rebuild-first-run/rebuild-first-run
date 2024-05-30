@@ -22,5 +22,8 @@ if [ "${HARDWARE_REVISION}" == "a8" ]; then
     systemctl start usb-role-switch.timer
 fi
 
+log "Running flash-stm32 script"
+/usr/local/bin/flash-stm32
+
 log "Disabling rebuild-first-run.service"
 systemctl disable rebuild-first-run.service

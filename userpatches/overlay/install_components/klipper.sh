@@ -20,7 +20,6 @@ install_klipper(){
     cp /tmp/overlay/klipper/tmc2130_a5.py /home/debian/klipper/klippy/extras/
 
 	cp /tmp/overlay/klipper/flash-stm32 /usr/local/bin
-	cp /tmp/overlay/klipper/flash-stm32.service /etc/systemd/system/
     mkdir -p /var/log/klipper_logs
     chown debian:debian /var/log/klipper_logs
     mkdir -p /opt/firmware/
@@ -62,7 +61,6 @@ install_klipper(){
     git reset --hard
 
     chown -R debian:debian /home/debian/klipper
-	systemctl enable flash-stm32.service
 
     if [ "${UI}" != "" ]; then
         sed -i 's:\(\# See docs.*\):\1\n\n\[include '${UI}'.cfg\]:' /home/debian/klipper/config/generic-recore-a5.cfg
