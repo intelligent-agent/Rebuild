@@ -11,3 +11,11 @@ Armbian images for Recore.
 To build a version, run the script in this folder:
 `./rebuild <barebone|fluidd|mainsail|octoprint>`
 
+## Manual tests to run before a release
+* Test Recore hardware revisions A6, A7, A8
+* Test Fluidd, Mainsail, OctoPrint
+* Check that Wifi comes up as an AP
+* Check that Webcam works as expected
+* Check that USB host/device works as expected
+* Check that Klipper runs without config errors
+* Check that there all systemd services are running as they should
