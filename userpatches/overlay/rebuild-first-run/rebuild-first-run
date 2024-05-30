@@ -2,6 +2,8 @@
 
 # This script is run only once, the first time Rebuild boots after being flashed
 
+set -e
+
 log() {
     echo "$1" | tee -a /var/log.hdd/rebuild-first-run.log
 }
