@@ -30,11 +30,16 @@ install_octoprint(){
 	cd OctoprintKlipperPlugin
 	/home/debian/OctoPrint/venv/bin/python setup.py install
 	
-
 	cd /home/debian
 	git clone https://github.com/LazeMSS/OctoPrint-TopTemp.git
 	chown -R debian:debian /home/debian/OctoPrint-TopTemp
 	cd OctoPrint-TopTemp
+	/home/debian/OctoPrint/venv/bin/python setup.py install
+
+	cd /home/debian
+	git clone https://github.com/intelligent-agent/octoprint_recore.git
+	chown -R debian:debian /home/debian/octoprint_recore
+	cd octoprint_recore
 	/home/debian/OctoPrint/venv/bin/python setup.py install
 }
 
