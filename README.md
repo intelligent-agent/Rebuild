@@ -12,10 +12,13 @@ To build a version, run the script in this folder:
 `./rebuild <barebone|fluidd|mainsail|octoprint>`
 
 ## Manual tests to run before a release
-* Test Recore hardware revisions A6, A7, A8
-* Test Fluidd, Mainsail, OctoPrint
-* Check that Wifi comes up as an AP
-* Check that Webcam works as expected
-* Check that USB host/device works as expected
-* Check that Klipper runs without config errors
-* Check that there all systemd services are running as they should
+We test software versions Fluidd/Mainsail and OctoPrint.  
+We test hardware versions Recore A6, A7, A8
+
+### Fluidd on Recore A8
+- [x] Wifi comes up as an AP
+- [x] Webcam shows a picture
+- [x] USB host/device works as expected
+- [x] Default Klipper config does not have any errors
+- [x] All systemd services are running as they should
+- [x] Software updates look functional
