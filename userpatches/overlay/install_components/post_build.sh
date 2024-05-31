@@ -9,6 +9,9 @@ post_build() {
     # Disable SSH. Can be enabled in Reflash
     systemctl disable ssh
 
+    # Increase burstlimit on ssh
+    sed '/RuntimeDirectoryMode=0755/a StartLimitBurst=10' /lib/systemd/system/ssh.service
+
     # Reload daemon after change. Might help with Rebuild isue #27
     systemctl daemon-reload
 
