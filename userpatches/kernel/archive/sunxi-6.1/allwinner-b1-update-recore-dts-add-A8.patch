@@ -406,24 +406,6 @@ unchanged:
  
  &reg_fldo1 {
  	regulator-name = "vdd-hsic";
-@@ -312,15 +307,15 @@ &reg_fldo2 {
- 	regulator-min-microvolt = <1100000>;
- 	regulator-max-microvolt = <1100000>;
- 	regulator-name = "vdd-cpus";
- };
- 
--&gpio0_ldo {
-+&reg_ldo_io0 {
- 	function = "ldo";
- };
- 
--&gpio1_ldo {
-+&reg_ldo_io1 {
- 	function = "ldo";
- };
- 
- &reg_ldo_io0 {
- 	regulator-always-on;
 @@ -369,39 +364,7 @@ &usb_otg {
  &usb_power_supply {
  	status = "okay";
