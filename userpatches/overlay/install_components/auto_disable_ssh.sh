@@ -10,5 +10,8 @@ install_auto_disable_ssh() {
     cp /tmp/overlay/auto_disable_ssh/auto-disable-ssh.service /etc/systemd/system/
     cp /tmp/overlay/auto_disable_ssh/auto-disable-ssh.timer /etc/systemd/system/
 
+    # install settings file
+    cp /tmp/overlay/auto_disable_ssh/rebuild-settings /etc/
+
     systemctl enable auto-disable-ssh.timer
 }
