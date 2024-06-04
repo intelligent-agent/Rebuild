@@ -3,6 +3,8 @@
 # If SSH is enabled and password has not been changed, disable SSH access
 # We use a monotonic timer that can work even without a valid clock.
 
+. /etc/rebuild-settings
+
 reset_timer(){
     echo 0 > /etc/ssh-active-without-pw-change
 }
@@ -13,31 +15,49 @@ increase_timer(){
     echo $NEW_TIME > /etc/ssh-active-without-pw-change
 }
 
+# Check if this is first time the script is run after a reboot
+if [ ! -f /tmp/ssh-disable-has-run ]; then
+    touch /tmp/ssh-disable-has-run
+
+    # If ssh should not be running, we stop ssh
+    if [ "$SSH_ENABLED_ON_BOOT" == "false" ]; then
+        echo "The SSH service should not be active on boot. Stopping ssh."
+        systemctl stop ssh
+        exit 0
+    fi
+fi
+
 # Create install time file first time script is run
 if [ ! -f /etc/ssh-active-without-pw-change ]; then
     reset_timer
+fi
+
+# Check if SSH service is active. If it is active here,
+# that means it has been enabled in the UI, so we can
+# keep it alive on next boot.
+SSH_STATE=$(systemctl is-active ssh)
+if [ "$SSH_STATE" != "active" ]; then
+    echo "The SSH service is not active. Exiting"
+    reset_timer
     exit 0
+fi
+
+if [ "$SSH_ENABLED_ON_BOOT" == "false" ]; then
+    echo "The SSH service has been reactivated. Removing stopping after boot"
+    sed -i 's/^SSH_ENABLED_ON_BOOT.*/SSH_ENABLED_ON_BOOT=true/'  /etc/rebuild-settings
 fi
 
 # Check if password has been changed for user Debian
 CHAGE_DATE=$(passwd debian --status | cut -d ' ' -f 3)
 if [ "$CHAGE_DATE" != "1970-01-01" ]; then
-    echo "Password been changed since install"
-    reset_timer
-    exit 0
-fi
-
-# Check if SSH serivce is active
-SSH_STATE=$(systemctl is-active ssh)
-if [ "$SSH_STATE" != "active" ]; then
-    echo "The SSH service is not active"
+    echo "Password has been changed since install"
     reset_timer
     exit 0
 fi
 
 # Check if enough time has passed
 MINUTES_ACTIVE=$(< /etc/ssh-active-without-pw-change)
-if [ "$MINUTES_ACTIVE" -lt 70 ]; then
+if [ "$MINUTES_ACTIVE" -lt $SSH_TIMEOUT ]; then
     echo "Only $MINUTES_ACTIVE has passed since install"
     increase_timer
     exit 0
@@ -45,5 +65,4 @@ fi
 
 echo "The SSH service is active, but the password has not been changed, and enough time has passed. Disabling SSH"
 systemctl stop ssh
-systemctl disable ssh
 reset_timer
