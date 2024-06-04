@@ -1,0 +1,33 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: John Doe <john.doe@somewhere.on.planet>
+Date: Tue, 4 Jun 2024 07:48:57 +0000
+Subject: Patching kernel sunxi64 files
+ arch/arm64/boot/dts/allwinner/sun50i-a64-recore-a5.dts
+
+Signed-off-by: John Doe <john.doe@somewhere.on.planet>
+---
+ arch/arm64/boot/dts/allwinner/sun50i-a64-recore-a5.dts | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/arch/arm64/boot/dts/allwinner/sun50i-a64-recore-a5.dts b/arch/arm64/boot/dts/allwinner/sun50i-a64-recore-a5.dts
+index a8858a4f3c49..ee7023d102dd 100644
+--- a/arch/arm64/boot/dts/allwinner/sun50i-a64-recore-a5.dts
++++ b/arch/arm64/boot/dts/allwinner/sun50i-a64-recore-a5.dts
+@@ -38,12 +38,12 @@ &reg_aldo1 {
+ 	regulator-max-microvolt = <700000>;
+ 	regulator-name = "vcc-vref-e0";
+ };
+ 
+ &reg_aldo2 {
+-	regulator-min-microvolt = <3200000>;
+-	regulator-max-microvolt = <3200000>;
++	regulator-min-microvolt = <700000>;
++	regulator-max-microvolt = <700000>;
+ 	regulator-name = "vcc-vref-e1";
+ };
+ 
+ &reg_dldo3 {
+ 	regulator-min-microvolt = <700000>;
+-- 
+Created with Armbian build tools https://github.com/armbian/build
+
