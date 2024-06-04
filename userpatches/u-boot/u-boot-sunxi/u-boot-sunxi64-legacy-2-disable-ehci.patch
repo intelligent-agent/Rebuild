@@ -1,0 +1,78 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: John Doe <john.doe@somewhere.on.planet>
+Date: Tue, 4 Jun 2024 09:19:23 +0000
+Subject: Patching u-boot sunxi64 files arch/arm/dts/sun50i-a64-recore.dts
+
+Signed-off-by: John Doe <john.doe@somewhere.on.planet>
+---
+ arch/arm/dts/sun50i-a64-recore.dts | 28 ++--------
+ 1 file changed, 6 insertions(+), 22 deletions(-)
+
+diff --git a/arch/arm/dts/sun50i-a64-recore.dts b/arch/arm/dts/sun50i-a64-recore.dts
+index d704731873..284961de43 100644
+--- a/arch/arm/dts/sun50i-a64-recore.dts
++++ b/arch/arm/dts/sun50i-a64-recore.dts
+@@ -134,33 +134,29 @@
+ 	};
+ };
+ 
+ &mmc2 {
+ 	pinctrl-names = "default";
+-  pinctrl-0 = <&mmc2_pins>, <&mmc2_ds_pin>;
++	pinctrl-0 = <&mmc2_pins>, <&mmc2_ds_pin>;
+ 	vmmc-supply = <&reg_dcdc1>;
+-  vqmmc-supply = <&reg_eldo1>;
+-  non-removable;
+-  cap-mmc-hw-reset;
++	vqmmc-supply = <&reg_eldo1>;
++	non-removable;
++	cap-mmc-hw-reset;
+ 	bus-width = <8>;
+ 	status = "okay";
+-  mmc-hs200-1_8v;
+-  max-frequency = <100000000>;
++	mmc-hs200-1_8v;
++	max-frequency = <100000000>;
+ };
+ 
+ &ohci0 {
+ 	status = "okay";
+ };
+ 
+ &ohci1 {
+   status = "okay";
+ };
+ 
+-&ehci0 {
+-	status = "okay";
+-};
+-
+ &ehci1 {
+ 	status = "okay";
+ };
+ 
+ &r_rsb {
+@@ -252,20 +248,8 @@
+ 	pinctrl-names = "default";
+ 	pinctrl-0 = <&uart0_pb_pins>;
+ 	status = "okay";
+ };
+ 
+-&usb_otg {
+-  dr_mode = "peripheral";
+-  vcc-supply = <&reg_dcdc1>;
+-	status = "okay";
+-};
+-
+-&usb_power_supply {
+-	status = "okay";
+-};
+-
+ &usbphy {
+-	usb0_vbus_power-supply = <&usb_power_supply>;
+-  vcc-supply = <&reg_dcdc1>;
+ 	status = "okay";
+ };
+-- 
+Created with Armbian build tools https://github.com/armbian/build
+
