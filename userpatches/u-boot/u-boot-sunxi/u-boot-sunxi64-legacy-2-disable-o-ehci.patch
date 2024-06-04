@@ -1,0 +1,40 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: John Doe <john.doe@somewhere.on.planet>
+Date: Tue, 4 Jun 2024 08:13:55 +0000
+Subject: Patching u-boot sunxi64 files arch/arm/dts/sun50i-a64-recore.dts
+
+Signed-off-by: John Doe <john.doe@somewhere.on.planet>
+---
+ arch/arm/dts/sun50i-a64-recore.dts | 8 --------
+ 1 file changed, 8 deletions(-)
+
+diff --git a/arch/arm/dts/sun50i-a64-recore.dts b/arch/arm/dts/sun50i-a64-recore.dts
+index d704731873..28e0875f5b 100644
+--- a/arch/arm/dts/sun50i-a64-recore.dts
++++ b/arch/arm/dts/sun50i-a64-recore.dts
+@@ -145,22 +145,14 @@
+ 	status = "okay";
+   mmc-hs200-1_8v;
+   max-frequency = <100000000>;
+ };
+ 
+-&ohci0 {
+-	status = "okay";
+-};
+-
+ &ohci1 {
+   status = "okay";
+ };
+ 
+-&ehci0 {
+-	status = "okay";
+-};
+-
+ &ehci1 {
+ 	status = "okay";
+ };
+ 
+ &r_rsb {
+-- 
+Created with Armbian build tools https://github.com/armbian/build
+
