@@ -15,6 +15,9 @@ post_build() {
     # armbian-firstrun needs to be type=oneshot in order to the autodisable to wait for it.
     sed -i 's/Type=.*/Type=oneshot/' /lib/systemd/system/armbian-firstrun.service
 
+    # Start moonraker only after armbian-firstrun
+    sed -i 's/After=.*/After=network-online.target armbian-firstrun.service/' /etc/systemd/system/moonraker.service
+
     # Enable SSH service discovery
     cp /usr/share/doc/avahi-daemon/examples/ssh.service /etc/avahi/services/
 
