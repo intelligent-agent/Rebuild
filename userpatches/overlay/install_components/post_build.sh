@@ -9,6 +9,12 @@ post_build() {
     # Disable socket activation of ssh
     systemctl disable ssh.socket
 
+    # Ssh needs to be enabled for moonraker to see it
+    systemctl enable ssh.service
+
+    # armbian-firstrun needs to be type=oneshot in order to the autodisable to wait for it.
+    sed -i 's/Type=.*/Type=oneshot/' /lib/systemd/system/armbian-firstrun.service
+
     # Enable SSH service discovery
     cp /usr/share/doc/avahi-daemon/examples/ssh.service /etc/avahi/services/
 

@@ -1,6 +1,5 @@
 [Unit]
 Description=Disables SSH if password has not been changed
-After=armbian-firstrun.service
 
 [Service]
 Type=oneshot
