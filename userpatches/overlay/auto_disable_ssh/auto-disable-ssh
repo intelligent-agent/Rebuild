@@ -58,11 +58,11 @@ fi
 # Check if enough time has passed
 MINUTES_ACTIVE=$(< /etc/ssh-active-without-pw-change)
 if [ "$MINUTES_ACTIVE" -lt $SSH_TIMEOUT ]; then
-    echo "Only $MINUTES_ACTIVE has passed since install"
+    echo "Only $MINUTES_ACTIVE minutes has passed since ssh was enabled. Doing nothing."
     increase_timer
     exit 0
 fi
 
-echo "The SSH service is active, but the password has not been changed, and enough time has passed. Disabling SSH"
+echo "The SSH service is active, but the password has not been changed, and more than $SSH_TIMEOUT minutes has passed. Disabling SSH"
 systemctl stop ssh
 reset_timer
