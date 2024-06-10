@@ -17,7 +17,7 @@ barebone | mainsail | fluidd | octoprint)
 esac
 
 # Cores
-reported_cores=$(nproc --all)
+reported_cores=$(nproc)
 if [ ! -z $cores ] && [ $cores -gt $reported_cores ]; then
     echo "😿 Desired core count greater than reported available cores."
 elif [ ! -z $cores ] && [ $cores -lt 1 ]; then
