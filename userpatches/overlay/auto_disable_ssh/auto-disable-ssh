@@ -15,6 +15,11 @@ increase_timer(){
     echo $NEW_TIME > /etc/ssh-active-without-pw-change
 }
 
+set_boot_state(){
+    echo "Setting state at next boot to: SSH_ENABLED_ON_BOOT=$1"
+    sed -i "s/^SSH_ENABLED_ON_BOOT.*/SSH_ENABLED_ON_BOOT=$1/"  /etc/rebuild-settings
+}
+
 # Check if this is first time the script is run after a reboot
 if [ ! -f /tmp/ssh-disable-has-run ]; then
     touch /tmp/ssh-disable-has-run
@@ -32,19 +37,22 @@ if [ ! -f /etc/ssh-active-without-pw-change ]; then
     reset_timer
 fi
 
-# Check if SSH service is active. If it is active here,
-# that means it has been enabled in the UI, so we can
-# keep it alive on next boot.
+# Check if SSH service is inactive. If it is inactive here,
+# we update the state for next boot and then exit
 SSH_STATE=$(systemctl is-active ssh)
-if [ "$SSH_STATE" != "active" ]; then
+if [ "$SSH_STATE" == "inactive" ]; then
+    if [ "$SSH_ENABLED_ON_BOOT" == "true" ]; then
+        set_boot_state "false"
+    fi
+
     echo "The SSH service is not active. Exiting"
     reset_timer
     exit 0
 fi
 
+# Everything below this point, the service is active. Update the state for the next boot.
 if [ "$SSH_ENABLED_ON_BOOT" == "false" ]; then
-    echo "The SSH service has been reactivated. Removing stopping after boot"
-    sed -i 's/^SSH_ENABLED_ON_BOOT.*/SSH_ENABLED_ON_BOOT=true/'  /etc/rebuild-settings
+    set_boot_state "true"
 fi
 
 # Check if password has been changed for user Debian
@@ -65,4 +73,5 @@ fi
 
 echo "The SSH service is active, but the password has not been changed, and more than $SSH_TIMEOUT minutes has passed. Disabling SSH"
 systemctl stop ssh
+set_boot_state "false"
 reset_timer
