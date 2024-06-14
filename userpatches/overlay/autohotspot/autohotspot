@@ -1,5 +1,6 @@
 #!/bin/bash
 
+. /etc/rebuild-settings
 wifidev=`nmcli dev | grep "wifi " | cut -d' ' -f1`
 hotspot_SSID="Recore"
 hotspot_PW="12345678"
@@ -18,7 +19,20 @@ create_hotspot() {
   nmcli con modify Hotspot wifi-sec.psk "$hotspot_PW"
 }
 
-if [ ! -f /etc/NetworkManager/system-connections/Hotspot.nmconnection ]
-then
+create_client() {
+  echo "Creating wifi client config"
+  nmcli con add type wifi ifname "$wifidev" con-name Client ssid "$WIFI_SSID"
+  nmcli con modify Client wifi-sec.key-mgmt wpa-psk
+  nmcli con modify Client wifi-sec.psk "$WIFI_PSK"
+  nmcli con up Client
+}
+
+if [ ! -f /etc/NetworkManager/system-connections/Hotspot.nmconnection ]; then
   create_hotspot
+fi
+
+if [ ! -f /etc/NetworkManager/system-connections/Client.nmconnection ]; then
+  if [ "${WIFI_SSID}" != "" ]; then
+    create_client
+  fi
 fi
