@@ -2,7 +2,7 @@
 BOARD_NAME="Iagent Recore"
 BOARDFAMILY="sun50iw1"
 BOOTCONFIG="recore_defconfig"
-KERNEL_TARGET="legacy,current"
+KERNEL_TARGET="legacy,current,edge"
 MODULES="g_serial"
 BOOT_LOGO="yes"
 

@@ -37,4 +37,7 @@ post_build() {
     # Force debian to change password
     # Must be done as a final step
     chage -d 0 debian
+
+    # Disable the upstream kernel driver for Rexfer/rtw88_rtl8821cu
+    echo "blacklist rtw88_8821cu" > /etc/modprobe.d/blacklist.conf
 }
