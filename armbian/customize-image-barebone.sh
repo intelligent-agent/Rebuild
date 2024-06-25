@@ -31,6 +31,9 @@ post_build() {
 
     TAG=$(cat /tmp/overlay/rebuild/rebuild-tag)
     sed -i "s/PRETTY_NAME=\"/PRETTY_NAME=\"Rebuild ${TAG}\//" /etc/os-release
+
+    # Disable the upstream kernel driver for Rexfer/rtw88_rtl8821cu
+    echo "blacklist rtw88_8821cu" > /etc/modprobe.d/blacklist.conf
 }
 
 prep_install() {
