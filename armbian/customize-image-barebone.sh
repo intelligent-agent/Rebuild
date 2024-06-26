@@ -34,6 +34,12 @@ post_build() {
 
     # Disable the upstream kernel driver for Rexfer/rtw88_rtl8821cu
     echo "blacklist rtw88_8821cu" > /etc/modprobe.d/blacklist.conf
+
+    # Automatically remount /boot rw when installing packages.
+    cat > /etc/apt/apt.conf.d/100update <<EOF
+DPkg::Pre-Invoke {"mount -o remount,rw /boot";};
+DPkg::Post-Invoke {"mount -o remount,ro /boot; /usr/local/bin/update-recore-revision";};
+EOF
 }
 
 prep_install() {
