@@ -1,18 +1,18 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Elias Bakken <elias@iagent.no>
-Date: Wed, 26 Jun 2024 12:29:55 +0000
+Date: Thu, 27 Jun 2024 12:39:45 +0000
 Subject: Add device trees for Recore A5 to A8
 
 Signed-off-by: Elias Bakken <elias@iagent.no>
 ---
  arch/arm64/boot/dts/allwinner/Makefile                 |   5 +
- arch/arm64/boot/dts/allwinner/sun50i-a64-recore-a5.dts | 102 +++
- arch/arm64/boot/dts/allwinner/sun50i-a64-recore-a6.dts |  59 ++
+ arch/arm64/boot/dts/allwinner/sun50i-a64-recore-a5.dts |  76 ++
+ arch/arm64/boot/dts/allwinner/sun50i-a64-recore-a6.dts |  33 +
  arch/arm64/boot/dts/allwinner/sun50i-a64-recore-a7.dts |  54 ++
  arch/arm64/boot/dts/allwinner/sun50i-a64-recore-a8.dts | 149 ++++
  arch/arm64/boot/dts/allwinner/sun50i-a64-recore.dts    |  37 +
- arch/arm64/boot/dts/allwinner/sun50i-a64-recore.dtsi   | 369 ++++++++++
- 7 files changed, 775 insertions(+)
+ arch/arm64/boot/dts/allwinner/sun50i-a64-recore.dtsi   | 396 ++++++++++
+ 7 files changed, 750 insertions(+)
 
 diff --git a/arch/arm64/boot/dts/allwinner/Makefile b/arch/arm64/boot/dts/allwinner/Makefile
 index a957365edc1a..5f705361c468 100644
@@ -36,10 +36,10 @@ index a957365edc1a..5f705361c468 100644
  dtb-$(CONFIG_ARCH_SUNXI) += sun50i-h5-bananapi-m2-plus-v1.2.dtb
 diff --git a/arch/arm64/boot/dts/allwinner/sun50i-a64-recore-a5.dts b/arch/arm64/boot/dts/allwinner/sun50i-a64-recore-a5.dts
 new file mode 100644
-index 000000000000..a8858a4f3c49
+index 000000000000..22c369c9dea3
 --- /dev/null
 +++ b/arch/arm64/boot/dts/allwinner/sun50i-a64-recore-a5.dts
-@@ -0,0 +1,102 @@
+@@ -0,0 +1,76 @@
 +// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
 +
 +/dts-v1/;
@@ -116,38 +116,12 @@ index 000000000000..a8858a4f3c49
 +	assigned-clock-rates = <120000000>;
 +};
 +
-+&cpu0 {
-+	/delete-property/ cpu-idle-states;
-+};
-+
-+&cpu1 {
-+	/delete-property/ cpu-idle-states;
-+};
-+
-+&cpu2 {
-+	/delete-property/ cpu-idle-states;
-+};
-+
-+&cpu3 {
-+	/delete-property/ cpu-idle-states;
-+};
-+
-+/ {
-+	cpus {
-+		/delete-node/ idle-states;
-+	};
-+	/delete-node/ scpi;
-+};
-+
-+&mbus {
-+	status = "disabled";
-+};
 diff --git a/arch/arm64/boot/dts/allwinner/sun50i-a64-recore-a6.dts b/arch/arm64/boot/dts/allwinner/sun50i-a64-recore-a6.dts
 new file mode 100644
-index 000000000000..54eaecaa50da
+index 000000000000..4a790dcf9d9f
 --- /dev/null
 +++ b/arch/arm64/boot/dts/allwinner/sun50i-a64-recore-a6.dts
-@@ -0,0 +1,59 @@
+@@ -0,0 +1,33 @@
 +// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
 +
 +/dts-v1/;
@@ -181,32 +155,6 @@ index 000000000000..54eaecaa50da
 +	assigned-clock-rates = <120000000>;
 +};
 +
-+&cpu0 {
-+	/delete-property/ cpu-idle-states;
-+};
-+
-+&cpu1 {
-+	/delete-property/ cpu-idle-states;
-+};
-+
-+&cpu2 {
-+	/delete-property/ cpu-idle-states;
-+};
-+
-+&cpu3 {
-+	/delete-property/ cpu-idle-states;
-+};
-+
-+/ {
-+	cpus {
-+		/delete-node/ idle-states;
-+	};
-+	/delete-node/ scpi;
-+};
-+
-+&mbus {
-+	status = "disabled";
-+};
 diff --git a/arch/arm64/boot/dts/allwinner/sun50i-a64-recore-a7.dts b/arch/arm64/boot/dts/allwinner/sun50i-a64-recore-a7.dts
 new file mode 100644
 index 000000000000..52ea801b8910
@@ -330,7 +278,7 @@ index 000000000000..44d559bdcfe2
 +	regulator-name = "vcc-ext";
 +};
 +
-+/* Set over current to lowest value: 30 A = 1200 mV */
++/* Set over current to: 30 A = 1200 mV */
 +&reg_dldo2 {
 +	regulator-min-microvolt = <1200000>;
 +	regulator-max-microvolt = <1200000>;
@@ -468,10 +416,10 @@ index 000000000000..0d6880ef9121
 \ No newline at end of file
 diff --git a/arch/arm64/boot/dts/allwinner/sun50i-a64-recore.dtsi b/arch/arm64/boot/dts/allwinner/sun50i-a64-recore.dtsi
 new file mode 100644
-index 000000000000..8fe52e99db8d
+index 000000000000..390af27157d6
 --- /dev/null
 +++ b/arch/arm64/boot/dts/allwinner/sun50i-a64-recore.dtsi
-@@ -0,0 +1,369 @@
+@@ -0,0 +1,396 @@
 +// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
 +
 +/dts-v1/;
@@ -840,6 +788,33 @@ index 000000000000..8fe52e99db8d
 +
 +&usbphy {
 +	status = "okay";
++};
++
++&cpu0 {
++	/delete-property/ cpu-idle-states;
++};
++
++&cpu1 {
++	/delete-property/ cpu-idle-states;
++};
++
++&cpu2 {
++	/delete-property/ cpu-idle-states;
++};
++
++&cpu3 {
++	/delete-property/ cpu-idle-states;
++};
++
++/ {
++	cpus {
++		/delete-node/ idle-states;
++	};
++	/delete-node/ scpi;
++};
++
++&mbus {
++	status = "disabled";
 +};
 -- 
 Created with Armbian build tools https://github.com/armbian/build
