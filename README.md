@@ -8,12 +8,12 @@ Armbian images for Recore.
 * Rebuild-Fluidd - Comes with Klipper, Moonraker and Fluidd
 * Rebuild-OctoPrint - Comes with Klipper and OctoPrint
 
-To build a version, run the script in this folder:
+To build a version, run the script in this folder:  
 `./rebuild <barebone|fluidd|mainsail|octoprint>`
 
 ## Manual tests to run before a release
-We test software versions Fluidd/Mainsail and OctoPrint.  
-We test hardware versions Recore A6, A7, A8
+We test software versions Fluidd, Mainsail and OctoPrint.
+We test hardware versions Recore A5, A6, A7, A8
 
 ### Fluidd on Recore A8
 - [x] Wifi comes up as an AP
