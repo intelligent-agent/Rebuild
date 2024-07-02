@@ -6,6 +6,7 @@ KERNEL_TARGET="legacy,current,edge"
 MODULES="g_serial"
 BOOT_LOGO="yes"
 BOARD_MAINTAINER=""
+NETWORKING_STACK="network-manager"
 
 function post_family_config__shrink_atf() {
 	display_alert "Choose ATF branch 🍰" "recore"

@@ -4,6 +4,8 @@
 
 enable_hotspot() {
   echo "Enabling wifi hotspot"
+  sed -i 's/@WIFI_SSID@/'${WIFI_SSID}'/g' /etc/netplan/lib/30-wifi-hotspot.yaml
+  sed -i 's/@WIFI_PASSWORD@/'${WIFI_PSK}'/g' /etc/netplan/lib/30-wifi-hotspot.yaml
   mv /etc/netplan/lib/30-wifi-hotspot.yaml /etc/netplan/
   netplan apply
 }
@@ -11,7 +13,7 @@ enable_hotspot() {
 enable_client() {
   echo "Enabling wifi client"
   sed -i 's/@WIFI_SSID@/'${WIFI_SSID}'/g' /etc/netplan/lib/20-wifi-client.yaml
-  sed -i 's/@WIFI_PASSWORD@/'${WIFI_PASSWORD}'/g' /etc/netplan/lib/20-wifi-client.yaml
+  sed -i 's/@WIFI_PASSWORD@/'${WIFI_PSK}'/g' /etc/netplan/lib/20-wifi-client.yaml
   mv /etc/netplan/lib/20-wifi-client.yaml /etc/netplan/
   netplan apply
 }

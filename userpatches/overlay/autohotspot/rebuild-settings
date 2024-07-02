@@ -1,0 +1,7 @@
+# Settings file for Rebuild
+SSH_ENABLED_ON_BOOT=false
+SSH_TIMEOUT=60
+EXTERNAL_SCREEN_ROTATION=0
+WIFI_TYPE="hotspot"
+WIFI_SSID="Recore"
+WIFI_PSK="12345678"

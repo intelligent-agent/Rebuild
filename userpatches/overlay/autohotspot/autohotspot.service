@@ -1,5 +1,7 @@
 [Unit]
 Description=Automatically generates an internet Hotspot when a valid ssid is not in range
+After=NetworkManager.service
+Wants=NetworkManager.service
 
 [Service]
 Type=oneshot

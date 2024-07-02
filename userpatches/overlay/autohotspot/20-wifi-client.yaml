@@ -1,6 +1,6 @@
 network:
   version: 2
-  renderer: networkd
+  renderer: network-manager
   wifis:
     wlan0:
       dhcp4: yes
