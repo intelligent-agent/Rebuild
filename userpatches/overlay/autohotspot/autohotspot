@@ -6,7 +6,7 @@ enable_hotspot() {
   echo "Enabling wifi hotspot"
   sed -i 's/@WIFI_SSID@/'${WIFI_SSID}'/g' /etc/netplan/lib/30-wifi-hotspot.yaml
   sed -i 's/@WIFI_PASSWORD@/'${WIFI_PSK}'/g' /etc/netplan/lib/30-wifi-hotspot.yaml
-  mv /etc/netplan/lib/30-wifi-hotspot.yaml /etc/netplan/
+  cp /etc/netplan/lib/30-wifi-hotspot.yaml /etc/netplan/
   netplan apply
 }
 
@@ -20,7 +20,7 @@ enable_client() {
 
 if [ "${WIFI_TYPE}" == "client" ]; then
   enable_client
-else if [ "${WIFI_TYPE}" == "hotspot" ]; then
+elif [ "${WIFI_TYPE}" == "hotspot" ]; then
   enable_hotspot
 else
   echo "No Wifi specified"

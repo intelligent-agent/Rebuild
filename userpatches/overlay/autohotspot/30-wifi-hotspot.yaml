@@ -1,6 +1,6 @@
 network:
   version: 2
-  renderer: network-manager
+  renderer: NetworkManager
   wifis:
     wlan0:
       dhcp4: no
@@ -9,3 +9,5 @@ network:
         "@WIFI_SSID@":
            password: "@WIFI_PASSWORD@"
            mode: ap
+           band: 2.4GHz
+           channel: 1
