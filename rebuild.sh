@@ -52,9 +52,9 @@ TAG=$(git describe --always --tags)
 NAME="rebuild-${VERSION}-${TAG}"
 
 cd $BUILD_DIR
-git reset --hard
+#git reset --hard
 git pull
-git checkout v24.05
+git checkout main
 rm -rf "userpatches"
 
 cd "$ROOT_DIR"

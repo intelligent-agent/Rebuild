@@ -15,9 +15,6 @@ post_build() {
     # armbian-firstrun needs to be type=oneshot in order to the autodisable to wait for it.
     sed -i 's/Type=.*/Type=oneshot/' /lib/systemd/system/armbian-firstrun.service
 
-    # Enable SSH service discovery
-    cp /usr/share/doc/avahi-daemon/examples/ssh.service /etc/avahi/services/
-
     # Increase burstlimit on ssh
     sed '/RuntimeDirectoryMode=0755/a StartLimitBurst=10' /lib/systemd/system/ssh.service
 

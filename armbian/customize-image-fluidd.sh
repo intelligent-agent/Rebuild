@@ -17,7 +17,7 @@ LINUXFAMILY=$2
 BOARD=$3
 BUILD_DESKTOP=$4
 PREP_PACKAGE_LIST="git unzip"
-ADD_PACKAGE_LIST="avahi-daemon"
+ADD_PACKAGE_LIST=""
 
 source /tmp/overlay/install_components/klipper.sh
 source /tmp/overlay/install_components/moonraker.sh

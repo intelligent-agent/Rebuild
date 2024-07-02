@@ -1,4 +1,4 @@
 verbosity=0
 bootlogo=true
 console=serial
-extraargs=vt.global_cursor_default=0 quiet plymouth.ignore-serial-consoles
+extraargs=vt.global_cursor_default=0 quiet plymouth.ignore-serial-consoles net.ifnames=0
