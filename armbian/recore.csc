@@ -1,14 +1,18 @@
 # Allwinner A64 quad core 1GB RAM SoC GBE for 3D printers
-BOARD_NAME="Iagent Recore"
+BOARD_NAME="Recore"
+BOARD_VENDOR="Iagent"
 BOARDFAMILY="sun50iw1"
 BOOTCONFIG="recore_defconfig"
 KERNEL_TARGET="legacy,current,edge"
+KERNEL_TEST_TARGET="current"
 MODULES="g_serial"
 BOOT_LOGO="yes"
+WIREGUARD=no
+BOOTFS_TYPE=ext4
 
 function post_family_config__shrink_atf() {
-    echo "🍰Choose ATF branch"
-    declare -g ATFBRANCH="tag:v2.8.0"
+    #echo "🍰Choose ATF branch"
+    #declare -g ATFBRANCH="tag:v2.8.0"
 
     echo "🍰Shrink ATF"
     declare -g ATF_TARGET_MAP="PLAT=$ATF_PLAT DEBUG=0 SUNXI_PSCI_USE_SCPI=0 bl31;;build/$ATF_PLAT/release/bl31.bin"
