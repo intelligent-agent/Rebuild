@@ -4,17 +4,19 @@ BOARD_VENDOR="Iagent"
 BOARDFAMILY="sun50iw1"
 BOOTCONFIG="recore_defconfig"
 KERNEL_TARGET="legacy,current,edge"
-KERNEL_TEST_TARGET="current"
+KERNEL_TEST_TARGET="edge"
 MODULES="g_serial"
 BOOT_LOGO="yes"
 WIREGUARD=no
 BOOTFS_TYPE=ext4
+ATF_SKIP_LDFLAGS_WL=no
 
 function post_family_config__shrink_atf() {
-    #echo "🍰Choose ATF branch"
+    echo "🍰Choose ATF branch"
     #declare -g ATFBRANCH="tag:v2.8.0"
+    #declare -g ATFBRANCH="tag:lts-v2.8.40"
 
-    echo "🍰Shrink ATF"
+    echo "🍰Disable Crust"
     declare -g ATF_TARGET_MAP="PLAT=$ATF_PLAT DEBUG=0 SUNXI_PSCI_USE_SCPI=0 bl31;;build/$ATF_PLAT/release/bl31.bin"
 
     echo "🍰Compile without SCP binary"
@@ -29,4 +31,13 @@ function format_partitions__make_boot_ro() {
 function extension_finish_config__enable_plymouth() {
     echo "🍰Enable Plymouth on minimal build"
     PLYMOUTH=yes
+}
+
+function post_config_uboot_target__disable_logging() {
+    display_alert "🍰Customizing U-Boot config" "Disabling logging for ATF compatibility" "info"
+    
+    # Use the same tool Armbian uses to undo the changes
+    run_host_command_logged ./scripts/config --disable CONFIG_LOG
+    run_host_command_logged ./scripts/config --disable CONFIG_LOG_CONSOLE
+    run_host_command_logged ./scripts/config --disable CONFIG_SPL_LOG
 }

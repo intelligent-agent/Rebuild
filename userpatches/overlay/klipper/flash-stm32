@@ -14,11 +14,14 @@ fi
 
 systemctl stop klipper
 
-gpioset 1 197=1
-gpioset 1 196=0
-gpioset 1 196=1
+# Set boot-pin high while flashing
+gpioset -z -C "boot-pin" -c 1 197=1
+# Set reset-pin 196 low, then high after 10 ms
+gpioset -t 10ms,0 -c 1 196=0
 stm32flash -w ${STM32_BINARY} -v -g 0 ${FLASH_DEVICE}
-gpioset 1 197=0
-gpioget 1 196
+# Set boot-pin low
+pkill -f boot-pin
+# 196 needs to be pull-up so the STM32 can use reset
+gpioget -c 1 -b pull-up 196
 
 systemctl restart klipper
