@@ -1,9 +1,9 @@
 #!/bin/bash
 # This script installs Klipper on a Debian 10 machine with Octoprint
 
-PYTHONDIR="${HOME}/klippy-env"
+PYTHONDIR="/home/debian/klippy-env"
 SYSTEMDDIR="/etc/systemd/system"
-KLIPPER_USER=$USER
+KLIPPER_USER=debian
 KLIPPER_GROUP=$KLIPPER_USER
 
 # Step 1: Install system packages
@@ -23,11 +23,11 @@ install_packages()
 
     # Update system package info
     report_status "Running apt-get update..."
-    sudo apt-get update
+    apt update
 
     # Install desired packages
     report_status "Installing packages..."
-    sudo apt-get install --yes ${PKGLIST} --no-install-suggests 
+    apt install --yes ${PKGLIST} --no-install-suggests 
 }
 
 # Step 2: Create python virtual environment
@@ -50,7 +50,7 @@ install_script()
     KLIPPER_LOG=/var/log/klipper_logs/klippy.log
     KLIPPER_SOCKET=/tmp/klippy_uds
     report_status "Installing system start script..."
-    sudo /bin/sh -c "cat > $SYSTEMDDIR/klipper.service" << EOF
+    /bin/sh -c "cat > $SYSTEMDDIR/klipper.service" << EOF
 #Systemd service file for klipper
 [Unit]
 Description=Starts klipper on startup
@@ -64,26 +64,26 @@ Type=simple
 User=debian
 RemainAfterExit=yes
 PermissionsStartOnly=true
-ExecStartPre=/usr/bin/gpioset 1 196=0
-ExecStartPre=/usr/bin/gpioget 1 196
+ExecStartPre=/usr/bin/gpioset -c 1 196=0
+ExecStartPre=/usr/bin/gpioget -c 1 196
 ExecStartPre=${SRCDIR}/scripts/flash-ar100.py /opt/firmware/ar100.bin
 ExecStart=${PYTHONDIR}/bin/python ${SRCDIR}/klippy/klippy.py ${KLIPPER_CONFIG} -l ${KLIPPER_LOG} -a ${KLIPPER_SOCKET}
 ExecStopPost=${SRCDIR}/scripts/flash-ar100.py --bl31 --halt /opt/firmware/bl31.bin
 EOF
 # Use systemctl to enable the klipper systemd service script
-    sudo systemctl enable klipper.service
+    systemctl enable klipper.service
 }
 
 # Step 4: Install numpy after creating virtualenv
 install_numpy(){
-    /home/debian/klippy-env/bin/pip install -v numpy
+    ${PYTHONDIR}/bin/pip install -v numpy
 }
 
 # Step 5: Start host software
 start_software()
 {
     report_status "Launching Klipper host software..."
-    sudo systemctl start klipper
+    systemctl start klipper
 }
 
 # Helper functions
@@ -107,7 +107,7 @@ set -e
 SRCDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )"/.. && pwd )"
 
 # Run installation steps defined above
-verify_ready
+#verify_ready
 install_packages
 create_virtualenv
 install_script

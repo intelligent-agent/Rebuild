@@ -26,35 +26,42 @@ install_klipper(){
     cp /tmp/overlay/klipper/bl31.bin /opt/firmware/
     chown -R debian:debian klipper
     chmod +x /home/debian/klipper/scripts/install-recore.sh
-    su -c "/home/debian/klipper/scripts/install-recore.sh" debian
+    /home/debian/klipper/scripts/install-recore.sh
 
     # Install AR100 toolchain
-    wget http://feeds.iagent.no/toolchains/or1k-linux-musl-11.2.0.tar.xz -P /opt
+    #wget http://feeds.iagent.no/toolchains/or1k-linux-musl-11.2.0.tar.xz -P /opt
+    wget http://feeds.iagent.no/toolchains/or1k-elf-15.1.0-20260131.tar.xz -P /opt
     cd /opt
-    tar -xf /opt/or1k-linux-musl-11.2.0.tar.xz
-    rm /opt/or1k-linux-musl-11.2.0.tar.xz
-
+    #tar -xf /opt/or1k-linux-musl-11.2.0.tar.xz
+    tar -xf /opt/or1k-elf-15.1.0-20260131.tar.xz
+    #rm /opt/or1k-linux-musl-11.2.0.tar.xz
+    rm /opt/or1k-elf-15.1.0-20260131.tar.xz
+    export PATH=$PATH:/opt/or1k-elf/bin
+	echo "export PATH=\$PATH:$PATH:/opt/or1k-elf/bin" >> /home/debian/.bashrc
+    
     # Compile AR100
     cp /tmp/overlay/klipper/ar100.config /home/debian/klipper/.config
     cd /home/debian/klipper/
-    export PATH=$PATH:/opt/output/bin
-	echo "export PATH=\$PATH:/opt/output/bin" >> /home/debian/.bashrc
+    sed -i 's/CFLAGS.*+= -O3//' src/ar100/Makefile
+
+    sed -i 's|ASSERT(. <= (SRAM_A2_SIZE), "Klipper image is too large")|ASSERT(. <= (ORIGIN(SRAM_A2) + LENGTH(SRAM_A2)), "Klipper image is too large")|' src/ar100/ar100.ld
+
     make olddefconfig
-    make -j
+    make
     cp /home/debian/klipper/out/ar100.bin /opt/firmware
 
     # Compile STM32
     cp /tmp/overlay/klipper/stm32f031-serial.config /home/debian/klipper/.config
     make clean
     make olddefconfig
-    make -j
+    make
     cp /home/debian/klipper/out/klipper.bin /opt/firmware/stm32.bin
 
     # Compile STM32-32KB
     cp /tmp/overlay/klipper/stm32f031-32KB-serial.config /home/debian/klipper/.config
     make clean
     make olddefconfig
-    make -j
+    make
     cp /home/debian/klipper/out/klipper.bin /opt/firmware/stm32-32KB.bin
     
     # Revert the patch to get rid of the warning
