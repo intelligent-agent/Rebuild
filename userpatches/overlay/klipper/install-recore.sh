@@ -64,8 +64,8 @@ Type=simple
 User=debian
 RemainAfterExit=yes
 PermissionsStartOnly=true
-ExecStartPre=/usr/bin/gpioset -c 1 196=0
-ExecStartPre=/usr/bin/gpioget -c 1 196
+ExecStartPre=/usr/bin/gpioset -c 1 -t0 196=0
+ExecStartPre=/usr/bin/gpioget -c 1 -b pull-up 196
 ExecStartPre=${SRCDIR}/scripts/flash-ar100.py /opt/firmware/ar100.bin
 ExecStart=${PYTHONDIR}/bin/python ${SRCDIR}/klippy/klippy.py ${KLIPPER_CONFIG} -l ${KLIPPER_LOG} -a ${KLIPPER_SOCKET}
 EOF
