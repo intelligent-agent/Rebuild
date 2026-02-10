@@ -786,7 +786,7 @@ index 000000000000..390af27157d6
 +	status = "okay";
 +};
 +
-+&cpu0 {
++/*&cpu0 {
 +	/delete-property/ cpu-idle-states;
 +};
 +
@@ -811,7 +811,7 @@ index 000000000000..390af27157d6
 +
 +&mbus {
 +	status = "disabled";
-+};
++};*/
 -- 
 Created with Armbian build tools https://github.com/armbian/build
 
