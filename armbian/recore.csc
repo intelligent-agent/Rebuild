@@ -17,7 +17,7 @@ function post_family_config__shrink_atf() {
     #declare -g ATFBRANCH="tag:lts-v2.8.40"
 
     echo "🍰Disable Crust"
-    declare -g ATF_TARGET_MAP="PLAT=$ATF_PLAT DEBUG=0 SUNXI_PSCI_USE_SCPI=0 bl31;;build/$ATF_PLAT/release/bl31.bin"
+    declare -g ATF_TARGET_MAP="PLAT=$ATF_PLAT DEBUG=0 SUNXI_PSCI_USE_SCPI=0 SUNXI_BL31_IN_DRAM=1 SEPARATE_NOBITS_REGION=0 bl31;;build/$ATF_PLAT/release/bl31.bin"
 
     echo "🍰Compile without SCP binary"
     UBOOT_TARGET_MAP="SCP=/dev/null;;u-boot-sunxi-with-spl.bin"
@@ -33,11 +33,3 @@ function extension_finish_config__enable_plymouth() {
     PLYMOUTH=yes
 }
 
-function post_config_uboot_target__disable_logging() {
-    display_alert "🍰Customizing U-Boot config" "Disabling logging for ATF compatibility" "info"
-    
-    # Use the same tool Armbian uses to undo the changes
-    run_host_command_logged ./scripts/config --disable CONFIG_LOG
-    run_host_command_logged ./scripts/config --disable CONFIG_LOG_CONSOLE
-    run_host_command_logged ./scripts/config --disable CONFIG_SPL_LOG
-}

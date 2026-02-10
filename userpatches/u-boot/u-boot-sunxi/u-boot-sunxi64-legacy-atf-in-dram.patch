@@ -1,0 +1,26 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Elias Bakken <elias@iagent.no>
+Date: Mon, 25 Dec 2023 01:56:11 +0000
+Subject: Patching u-boot sunxi64 files atf in dram
+
+Signed-off-by: Elias Bakken <elias@iagent.no>
+---
+ arch/arm/dts/sunxi-u-boot.dtsi | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/arch/arm/dts/sunxi-u-boot.dtsi b/arch/arm/dts/sunxi-u-boot.dtsi
+index a0c8abb703..8ed6532430 100644
+--- a/arch/arm/dts/sunxi-u-boot.dtsi
++++ b/arch/arm/dts/sunxi-u-boot.dtsi
+@@ -5,6 +5,9 @@
+ #define  SCP_ADDR 0x114000
+ #elif defined(CONFIG_MACH_SUN50I_H616)
+ #define BL31_ADDR 0x40000000
++#elif defined(CONFIG_MACH_SUN50I)
++/* Move A64 BL31 to DRAM to make room for Klipper */
++#define BL31_ADDR 0x40000000
+ #else
+ #define BL31_ADDR  0x44000
+ #define  SCP_ADDR  0x50000
+-- 
+Created with Armbian build tools https://github.com/armbian/build

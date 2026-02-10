@@ -22,3 +22,5 @@ We test hardware versions Recore A5, A6, A7, A8
 - [x] Default Klipper config does not have any errors
 - [x] All systemd services are running as they should
 - [x] Software updates look functional
+
+

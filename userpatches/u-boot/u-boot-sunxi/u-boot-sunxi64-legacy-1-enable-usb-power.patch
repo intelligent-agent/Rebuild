@@ -19,7 +19,7 @@ index 0162a4ae39..97e6957e4b 100644
  CONFIG_DM_REGULATOR_FIXED=y
  CONFIG_CMD_REGULATOR=y
 +CONFIG_USE_PREBOOT=y
-+CONFIG_PREBOOT="regulator status; usb reset; run bootcmd_usb0"
++CONFIG_PREBOOT="mw.l 0x01f01400 0x00020102; regulator status; usb reset; run bootcmd_usb0"
 -- 
 Created with Armbian build tools https://github.com/armbian/build
 

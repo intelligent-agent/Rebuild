@@ -68,7 +68,6 @@ ExecStartPre=/usr/bin/gpioset -c 1 196=0
 ExecStartPre=/usr/bin/gpioget -c 1 196
 ExecStartPre=${SRCDIR}/scripts/flash-ar100.py /opt/firmware/ar100.bin
 ExecStart=${PYTHONDIR}/bin/python ${SRCDIR}/klippy/klippy.py ${KLIPPER_CONFIG} -l ${KLIPPER_LOG} -a ${KLIPPER_SOCKET}
-ExecStopPost=${SRCDIR}/scripts/flash-ar100.py --bl31 --halt /opt/firmware/bl31.bin
 EOF
 # Use systemctl to enable the klipper systemd service script
     systemctl enable klipper.service

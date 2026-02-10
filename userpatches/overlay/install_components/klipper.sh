@@ -19,7 +19,7 @@ install_klipper(){
     cp /tmp/overlay/klipper/tmc2209_a5.py /home/debian/klipper/klippy/extras/
     cp /tmp/overlay/klipper/tmc2130_a5.py /home/debian/klipper/klippy/extras/
 
-	cp /tmp/overlay/klipper/flash-stm32 /usr/local/bin
+    cp /tmp/overlay/klipper/flash-stm32 /usr/local/bin
     mkdir -p /var/log/klipper_logs
     chown debian:debian /var/log/klipper_logs
     mkdir -p /opt/firmware/

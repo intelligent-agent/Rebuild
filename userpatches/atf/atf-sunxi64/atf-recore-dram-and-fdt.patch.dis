@@ -1,0 +1,22 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Elias Bakken <elias@iagent.no>
+Date: Mon, 25 Dec 2023 01:56:11 +0000
+Subject: Patching u-boot sunxi64 files configs/recore_defconfig
+
+Signed-off-by: Elias Bakken <elias@iagent.no>
+---
+ plat/allwinner/sun50i_a64/platform.mk | 2 ++
+ 1 file changed, 2 insertions(+)
+
+--- a/plat/allwinner/sun50i_a64/platform.mk
++++ b/plat/allwinner/sun50i_a64/platform.mk
+@@ -13,6 +13,8 @@
+ 
+ BL31_SOURCES           +=      drivers/allwinner/axp/axp803.c          \
+                                 drivers/allwinner/sunxi_rsb.c
++BL31_SOURCES           +=      common/fdt_wrappers.c                   \
++                                lib/libfdt/fdt_addresses.c
+ 
+ FDT_ASSUME_MASK := "(ASSUME_LATEST | ASSUME_NO_ROLLBACK | ASSUME_LIBFDT_ORDER)"
+ $(eval $(call add_define,FDT_ASSUME_MASK))
+--
