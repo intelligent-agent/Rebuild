@@ -1,0 +1,33 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: John Doe <john.doe@somewhere.on.planet>
+Date: Mon, 9 Feb 2026 20:38:29 +0000
+Subject: Patching atf sunxi64 files plat/allwinner/sun50i_a64/platform.mk
+
+Signed-off-by: John Doe <john.doe@somewhere.on.planet>
+---
+ plat/allwinner/sun50i_a64/platform.mk | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/plat/allwinner/sun50i_a64/platform.mk b/plat/allwinner/sun50i_a64/platform.mk
+index cced7f0b7..68cf4484c 100644
+--- a/plat/allwinner/sun50i_a64/platform.mk
++++ b/plat/allwinner/sun50i_a64/platform.mk
+@@ -10,12 +10,13 @@ SUNXI_AMEND_DTB		:=	1
+ 
+ # The differences between the platform are covered by the include files.
+ include plat/allwinner/common/allwinner-common.mk
+ 
+ BL31_SOURCES		+=	drivers/allwinner/axp/axp803.c		\
+-				drivers/allwinner/sunxi_rsb.c
+-
++				drivers/allwinner/sunxi_rsb.c		\
++				common/fdt_wrappers.c                   \
++				lib/libfdt/fdt_addresses.c
+ FDT_ASSUME_MASK := "(ASSUME_LATEST | ASSUME_NO_ROLLBACK | ASSUME_LIBFDT_ORDER)"
+ $(eval $(call add_define,FDT_ASSUME_MASK))
+ 
+ # Put NOBITS memory in SRAM A1, overwriting U-Boot's SPL.
+ SEPARATE_NOBITS_REGION	:=	1
+-- 
+Created with Armbian build tools https://github.com/armbian/build
+

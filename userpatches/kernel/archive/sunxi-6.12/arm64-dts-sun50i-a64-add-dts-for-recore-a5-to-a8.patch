@@ -628,7 +628,7 @@ index 000000000000..390af27157d6
 +	vcc-pf-supply = <&reg_dcdc1>;
 +	vcc-pg-supply = <&reg_dcdc1>;
 +	vcc-ph-supply = <&reg_dcdc1>;
-+	vcc-pl-supply = <&reg_dcdc1>;
++	/*vcc-pl-supply = <&reg_dcdc1>;*/
 +};
 +
 +&r_rsb {
