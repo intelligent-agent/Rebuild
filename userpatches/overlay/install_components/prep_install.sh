@@ -22,4 +22,5 @@ prepare_build() {
     # Make folder for configs
     mkdir -p /home/debian/printer_data/config
     chown -R debian:debian /home/debian/printer_data
+    chmod +x /home/debian
 }

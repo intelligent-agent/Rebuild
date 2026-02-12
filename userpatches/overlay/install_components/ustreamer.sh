@@ -10,5 +10,6 @@ install_ustreamer() {
     echo 'SUBSYSTEM=="video4linux", ATTR{name}!="cedrus", ATTR{index}=="0", SYMLINK+="webcam", TAG+="systemd"' > /etc/udev/rules.d/50-video.rules
     echo '%debian ALL=NOPASSWD: /bin/systemctl restart ustreamer.service' >> /etc/sudoers.d/debian
     cp /tmp/overlay/ustreamer/ustreamer.service /etc/systemd/system/
+    chown -R debian:debian /home/debian/ustreamer
     systemctl enable ustreamer.service
 }
