@@ -23,11 +23,11 @@ install_packages()
 
     # Update system package info
     report_status "Running apt-get update..."
-    apt update
+    sudo apt update
 
     # Install desired packages
     report_status "Installing packages..."
-    apt install --yes ${PKGLIST} --no-install-suggests 
+    sudo apt install --yes ${PKGLIST} --no-install-suggests 
 }
 
 # Step 2: Create python virtual environment
@@ -50,7 +50,7 @@ install_script()
     KLIPPER_LOG=/var/log/klipper_logs/klippy.log
     KLIPPER_SOCKET=/tmp/klippy_uds
     report_status "Installing system start script..."
-    /bin/sh -c "cat > $SYSTEMDDIR/klipper.service" << EOF
+    sudo /bin/sh -c "cat > $SYSTEMDDIR/klipper.service" << EOF
 #Systemd service file for klipper
 [Unit]
 Description=Starts klipper on startup
@@ -64,13 +64,14 @@ Type=simple
 User=debian
 RemainAfterExit=yes
 PermissionsStartOnly=true
+ExecStartPre=/usr/bin/gpioset -c 1 -t0 197=0
 ExecStartPre=/usr/bin/gpioset -c 1 -t0 196=0
 ExecStartPre=/usr/bin/gpioget -c 1 -b pull-up 196
 ExecStartPre=${SRCDIR}/scripts/flash-ar100.py /opt/firmware/ar100.bin
 ExecStart=${PYTHONDIR}/bin/python ${SRCDIR}/klippy/klippy.py ${KLIPPER_CONFIG} -l ${KLIPPER_LOG} -a ${KLIPPER_SOCKET}
 EOF
 # Use systemctl to enable the klipper systemd service script
-    systemctl enable klipper.service
+    sudo systemctl enable klipper.service
 }
 
 # Step 4: Install numpy after creating virtualenv
@@ -82,7 +83,7 @@ install_numpy(){
 start_software()
 {
     report_status "Launching Klipper host software..."
-    systemctl start klipper
+    sudo systemctl start klipper
 }
 
 # Helper functions
@@ -106,7 +107,7 @@ set -e
 SRCDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )"/.. && pwd )"
 
 # Run installation steps defined above
-#verify_ready
+verify_ready
 install_packages
 create_virtualenv
 install_script

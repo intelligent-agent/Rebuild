@@ -10,6 +10,7 @@ BOOT_LOGO="yes"
 WIREGUARD=no
 BOOTFS_TYPE=ext4
 ATF_SKIP_LDFLAGS_WL=no
+INCLUDE_HOME_DIR="yes"
 
 function post_family_config__shrink_atf() {
     echo "🍰Choose ATF branch"
