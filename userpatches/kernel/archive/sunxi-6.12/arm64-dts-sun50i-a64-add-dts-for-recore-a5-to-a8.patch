@@ -299,8 +299,8 @@ index 000000000000..44d559bdcfe2
 +
 +&usbphy {
 +	status = "okay";
-+	usb0_id_det-gpios = <&pio 4 7 GPIO_ACTIVE_HIGH>;
-+	usb0_vbus_det-gpios = <&pio 4 6 GPIO_ACTIVE_HIGH>;
++	/*usb0_id_det-gpios = <&pio 4 7 GPIO_ACTIVE_HIGH>;*/
++	/*usb0_vbus_det-gpios = <&pio 4 6 GPIO_ACTIVE_HIGH>;*/
 +	ports {
 +		port@0 {
 +			usb0_role_switch: endpoint {

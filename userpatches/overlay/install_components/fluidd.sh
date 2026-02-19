@@ -2,10 +2,11 @@
 
 install_fluidd(){
     echo "🍰 install Fluidd"
-    cd /home/debian
+    cd ${HOMEDIR}
     wget https://github.com/fluidd-core/fluidd/releases/latest/download/fluidd.zip
     unzip fluidd.zip -d fluidd
-    chown -R debian:debian fluidd
-    cp /tmp/overlay/fluidd/fluidd.cfg /home/debian/printer_data/config
+    chown -R ${USER}:${USER} fluidd
+    cp /tmp/overlay/fluidd/fluidd.cfg ${HOMEDIR}/printer_data/config
+    chown ${USER}:${USER} ${HOMEDIR}/printer_data/config/fluidd.cfg
     rm fluidd.zip
 }

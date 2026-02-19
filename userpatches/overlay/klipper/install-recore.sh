@@ -1,34 +1,11 @@
 #!/bin/bash
-# This script installs Klipper on a Debian 10 machine with Octoprint
 
-PYTHONDIR="/home/debian/klippy-env"
+KLIPPER_USER=printer
+HOMEDIR="/home/$KLIPPER_USER"
+PYTHONDIR="$HOMEDIR/klippy-env"
 SYSTEMDDIR="/etc/systemd/system"
-KLIPPER_USER=debian
 KLIPPER_GROUP=$KLIPPER_USER
 
-# Step 1: Install system packages
-install_packages()
-{
-    # Packages for python cffi    
-    PKGLIST="python3-virtualenv virtualenv python3-dev libffi-dev build-essential python3-cffi python3-libxml2"
-    # kconfig requirements
-    PKGLIST="${PKGLIST} libncurses-dev"
-    # hub-ctrl and rp2040 flasher
-    PKGLIST="${PKGLIST} libusb-dev libusb-1.0-0-dev"
-    # ARM chip installation and building
-    PKGLIST="${PKGLIST} stm32flash libnewlib-arm-none-eabi"
-    PKGLIST="${PKGLIST} gcc-arm-none-eabi binutils-arm-none-eabi"
-    # ADXL/Remove A1 requirements
-    PKGLIST="${PKGLIST} python3-numpy python3-matplotlib"
-
-    # Update system package info
-    report_status "Running apt-get update..."
-    sudo apt update
-
-    # Install desired packages
-    report_status "Installing packages..."
-    sudo apt install --yes ${PKGLIST} --no-install-suggests 
-}
 
 # Step 2: Create python virtual environment
 create_virtualenv()
@@ -46,7 +23,7 @@ create_virtualenv()
 install_script()
 {
 # Create systemd service file
-    KLIPPER_CONFIG=/home/debian/printer_data/config/printer.cfg
+    KLIPPER_CONFIG=${HOMEDIR}/printer_data/config/printer.cfg
     KLIPPER_LOG=/var/log/klipper_logs/klippy.log
     KLIPPER_SOCKET=/tmp/klippy_uds
     report_status "Installing system start script..."
@@ -61,7 +38,8 @@ WantedBy=multi-user.target
 
 [Service]
 Type=simple
-User=debian
+User=$KLIPPER_USER
+Group=$KLIPPER_GROUP
 RemainAfterExit=yes
 PermissionsStartOnly=true
 ExecStartPre=/usr/bin/gpioset -c 1 -t0 197=0
@@ -111,5 +89,5 @@ verify_ready
 install_packages
 create_virtualenv
 install_script
-install_numpy
-start_software
+#install_numpy
+#start_software
