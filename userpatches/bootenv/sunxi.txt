@@ -1,4 +1,4 @@
 verbosity=0
 bootlogo=true
 console=serial
-extraargs=
+extraargs=quiet

@@ -43,7 +43,7 @@ install_klipper(){
     PKGLIST="${PKGLIST} libncurses-dev libusb-1.0-0-dev stm32flash"
     PKGLIST="${PKGLIST} gcc-arm-none-eabi binutils-arm-none-eabi libnewlib-arm-none-eabi"
     # In Trixie, use the system numpy for speed
-    PKGLIST="${PKGLIST} python3-numpy python3-matplotlib"
+    PKGLIST="${PKGLIST} python3-matplotlib"
 
     # Install desired packages
     apt install --yes ${PKGLIST} --no-install-suggests 
@@ -52,7 +52,8 @@ install_klipper(){
 
     # Install/update dependencies
     ${PYTHONDIR}/bin/pip install -r ${HOMEDIR}/klipper/scripts/klippy-requirements.txt
-        
+    ${PYTHONDIR}/bin/pip install numpy
+
     # Create systemd service file
     cat > /etc/systemd/system/klipper.service << EOF
 #Systemd service file for klipper
