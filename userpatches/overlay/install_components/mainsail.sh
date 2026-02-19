@@ -7,5 +7,6 @@ install_mainsail(){
     unzip mainsail.zip -d mainsail
     chown -R ${USER}:${USER} mainsail
     cp /tmp/overlay/mainsail/mainsail.cfg ${HOMEDIR}/printer_data/config
+    chown ${USER}:${USER} ${HOMEDIR}/printer_data/config/mainsail.cfg
     rm mainsail.zip
 }

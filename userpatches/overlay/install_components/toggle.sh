@@ -2,12 +2,12 @@
 
 install_weston(){
 	echo "🍰 installing Weston"
-	cd /home/debian
-    # This pulls in a lot of packages, should be optimized
+	cd ${HOMEDIR}
+	# This pulls in a lot of packages, should be optimized
 	apt install -y weston librsvg2-common libgl1-mesa-dri
 
-    mkdir -p /etc/xdg/weston/
-    cat > /etc/xdg/weston/weston.ini <<EOF
+	mkdir -p /etc/xdg/weston/
+	cat > /etc/xdg/weston/weston.ini <<EOF
 [core]
 idle-time=0
 
@@ -20,7 +20,7 @@ name=HDMI-A-1
 transform=normal
 EOF
 
-    cat > /etc/systemd/system/weston.service <<EOF
+	cat > /etc/systemd/system/weston.service <<EOF
 [Unit]
 Description=Weston Wayland Compositor
 
@@ -47,7 +47,7 @@ install_toggle(){
     dpkg -i gir1.2-mash-0.3-0_0.3.0-1_arm64.deb
     rm -rf *.deb
 
-    cd /home/debian
+    cd ${HOMEDIR}
     git clone https://github.com/intelligent-agent/toggle
     cd toggle
     pip3 install -r requirements.txt --break-system-packages
@@ -78,14 +78,14 @@ user = toggle
 authentication =
 EOF
 
-    chown -R debian:debian /home/debian/toggle
-    chown -R debian:debian /etc/toggle
+    chown -R ${USER}:${USER} ${HOMEDIR}/toggle
+    chown -R ${USER}:${USER} /etc/toggle
     systemctl enable toggle
 
-    cd /home/debian
+    cd ${HOMEDIR}
     git clone https://github.com/intelligent-agent/octoprint_toggle
-    cd /home/debian/octoprint_toggle
-    /home/debian/OctoPrint/venv/bin/python setup.py install
+    cd octoprint_toggle
+    ${HOMEDIR}/OctoPrint/venv/bin/python setup.py install
 
     cat > /etc/systemd/system/toggle-runfirst.service <<EOF
 [Unit]
