@@ -17,10 +17,13 @@ install_moonraker(){
 
     echo '%printer ALL=NOPASSWD: /bin/systemctl restart ssh' >> /etc/sudoers.d/printer
     echo '%printer ALL=NOPASSWD: /bin/systemctl stop ssh' >> /etc/sudoers.d/printer
+    echo '%printer ALL=NOPASSWD: /bin/systemctl start ssh' >> /etc/sudoers.d/printer
     echo '%printer ALL=NOPASSWD: /bin/systemctl restart klipper' >> /etc/sudoers.d/printer
     echo '%printer ALL=NOPASSWD: /bin/systemctl stop klipper' >> /etc/sudoers.d/printer
+    echo '%printer ALL=NOPASSWD: /bin/systemctl start klipper' >> /etc/sudoers.d/printer
     echo '%printer ALL=NOPASSWD: /bin/systemctl restart KlipperScreen' >> /etc/sudoers.d/printer
     echo '%printer ALL=NOPASSWD: /bin/systemctl stop KlipperScreen' >> /etc/sudoers.d/printer
+    echo '%printer ALL=NOPASSWD: /bin/systemctl start KlipperScreen' >> /etc/sudoers.d/printer
     echo '%printer ALL=NOPASSWD: /bin/systemctl restart moonraker' >> /etc/sudoers.d/printer
     echo '%printer ALL=NOPASSWD: /bin/systemctl reboot' >> /etc/sudoers.d/printer
     echo '%printer ALL=NOPASSWD: /bin/systemctl poweroff' >> /etc/sudoers.d/printer
