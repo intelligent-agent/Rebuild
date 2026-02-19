@@ -17,7 +17,7 @@ def hash_password(password):
     return hashlib.sha512((password + salt).encode()).hexdigest()
 
 def get_salt():
-    fname = '/home/debian/.octoprint/config.yaml'
+    fname = '/home/printer/.octoprint/config.yaml'
     with open(fname, "r") as f_in:
         config = yaml.safe_load(f_in)
         salt = config.get("accessControl", {}).get("salt", make_key(32))
@@ -61,7 +61,7 @@ def update_user_config(password, fname):
           yaml.safe_dump(users, f_out, default_flow_style=False)
       return apikey
 
-fname = '/home/debian/.octoprint/users.yaml'
+fname = '/home/printer/.octoprint/users.yaml'
 
 while True:
   if os.path.exists(fname):
