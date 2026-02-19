@@ -2,7 +2,7 @@
 Description=streams webcam data
 
 [Service]
-ExecStart=/home/debian/ustreamer/ustreamer --device /dev/webcam --host=0.0.0.0 --port=8080 -m MJPEG
+ExecStart=/home/printer/ustreamer/ustreamer --device /dev/webcam --host=0.0.0.0 --port=8080 -m MJPEG
 
 [Install]
 WantedBy=dev-webcam.device

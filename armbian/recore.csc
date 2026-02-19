@@ -3,9 +3,9 @@ BOARD_NAME="Recore"
 BOARD_VENDOR="Iagent"
 BOARDFAMILY="sun50iw1"
 BOOTCONFIG="recore_defconfig"
-KERNEL_TARGET="legacy,current,edge"
+KERNEL_TARGET="edge"
 KERNEL_TEST_TARGET="edge"
-MODULES="g_serial"
+#MODULES="g_serial"
 BOOT_LOGO="yes"
 WIREGUARD=no
 BOOTFS_TYPE=ext4
@@ -13,10 +13,6 @@ ATF_SKIP_LDFLAGS_WL=no
 INCLUDE_HOME_DIR="yes"
 
 function post_family_config__shrink_atf() {
-    echo "🍰Choose ATF branch"
-    #declare -g ATFBRANCH="tag:v2.8.0"
-    #declare -g ATFBRANCH="tag:lts-v2.8.40"
-
     echo "🍰Disable Crust"
     declare -g ATF_TARGET_MAP="PLAT=$ATF_PLAT DEBUG=0 SUNXI_PSCI_USE_SCPI=0 SUNXI_BL31_IN_DRAM=1 SEPARATE_NOBITS_REGION=0 bl31;;build/$ATF_PLAT/release/bl31.bin"
 
@@ -29,8 +25,8 @@ function format_partitions__make_boot_ro() {
     sed -i 's:/boot ext4 defaults,commit=600,errors=remount-ro:/boot ext4 ro,defaults:' $SDCARD/etc/fstab
 }
 
-function extension_finish_config__enable_plymouth() {
-    echo "🍰Enable Plymouth on minimal build"
-    PLYMOUTH=yes
-}
+#function extension_finish_config__enable_plymouth() {
+#    echo "🍰Enable Plymouth on minimal build"
+#    PLYMOUTH=yes
+#}
 

@@ -3,7 +3,7 @@
 install_octoprint(){
 	echo "🍰 install OctoPrint"
 	cd /home/debian
-	apt install -y python3 python3-pip python3-dev python3-setuptools python3-venv git libyaml-dev build-essential libffi-dev libssl-dev nftables
+	apt install -y python3 python3-pip python3-dev python3-setuptools python3-venv git libyaml-dev build-essential libffi-dev libssl-dev nftables python3-libxml2
 	mkdir OctoPrint
 	cd OctoPrint
 	python3 -m venv venv

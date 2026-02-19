@@ -20,8 +20,8 @@ fi
 log "Found Recore hardware revision ${HARDWARE_REVISION}"
 if [ "${HARDWARE_REVISION}" == "a8" ]; then
     log "Starting and enabling usb-role-switch.timer"
-    systemctl enable usb-role-switch.timer
-    systemctl start usb-role-switch.timer
+    #systemctl enable usb-role-switch.timer
+    #systemctl start usb-role-switch.timer
 fi
 
 log "Running flash-stm32 script"
