@@ -18,11 +18,12 @@ BOARD=$3
 BUILD_DESKTOP=$4
 PREP_PACKAGE_LIST=""
 ADD_PACKAGE_LIST="avahi-daemon"
+USER=printer
+HOMEDIR="/home/${USER}"
 
 source /tmp/overlay/install_components/add_overlays.sh
 
 post_build() {
-    echo "ttyGS0" >> /etc/securetty
     systemctl enable serial-getty@ttyGS0.service
 
     cp /tmp/overlay/rebuild/rebuild-version /etc/
