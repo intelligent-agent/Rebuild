@@ -7,9 +7,7 @@ install_moonraker(){
     git clone https://github.com/Arksine/moonraker
     chown -R ${USER}:${USER} moonraker
     
-    echo "printer ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/printer
     su -c "${HOMEDIR}/moonraker/scripts/install-moonraker.sh" ${USER}
-    echo "" > /etc/sudoers.d/printer
 
     mkdir -p /etc/polkit-1/rules.d/
     cp /tmp/overlay/moonraker/10-moonraker.rules /etc/polkit-1/rules.d/
@@ -17,13 +15,15 @@ install_moonraker(){
     chmod 600 /etc/polkit-1/rules.d/10-moonraker.rules
     chown -R root:root /etc/polkit-1/rules.d/
 
-cat > /etc/sudoers.d/printer << EOF
-printer ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart ssh
-printer ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart klipper
-printer ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart moonraker
-printer ALL=(ALL) NOPASSWD: /usr/sbin/reboot
-EOF
-chmod 0440 /etc/sudoers.d/printer
+    echo '%printer ALL=NOPASSWD: /bin/systemctl restart ssh' >> /etc/sudoers.d/printer
+    echo '%printer ALL=NOPASSWD: /bin/systemctl stop ssh' >> /etc/sudoers.d/printer
+    echo '%printer ALL=NOPASSWD: /bin/systemctl restart klipper' >> /etc/sudoers.d/printer
+    echo '%printer ALL=NOPASSWD: /bin/systemctl stop klipper' >> /etc/sudoers.d/printer
+    echo '%printer ALL=NOPASSWD: /bin/systemctl restart KlipperScreen' >> /etc/sudoers.d/printer
+    echo '%printer ALL=NOPASSWD: /bin/systemctl stop KlipperScreen' >> /etc/sudoers.d/printer
+    echo '%printer ALL=NOPASSWD: /bin/systemctl restart moonraker' >> /etc/sudoers.d/printer
+    echo '%printer ALL=NOPASSWD: /bin/systemctl reboot' >> /etc/sudoers.d/printer
+    echo '%printer ALL=NOPASSWD: /bin/systemctl poweroff' >> /etc/sudoers.d/printer
 
     cp /tmp/overlay/moonraker/moonraker-"${UI}".conf ${HOMEDIR}/printer_data/config/moonraker.conf
     cp /tmp/overlay/moonraker/moonraker.asvc ${HOMEDIR}/printer_data/

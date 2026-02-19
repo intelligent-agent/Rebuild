@@ -1,0 +1,40 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: John Doe <john.doe@somewhere.on.planet>
+Date: Mon, 9 Feb 2026 20:50:37 +0000
+Subject: Patching kernel sunxi64 files
+ arch/arm64/boot/dts/allwinner/sun50i-a64-recore.dtsi
+
+Signed-off-by: John Doe <john.doe@somewhere.on.planet>
+---
+ arch/arm64/boot/dts/allwinner/sun50i-a64-recore.dtsi | 11 ++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/allwinner/sun50i-a64-recore.dtsi b/arch/arm64/boot/dts/allwinner/sun50i-a64-recore.dtsi
+index aa9186e73034..a84535e2f616 100644
+--- a/arch/arm64/boot/dts/allwinner/sun50i-a64-recore.dtsi
++++ b/arch/arm64/boot/dts/allwinner/sun50i-a64-recore.dtsi
+@@ -16,10 +16,21 @@ aliases {
+ 
+ 	chosen {
+ 		stdout-path = "serial0:115200n8";
+ 	};
+ 
++	reserved-memory {
++		#address-cells = <1>;
++                #size-cells = <1>;
++                ranges;
++
++	        atf_reserved: atf@40000000 {
++	            reg = <0x40000000 0x100000>;
++	            no-map;
++	        };
++	};
++
+ 	hdmi-connector {
+ 		compatible = "hdmi-connector";
+ 		type = "a";
+ 
+ 		port {
+-- 
+Created with Armbian build tools https://github.com/armbian/build
+
