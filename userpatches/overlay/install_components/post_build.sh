@@ -24,67 +24,84 @@ post_build() {
     # Disable SSH root access
     sed -i 's/^PermitRootLogin.*$/#PermitRootLogin/g' /etc/ssh/sshd_config
 
+    # Remove all temporary permission granted during install
+    sed -i 's/printer ALL=(ALL) NOPASSWD: ALL//g' > /etc/sudoers.d/printer
+    chmod 0440 /etc/sudoers.d/printer
+
+
     cat <<EOF > /etc/udev/rules.d/99-recore-otg.rules
-# Only start getty if ttyGS0 (Gadget Serial) is actually initialized by the kernel
+# Trigger the ConfigFS script only when the role is 'device'
+SUBSYSTEM=="usb_role", ATTR{role}=="device", RUN+="/usr/bin/systemctl start usb-gadget-setup.service"
+
+# Tear down the gadget if the cable is removed or switched to host
+SUBSYSTEM=="usb_role", ATTR{role}=="none", RUN+="/usr/bin/systemctl stop usb-gadget-setup.service"
+SUBSYSTEM=="usb_role", ATTR{role}=="host", RUN+="/usr/bin/systemctl stop usb-gadget-setup.service"
+
+# Start the login prompt only when the serial node appears
 KERNEL=="ttyGS0", ACTION=="add", TAG+="systemd", ENV{SYSTEMD_WANTS}="serial-getty@ttyGS0.service"
 EOF
 
-    cat <<EOF > /usr/local/bin/usb-gadget-init.sh
+ cat <<EOF > /usr/local/bin/usb-gadget-init.sh
 #!/bin/bash
-# Load the composite framework
-modprobe libcomposite
 
-# Create the gadget configuration directory
-cd /sys/kernel/config/usb_gadget/
-mkdir -p g1
-cd g1
+GADGET_DIR="/sys/kernel/config/usb_gadget/g1"
+UDC_NAME="musb-hdrc.4.auto"
 
-# Define Device ID and Identifiers
-# These match the standard Linux USB Serial Gadget IDs
-echo 0x1d6b > idVendor  # Linux Foundation
-echo 0x0104 > idProduct # Multifunction Composite Gadget
-echo 0x0100 > bcdDevice # v1.0.0
-echo 0x0200 > bcdUSB    # USB 2.0
+case "\$1" in
+    start)
+        modprobe libcomposite
+        mkdir -p \$GADGET_DIR
+        cd \$GADGET_DIR
 
-# Create string descriptors (Manufacturer, Product, Serial)
-mkdir -p strings/0x409
-echo "0123456789" > strings/0x409/serialnumber
-echo "Iagent" > strings/0x409/manufacturer
-echo "Recore USB Serial" > strings/0x409/product
+        echo 0x1d6b > idVendor
+        echo 0x0104 > idProduct
+        echo 0x0200 > bcdUSB
 
-# Create the Serial function (ACM is the standard for Serial Gadgets)
-mkdir -p functions/acm.usb0
+        mkdir -p strings/0x409
+        echo "0123456789" > strings/0x409/serialnumber
+        echo "Iagent" > strings/0x409/manufacturer
+        echo "Recore USB Serial" > strings/0x409/product
 
-# Create the configuration
-mkdir -p configs/c.1/strings/0x409
-echo "Config 1: Serial" > configs/c.1/strings/0x409/configuration
-echo 250 > configs/c.1/MaxPower
+        mkdir -p functions/acm.usb0
+        mkdir -p configs/c.1/strings/0x409
+        echo "Config 1: Serial" > configs/c.1/strings/0x409/configuration
+        
+        # Link function to config
+        ln -s functions/acm.usb0 configs/c.1/ 2>/dev/null
 
-# Bind the Serial function to this configuration
-ln -s functions/acm.usb0 configs/c.1/
-
-# Final Step: Bind the entire gadget to the UDC (Universal Device Controller)
-# This is what "plugs it in" logically to your hardware
-echo "" > UDC 2>/dev/null || true
-echo "musb-hdrc.4.auto" > UDC
+        # Bind to hardware
+        echo \$UDC_NAME > UDC
+        ;;
+    stop)
+        if [ -d "\$GADGET_DIR" ]; then
+            cd \$GADGET_DIR
+            echo "" > UDC
+            rm -f configs/c.1/acm.usb0
+            [ -d "configs/c.1/strings/0x409" ] && rmdir configs/c.1/strings/0x409
+            [ -d "configs/c.1" ] && rmdir configs/c.1
+            [ -d "functions/acm.usb0" ] && rmdir functions/acm.usb0
+            [ -d "strings/0x409" ] && rmdir strings/0x409
+            cd ..
+            rmdir g1
+        fi
+        ;;
+esac
 EOF
+
     chmod +x /usr/local/bin/usb-gadget-init.sh
     
-    cat <<EOF > /etc/systemd/system/usb-gadget-setup.service
+cat <<EOF > /etc/systemd/system/usb-gadget-setup.service
 [Unit]
-Description=Initialize USB ConfigFS Gadget
-After=usb-gadget.target
-Requires=usb-gadget.target
+Description=USB ConfigFS Gadget Manager
 
 [Service]
 Type=oneshot
-ExecStart=/usr/local/bin/usb-gadget-init.sh
+ExecStart=/usr/local/bin/usb-gadget-init.sh start
+ExecStop=/usr/local/bin/usb-gadget-init.sh stop
 RemainAfterExit=yes
 
 [Install]
-WantedBy=usb-gadget.target
 EOF
-    systemctl enable usb-gadget-setup.service
     
     cp /tmp/overlay/rebuild/rebuild-version /etc/
     # Backwards compatibility with refactor
