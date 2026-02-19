@@ -23,6 +23,11 @@ install_octoprint(){
 	systemctl enable nftables
 	echo "octoprint 5000/tcp" >> /etc/services
 
+	echo '%printer ALL=NOPASSWD: /usr/sbin/reboot' >> /etc/sudoers.d/printer
+	echo '%printer ALL=NOPASSWD: /usr/sbin/shutdown -h now' >> /etc/sudoers.d/printer
+	echo '%printer ALL=NOPASSWD: /usr/bin/systemctl restart octoprint.service' >> /etc/sudoers.d/printer
+	echo '%printer ALL=NOPASSWD: /usr/bin/systemctl restart toggle.service' >> /etc/sudoers.d/printer
+
 	# Install plugins
 	cd ${HOMEDIR}
 	git clone https://github.com/thelastWallE/OctoprintKlipperPlugin.git

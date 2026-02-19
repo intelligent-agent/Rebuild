@@ -26,7 +26,7 @@ Description=Weston Wayland Compositor
 
 [Service]
 Environment="XDG_RUNTIME_DIR=/tmp"
-ExecStart=/usr/bin/weston --tty 2
+ExecStart=/usr/bin/weston
 
 [Install]
 WantedBy=multi-user.target
@@ -46,6 +46,8 @@ install_toggle(){
     dpkg -i gir1.2-mx-2.0-0_2.0-1_arm64.deb
     dpkg -i gir1.2-mash-0.3-0_0.3.0-1_arm64.deb
     rm -rf *.deb
+
+    apt-get install -y pkg-config libdbus-1-dev libglib2.0-dev
 
     cd ${HOMEDIR}
     git clone https://github.com/intelligent-agent/toggle
