@@ -18,6 +18,8 @@ BOARD=$3
 BUILD_DESKTOP=$4
 PREP_PACKAGE_LIST="git unzip"
 ADD_PACKAGE_LIST="avahi-daemon"
+USER=printer
+HOMEDIR="/home/${USER}"
 
 source /tmp/overlay/install_components/prep_install.sh
 source /tmp/overlay/install_components/klipper.sh
@@ -46,7 +48,6 @@ install_ustreamer
 install_bins
 install_autohotspot
 install_auto_disable_ssh
-install_auto_switch_role
 install_rebuild_first_run
 add_overlays
 post_build
