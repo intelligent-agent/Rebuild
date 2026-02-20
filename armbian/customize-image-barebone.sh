@@ -22,6 +22,7 @@ USER=printer
 HOMEDIR="/home/${USER}"
 
 source /tmp/overlay/install_components/add_overlays.sh
+source /tmp/overlay/install_components/autohotspot.sh
 
 post_build() {
     systemctl enable serial-getty@ttyGS0.service
@@ -32,9 +33,6 @@ post_build() {
 
     TAG=$(cat /tmp/overlay/rebuild/rebuild-tag)
     sed -i "s/PRETTY_NAME=\"/PRETTY_NAME=\"Rebuild ${TAG}\//" /etc/os-release
-
-    # Disable the upstream kernel driver for Rexfer/rtw88_rtl8821cu
-    echo "blacklist rtw88_8821cu" > /etc/modprobe.d/blacklist.conf
 
     # Automatically remount /boot rw when installing packages.
     #cat > /etc/apt/apt.conf.d/100update <<EOF
@@ -51,6 +49,7 @@ echo "🍰 Rebuild starting..."
 
 prep_install
 add_overlays
+install_autohotspot
 post_build
 
 echo "🍰 Rebuild finished"
