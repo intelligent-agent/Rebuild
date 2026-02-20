@@ -24,7 +24,7 @@ create_client() {
   nmcli con add type wifi ifname "$wifidev" con-name Client ssid "$WIFI_SSID"
   nmcli con modify Client wifi-sec.key-mgmt wpa-psk
   nmcli con modify Client wifi-sec.psk "$WIFI_PSK"
-  nmcli con up Client
+  nmcli con up Client || echo "Client connection setup, but failed to associate immediately."
 }
 
 if [ ! -f /etc/NetworkManager/system-connections/Hotspot.nmconnection ]; then
@@ -32,7 +32,9 @@ if [ ! -f /etc/NetworkManager/system-connections/Hotspot.nmconnection ]; then
 fi
 
 if [ ! -f /etc/NetworkManager/system-connections/Client.nmconnection ]; then
-  if [ "${WIFI_SSID}" != "" ]; then
+  if [ -n "$WIFI_SSID" ]; then
     create_client
+  else
+    echo "No WIFI_SSID found in /etc/rebuild-settings. Skipping Client setup."
   fi
 fi
