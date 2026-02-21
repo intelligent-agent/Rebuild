@@ -15,12 +15,14 @@ To build a version, run the script in this folder:
 We test software versions Fluidd, Mainsail and OctoPrint.
 We test hardware versions Recore A5, A6, A7, A8
 
-### Fluidd on Recore A8
-- [x] Wifi comes up as an AP
+### OOBA Fluidd on Recore A8
+- [x] Wifi comes up as an AP/Station
 - [x] Webcam shows a picture
 - [x] USB host/device works as expected
 - [x] Default Klipper config does not have any errors
 - [x] All systemd services are running as they should
 - [x] Software updates look functional
-
-
+- [x] Shaper calibrate works
+- [x] A print can be performed
+- [x] The LEDs are working
+- [x] KlipperScreen works and can be used to control the printer
