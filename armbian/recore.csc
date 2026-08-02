@@ -12,6 +12,13 @@ BOOTFS_TYPE=ext4
 ATF_SKIP_LDFLAGS_WL=no
 INCLUDE_HOME_DIR="yes"
 
+function post_family_config__pin_kernel() {
+    echo "🍰Freeze kernel to a known-good point release for reproducible builds"
+    declare -g KERNEL_MAJOR_MINOR="6.18"
+    declare -g KERNELPATCHDIR="archive/sunxi-6.18"
+    declare -g KERNELBRANCH="tag:v6.18.33"
+}
+
 function post_family_config__shrink_atf() {
     echo "🍰Disable Crust"
     declare -g ATF_TARGET_MAP="PLAT=$ATF_PLAT DEBUG=0 SUNXI_PSCI_USE_SCPI=0 SUNXI_BL31_IN_DRAM=1 SEPARATE_NOBITS_REGION=0 bl31;;build/$ATF_PLAT/release/bl31.bin"
