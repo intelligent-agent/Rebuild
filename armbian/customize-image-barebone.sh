@@ -108,10 +108,10 @@ RemainAfterExit=yes
 EOF
 
     # Automatically remount /boot rw when installing packages.
-    #cat > /etc/apt/apt.conf.d/100update <<EOF
-#DPkg::Pre-Invoke {"mount -o remount,rw /boot";};
-#DPkg::Post-Invoke {"mount -o remount,ro /boot; /usr/local/bin/update-recore-revision";};
-#EOF
+    cat > /etc/apt/apt.conf.d/100update <<EOF
+DPkg::Pre-Invoke {"mount -o remount,rw /boot 2>/dev/null || true";};
+DPkg::Post-Invoke {"mount -o remount,ro /boot 2>/dev/null || true";};
+EOF
 }
 
 prep_install() {
