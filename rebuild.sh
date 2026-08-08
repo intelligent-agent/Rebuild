@@ -53,7 +53,7 @@ NAME="rebuild-${VERSION}-${TAG}"
 
 cd $BUILD_DIR
 ARMBIAN_REF="v26.5.1" # sunxi-6.18 patches unchanged since being rewritten against v6.18.33 (see recore.csc)
-git fetch --tags
+git fetch --tags --prune
 git reset --hard
 git checkout "$ARMBIAN_REF"
 rm -rf "userpatches"
