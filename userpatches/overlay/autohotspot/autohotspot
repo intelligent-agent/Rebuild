@@ -1,6 +1,9 @@
 #!/bin/bash
 
 . /etc/rebuild-settings
+# Holds the plaintext wifi password - make sure it's root-only
+# regardless of how/when it was last written.
+chmod 600 /etc/rebuild-settings
 wifidev=`nmcli dev | grep "wifi " | cut -d' ' -f1`
 hotspot_SSID="Recore"
 hotspot_PW="12345678"
