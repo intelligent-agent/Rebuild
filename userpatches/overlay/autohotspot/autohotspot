@@ -4,6 +4,10 @@
 wifidev=`nmcli dev | grep "wifi " | cut -d' ' -f1`
 hotspot_SSID="Recore"
 hotspot_PW="12345678"
+# How long to wait for the configured network at boot before falling
+# back to the hotspot. Only boot-time availability matters here - if
+# the connection later drops, we deliberately do not fall back.
+CLIENT_TIMEOUT=30
 
 create_hotspot() {
   echo "Creating hotspot"
@@ -13,8 +17,9 @@ create_hotspot() {
   nmcli con modify Hotspot 802-11-wireless.channel 1
   nmcli con modify Hotspot ipv4.method shared
   nmcli con modify Hotspot ipv4.addresses 192.168.50.1/24
-  nmcli con modify Hotspot connection.autoconnect-priority -10
-  nmcli con modify Hotspot connection.autoconnect yes
+  # Brought up explicitly below, not left to NetworkManager's own
+  # autoconnect arbitration - see the Client/Hotspot race in #65.
+  nmcli con modify Hotspot connection.autoconnect no
   nmcli con modify Hotspot wifi-sec.key-mgmt wpa-psk
   nmcli con modify Hotspot wifi-sec.psk "$hotspot_PW"
 }
@@ -22,9 +27,9 @@ create_hotspot() {
 create_client() {
   echo "Creating wifi client config"
   nmcli con add type wifi ifname "$wifidev" con-name Client ssid "$WIFI_SSID"
+  nmcli con modify Client connection.autoconnect no
   nmcli con modify Client wifi-sec.key-mgmt wpa-psk
   nmcli con modify Client wifi-sec.psk "$WIFI_PSK"
-  nmcli con up Client || echo "Client connection setup, but failed to associate immediately."
 }
 
 if [ ! -f /etc/NetworkManager/system-connections/Hotspot.nmconnection ]; then
@@ -37,4 +42,21 @@ if [ ! -f /etc/NetworkManager/system-connections/Client.nmconnection ]; then
   else
     echo "No WIFI_SSID found in /etc/rebuild-settings. Skipping Client setup."
   fi
+fi
+
+# Decide which connection to bring up this boot. Both connections have
+# autoconnect disabled, so NetworkManager never arbitrates between them
+# itself - the choice is made explicitly, once, here.
+if [ -n "$WIFI_SSID" ] && [ -f /etc/NetworkManager/system-connections/Client.nmconnection ]; then
+  echo "Trying to connect to $WIFI_SSID (timeout ${CLIENT_TIMEOUT}s)..."
+  if nmcli -w "$CLIENT_TIMEOUT" con up Client; then
+    echo "Connected to $WIFI_SSID"
+  else
+    echo "Could not connect to $WIFI_SSID within ${CLIENT_TIMEOUT}s, falling back to hotspot"
+    nmcli con down Client 2>/dev/null
+    nmcli con up Hotspot
+  fi
+else
+  echo "No WIFI_SSID configured, starting hotspot"
+  nmcli con up Hotspot
 fi
