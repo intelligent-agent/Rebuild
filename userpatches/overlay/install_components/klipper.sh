@@ -23,6 +23,9 @@ install_klipper(){
     cp /tmp/overlay/klipper/tmc2130_a5.py ${HOMEDIR}/klipper/klippy/extras/
 
     cp /tmp/overlay/klipper/flash-stm32 /usr/local/bin
+    cp /tmp/overlay/klipper/flash-ar100.py /usr/local/bin
+    cp /tmp/overlay/klipper/set-ar100-clock.py /usr/local/bin
+    chmod +x /usr/local/bin/flash-ar100.py /usr/local/bin/set-ar100-clock.py
     mkdir -p /var/log/klipper_logs
     chown ${USER}:${USER} /var/log/klipper_logs
     mkdir -p /opt/firmware/
@@ -73,7 +76,8 @@ PermissionsStartOnly=true
 ExecStartPre=/usr/bin/gpioset -c 1 -t0 197=0
 ExecStartPre=/usr/bin/gpioset -c 1 -t0 196=0
 ExecStartPre=/usr/bin/gpioget -c 1 -b pull-up 196
-ExecStartPre=${SRCDIR}/scripts/flash-ar100.py /opt/firmware/ar100.bin
+ExecStartPre=/usr/local/bin/set-ar100-clock.py
+ExecStartPre=/usr/local/bin/flash-ar100.py /opt/firmware/ar100.bin
 ExecStart=${PYTHONDIR}/bin/python ${SRCDIR}/klippy/klippy.py ${KLIPPER_CONFIG} -l ${KLIPPER_LOG} -a ${KLIPPER_SOCKET}
 EOF
 # Use systemctl to enable the klipper systemd service script
@@ -98,6 +102,11 @@ EOF
     make olddefconfig
     make -j
     cp ${HOMEDIR}/klipper/out/ar100.bin /opt/firmware
+    # flash-ar100.py mmaps /opt/firmware/ar100.bin's target region as
+    # Device memory (it's not in /proc/iomem), which requires aligned
+    # accesses. Pad to a 16-byte boundary so the bulk write never ends
+    # on a misaligned tail store, which would fault with SIGBUS.
+    truncate -s %16 /opt/firmware/ar100.bin
 
     # Compile STM32
     cp /tmp/overlay/klipper/stm32f031-serial.config ${HOMEDIR}/klipper/.config

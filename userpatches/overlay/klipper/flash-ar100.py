@@ -21,9 +21,6 @@ R_CPU_CFG_SIZE = R_CPU_CFG_PAGE_LIMIT - R_CPU_CFG_PAGE_BASE
 R_CPU_CFG_OFFSET = 0xC00
 R_CPU_CLK_OFFSET = 0x400
 
-CLK_PERIPH0 = 0
-CLK_HOSC = 0
-
 parser = argparse.ArgumentParser(description='Flash and reset SRAM A2 of A64')
 parser.add_argument('filename', nargs='?', help='binary file to write')
 parser.add_argument('--reset', action='store_true', help='reset the AR100')
@@ -61,20 +58,6 @@ def assert_deassert_reset(ass):
                 print("failed to deassert reset")
         r_cpucfg.close()
 
-def set_clk_speed(src):
-    with open("/dev/mem", "w+b") as f:
-        r_cpucfg = mmap.mmap(f.fileno(),
-                             length=R_CPU_CFG_SIZE,
-                             offset=R_CPU_CFG_PAGE_BASE)
-        print(hex(int.from_bytes(r_cpucfg[R_CPU_CLK_OFFSET:R_CPU_CLK_OFFSET+4], byteorder='little')))
-        if src == CLK_PERIPH0:
-            r_cpucfg[R_CPU_CLK_OFFSET:R_CPU_CLK_OFFSET + 4] = (2<<16 | 1<<8).to_bytes(
-                4, byteorder='little')
-        else:
-            r_cpucfg[R_CPU_CLK_OFFSET:R_CPU_CLK_OFFSET+4] = (1<<16).to_bytes(
-                4, byteorder='little')
-        print(hex(int.from_bytes(r_cpucfg[R_CPU_CLK_OFFSET:R_CPU_CLK_OFFSET+4], byteorder='little')))
-        r_cpucfg.close()
 
 def write_file(filename):
     with open(filename, "r+b") as fw:
@@ -82,14 +65,6 @@ def write_file(filename):
         if len(data) > FW_SIZE:
             print("File does not fit in memory")
             sys.exit(1)
-        # /dev/mem maps this range as Device memory (it's not in
-        # /proc/iomem), which requires aligned accesses. A bulk slice
-        # assignment of unaligned length makes glibc's memcpy use a
-        # misaligned tail store, which faults with SIGBUS. Pad to a
-        # 16-byte boundary so every store in the copy is aligned.
-        pad = (-len(data)) % 16
-        if pad:
-            data += b"\x00" * pad
         print("Writing file to SRAM A2")
         with open("/dev/mem", "w+b") as f:
             sram_a2 = mmap.mmap(f.fileno(), length=FW_SIZE, offset=FW_BASE)
@@ -114,12 +89,10 @@ if args.filename:
     if args.bl31:
         print("writing bl31")
         assert_deassert_reset(1)
-        set_clk_speed(CLK_HOSC)
         write_file(args.filename)
     else:
         assert_deassert_reset(1)
         write_exception_vectors()
-        set_clk_speed(CLK_PERIPH0)
         write_file(args.filename)
         assert_deassert_reset(0)
 
