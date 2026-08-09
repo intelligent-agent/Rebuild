@@ -32,8 +32,3 @@ function format_partitions__make_boot_ro() {
     sed -i -E 's:/boot ext4 defaults,commit=[0-9]+,errors=remount-ro:/boot ext4 ro,defaults:' $SDCARD/etc/fstab
 }
 
-#function extension_finish_config__enable_plymouth() {
-#    echo "🍰Enable Plymouth on minimal build"
-#    PLYMOUTH=yes
-#}
-

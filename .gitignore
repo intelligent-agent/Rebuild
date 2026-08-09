@@ -3,3 +3,6 @@ build-mainsail
 build-fluidd
 build-octoprint
 images
+
+# Personal first-boot customization scripts - not meant to be shared/committed.
+user_scripts/
