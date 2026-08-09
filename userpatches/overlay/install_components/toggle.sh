@@ -23,6 +23,7 @@ EOF
 	cat > /etc/systemd/system/weston.service <<EOF
 [Unit]
 Description=Weston Wayland Compositor
+After=plymouth-quit-wait.service
 
 [Service]
 Environment="XDG_RUNTIME_DIR=/tmp"

@@ -24,6 +24,7 @@ HOMEDIR="/home/${USER}"
 source /tmp/overlay/install_components/klipper.sh
 source /tmp/overlay/install_components/octoprint.sh
 source /tmp/overlay/install_components/toggle.sh
+source /tmp/overlay/install_components/plymouth.sh
 source /tmp/overlay/install_components/recore_binaries.sh
 source /tmp/overlay/install_components/autohotspot.sh
 source /tmp/overlay/install_components/auto_disable_ssh.sh
@@ -42,6 +43,7 @@ install_klipper
 install_octoprint
 install_weston
 install_toggle
+install_plymouth
 install_ustreamer
 install_bins
 install_autohotspot

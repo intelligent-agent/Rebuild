@@ -64,8 +64,6 @@ cp armbian/customize-image-"${VERSION}".sh "${BUILD_DIR}"/userpatches/customize-
 cp armbian/recore.csc "${BUILD_DIR}"/config/boards
 rm -f "${BUILD_DIR}/patch/u-boot/u-boot-sunxi/allwinner-boot-splash.patch"
 
-cp armbian/watermark.png "${BUILD_DIR}"/packages/plymouth-theme-armbian/watermark.png
-
 mkdir -p "${BUILD_DIR}"/userpatches/overlay/rebuild/
 echo "${NAME}" >"${BUILD_DIR}"/userpatches/overlay/rebuild/rebuild-version
 echo "${TAG}" >"${BUILD_DIR}"/userpatches/overlay/rebuild/rebuild-tag

@@ -27,6 +27,7 @@ source /tmp/overlay/install_components/moonraker.sh
 source /tmp/overlay/install_components/nginx.sh
 source /tmp/overlay/install_components/mainsail.sh
 source /tmp/overlay/install_components/klipperscreen.sh
+source /tmp/overlay/install_components/plymouth.sh
 source /tmp/overlay/install_components/recore_binaries.sh
 source /tmp/overlay/install_components/ustreamer.sh
 source /tmp/overlay/install_components/autohotspot.sh
@@ -44,6 +45,7 @@ install_moonraker "mainsail"
 install_nginx "mainsail"
 install_mainsail
 install_klipperscreen
+install_plymouth
 install_ustreamer
 install_bins
 install_autohotspot
