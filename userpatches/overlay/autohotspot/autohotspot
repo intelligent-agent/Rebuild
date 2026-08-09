@@ -10,7 +10,7 @@ hotspot_PW="12345678"
 # How long to wait for the configured network at boot before falling
 # back to the hotspot. Only boot-time availability matters here - if
 # the connection later drops, we deliberately do not fall back.
-CLIENT_TIMEOUT=30
+CLIENT_TIMEOUT=60
 
 create_hotspot() {
   echo "Creating hotspot"
