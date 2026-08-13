@@ -107,6 +107,12 @@ RemainAfterExit=yes
 [Install]
 EOF
 
+    # U-Boot splash image. Armbian only installs a boot logo when Plymouth is
+    # enabled, which this variant does not use, so install it ourselves. The
+    # boot script (userpatches/bootscripts/boot-sunxi.cmd) displays it if it is
+    # present; set splashfile= in armbianEnv.txt to turn it off.
+    install -D -m 644 /tmp/overlay/splash/boot.bmp /boot/boot.bmp
+
     # Automatically remount /boot rw when installing packages.
     cat > /etc/apt/apt.conf.d/100update <<EOF
 DPkg::Pre-Invoke {"mount -o remount,rw /boot 2>/dev/null || true";};

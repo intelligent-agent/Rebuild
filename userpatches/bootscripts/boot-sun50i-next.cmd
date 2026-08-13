@@ -12,6 +12,8 @@ setenv rootfstype "ext4"
 setenv console "both"
 setenv docker_optimizations "on"
 setenv bootlogo "false"
+setenv splashfile "boot.bmp"
+setenv splashimage "0x66000000"
 
 setenv vendor "allwinner"
 
@@ -34,6 +36,17 @@ echo "Boot script loaded from ${devtype}"
 if test -e ${devtype} ${devnum} ${prefix}armbianEnv.txt; then
 	load ${devtype} ${devnum} ${load_addr} ${prefix}armbianEnv.txt
 	env import -t ${load_addr} ${filesize}
+fi
+
+# Show a splash image from the boot partition, if one is there.
+# ${devtype}/${devnum} rather than a fixed device, so this works whether we
+# booted from eMMC or USB. The load is guarded: an image without a splash
+# file simply skips it rather than failing the boot.
+# Disable by setting splashfile= (empty) in armbianEnv.txt.
+if test -n "${splashfile}"; then
+	if load ${devtype} ${devnum} ${splashimage} ${prefix}${splashfile}; then
+		bmp display ${splashimage} m m
+	fi
 fi
 
 # Delete the vendor's name from the fdtfile variable and record the result
