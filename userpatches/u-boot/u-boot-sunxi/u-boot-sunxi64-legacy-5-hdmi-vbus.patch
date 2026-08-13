@@ -1,0 +1,54 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Elias Bakken <elias@iagent.no>
+Date: Wed, 13 Aug 2026 00:00:00 +0000
+Subject: recore: add the HDMI VBUS regulator (PG9) to U-Boot's DT
+
+The kernel DT drives PG9 as a fixed regulator supplying HDMI VBUS
+(reg_hdmi_vbus in sun50i-a64-recore.dtsi, wired to simplefb_hdmi via
+vcc-hdmi-supply). U-Boot's DT had no equivalent node, so PG9 was never
+asserted during U-Boot and the display stayed dark - confirmed on
+hardware: setting it by hand with "gpio set PG9" from the U-Boot prompt
+is what makes an image appear.
+
+PG9 is not revision specific. It is defined once in the shared
+sun50i-a64-recore.dtsi, which all of -a5/-a6/-a7/-a8 include, and no
+per-revision DT overrides it - so this applies to every Recore.
+
+This only works now that sunxi board_init() calls
+regulators_enable_boot_on() (see
+u-boot-sunxi64-legacy-3-regulators-enable-boot-on): U-Boot probes
+devices lazily, so before that a regulator-always-on node would simply
+have been ignored. It also has to come up before video probes and reads
+EDID, which is why doing it via board_init() works where a manual
+"gpio set" at the prompt is already too late to affect mode setting.
+
+regulator-boot-on is included alongside regulator-always-on to match
+the neighbouring usb1-vbus nodes in this file; regulator_autoset()
+acts on either.
+
+Signed-off-by: Elias Bakken <elias@iagent.no>
+---
+ arch/arm/dts/sun50i-a64-recore.dts | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/arch/arm/dts/sun50i-a64-recore.dts b/arch/arm/dts/sun50i-a64-recore.dts
+@@ -101,6 +101,17 @@
+ 		regulator-boot-on;
+ 		enable-active-high;
+ 	};
++
++	reg_hdmi_vbus: hdmi-vbus {
++		compatible = "regulator-fixed";
++		regulator-name = "hdmi-vbus";
++		gpio = <&pio 6 9 GPIO_ACTIVE_HIGH> ; /* PG9 */
++		regulator-min-microvolt = <5000000>;
++		regulator-max-microvolt = <5000000>;
++		regulator-always-on;
++		regulator-boot-on;
++		enable-active-high;
++	};
+ };
+ 
+ &de {
+-- 
+Created with Armbian build tools https://github.com/armbian/build
