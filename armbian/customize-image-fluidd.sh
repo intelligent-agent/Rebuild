@@ -34,6 +34,7 @@ source /tmp/overlay/install_components/autohotspot.sh
 source /tmp/overlay/install_components/auto_disable_ssh.sh
 source /tmp/overlay/install_components/rebuild_first_run.sh
 source /tmp/overlay/install_components/add_overlays.sh
+source /tmp/overlay/install_components/uboot_splash.sh
 source /tmp/overlay/install_components/post_build.sh
 
 echo "🍰 Rebuild starting..."
@@ -53,6 +54,7 @@ install_autohotspot
 install_auto_disable_ssh
 install_rebuild_first_run
 add_overlays
+install_uboot_splash
 post_build
 
 systemctl disable getty@tty1.service

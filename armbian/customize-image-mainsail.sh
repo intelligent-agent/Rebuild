@@ -36,6 +36,7 @@ source /tmp/overlay/install_components/auto_switch_role.sh
 source /tmp/overlay/install_components/rebuild_first_run.sh
 source /tmp/overlay/install_components/post_build.sh
 source /tmp/overlay/install_components/add_overlays.sh
+source /tmp/overlay/install_components/uboot_splash.sh
 
 set -e
 echo "🍰 Rebuild starting..."
@@ -52,6 +53,7 @@ install_autohotspot
 install_auto_disable_ssh
 install_rebuild_first_run
 add_overlays
+install_uboot_splash
 post_build
 
 echo "🍰 Rebuild finished"
