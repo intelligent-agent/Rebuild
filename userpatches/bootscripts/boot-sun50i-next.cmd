@@ -45,7 +45,12 @@ fi
 # Disable by setting splashfile= (empty) in armbianEnv.txt.
 if test -n "${splashfile}"; then
 	if load ${devtype} ${devnum} ${splashimage} ${prefix}${splashfile}; then
-		bmp display ${splashimage} m m
+		# Nested if so a failure here cannot abort the boot script. An
+		# older u-boot on eMMC without CONFIG_CMD_BMP would fail on an
+		# unknown command, and that must not stop the board booting.
+		if bmp display ${splashimage} m m; then
+			echo "Splash displayed"
+		fi
 	fi
 fi
 
