@@ -27,6 +27,24 @@ function post_family_config__shrink_atf() {
     UBOOT_TARGET_MAP="SCP=/dev/null;;u-boot-sunxi-with-spl.bin"
 }
 
+function custom_kernel_config__enable_fbcon_rotation() {
+    echo "🍰Enable framebuffer console rotation"
+    # CONFIG_FRAMEBUFFER_CONSOLE_ROTATION is set in linux-sunxi64-legacy.config
+    # but is absent from the current/edge configs, so it falls back to the
+    # Kconfig default of n. Without it the kernel silently ignores
+    # fbcon=rotate:, which rotate-screen writes on every flash - so the text
+    # console came up unrotated on a panel that is mounted rotated.
+    #
+    # The hook can be called more than once and not always with a .config in
+    # place; either way it has to contribute to the config hash, or the kernel
+    # cache key stops matching the config actually built.
+    if [[ -f .config ]]; then
+        kernel_config_set_y "CONFIG_FRAMEBUFFER_CONSOLE_ROTATION"
+    else
+        kernel_config_modifying_hashes+=("CONFIG_FRAMEBUFFER_CONSOLE_ROTATION=y")
+    fi
+}
+
 function format_partitions__make_boot_ro() {
     echo "🍰Making boot partition ro"
     sed -i -E 's:/boot ext4 defaults,commit=[0-9]+,errors=remount-ro:/boot ext4 ro,defaults:' $SDCARD/etc/fstab

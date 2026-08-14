@@ -1,0 +1,76 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Elias Bakken <elias@iagent.no>
+Date: Fri, 14 Aug 2026 12:00:00 +0000
+Subject: drm/bridge: dw-hdmi: debounce spurious HPD disconnect during PHY setup
+
+The sun8i HDMI PHY reports both HPD and RX_SENSE low for ~600ms while it
+is being brought up, which dw_hdmi_detect() reports to DRM as a genuine
+disconnect. The fbdev client probes connectors inside that window, so it
+never reads the EDID and builds the console from a fallback mode the
+panel cannot display. The screen stays dark for early boot, and Plymouth
+inherits that mode, which is why the boot splash was never visible.
+
+Measured on Recore: plugout at 7.041s, fb0 created at 7.100s, plugin at
+7.656s - reproducible to within a millisecond across boots, and
+independent of the U-Boot splash and of the HDMI VBUS regulator flags.
+
+Re-read HPD before believing a disconnect. .detect may sleep, and the
+loop exits as soon as HPD returns, so the delay is only paid when the
+display really is absent.
+
+Signed-off-by: Elias Bakken <elias@iagent.no>
+---
+ drivers/gpu/drm/bridge/synopsys/dw-hdmi.c | 35 +++++++++++++++++++++++
+ 1 file changed, 35 insertions(+)
+
+diff --git a/drivers/gpu/drm/bridge/synopsys/dw-hdmi.c b/drivers/gpu/drm/bridge/synopsys/dw-hdmi.c
+--- a/drivers/gpu/drm/bridge/synopsys/dw-hdmi.c
++++ b/drivers/gpu/drm/bridge/synopsys/dw-hdmi.c
+@@ -2451,12 +2451,47 @@
+ 					  hdmi->rxsense);
+ }
+ 
++/*
++ * The sun8i PHY reports HPD low for roughly 600ms while it is being set up,
++ * even though the sink never went away. Re-read before believing a
++ * disconnect, so a transient during PHY bring-up is not reported to DRM.
++ */
++#define DW_HDMI_HPD_DEBOUNCE_MS		50
++#define DW_HDMI_HPD_DEBOUNCE_TRIES	20
++
+ static enum drm_connector_status dw_hdmi_detect(struct dw_hdmi *hdmi)
+ {
+ 	enum drm_connector_status result;
++	unsigned int tries;
+ 
+ 	result = hdmi->phy.ops->read_hpd(hdmi, hdmi->phy.data);
+ 
++	/*
++	 * Debounce a disconnect. This runs from the connector .detect
++	 * callback, which is allowed to sleep.
++	 *
++	 * Without this, the fbdev client probes connectors during the PHY
++	 * bring-up window, sees "disconnected", and so never reads the EDID.
++	 * It then builds the framebuffer console from whatever mode is left -
++	 * on a panel whose EDID it could not read, that is a fallback mode the
++	 * display cannot show, and the screen stays dark for the whole of
++	 * early boot. Plymouth inherits that mode and draws into it, which is
++	 * why the boot splash was invisible.
++	 *
++	 * A genuine unplug is simply reported up to a second later, which
++	 * nothing depends on. The loop exits as soon as HPD returns, so the
++	 * delay is only paid when the display really is disconnected.
++	 */
++	if (result == connector_status_disconnected) {
++		for (tries = 0; tries < DW_HDMI_HPD_DEBOUNCE_TRIES; tries++) {
++			msleep(DW_HDMI_HPD_DEBOUNCE_MS);
++
++			result = hdmi->phy.ops->read_hpd(hdmi, hdmi->phy.data);
++			if (result != connector_status_disconnected)
++				break;
++		}
++	}
++
+ 	if (result != hdmi->last_connector_result) {
+ 		dev_info(hdmi->dev, "read_hpd result: %d", result);
+ 		handle_plugged_change(hdmi,
