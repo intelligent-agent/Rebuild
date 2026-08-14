@@ -1,4 +1,4 @@
 verbosity=0
 bootlogo=true
 console=serial
-extraargs=quiet selinux=0
+extraargs=quiet selinux=0 vt.global_cursor_default=0
