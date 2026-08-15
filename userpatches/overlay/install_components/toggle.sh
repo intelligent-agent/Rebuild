@@ -18,6 +18,15 @@ panel-position=none
 [output]
 name=HDMI-A-1
 transform=normal
+
+# The panel is driven by simpledrm off the framebuffer u-boot hands over, and
+# simpledrm reports DRM_MODE_CONNECTOR_Unknown, so the output is Unknown-1 and
+# not HDMI-A-1. Both sections are kept: weston applies whichever one matches
+# the connector actually present, so this still works on an image built before
+# the switch to simpledrm.
+[output]
+name=Unknown-1
+transform=normal
 EOF
 
 	cat > /etc/systemd/system/weston.service <<EOF
