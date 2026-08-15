@@ -11,8 +11,8 @@ Signed-off-by: Elias Bakken <elias@iagent.no>
  arch/arm64/boot/dts/allwinner/sun50i-a64-recore-a7.dts |  54 ++
  arch/arm64/boot/dts/allwinner/sun50i-a64-recore-a8.dts | 149 ++++
  arch/arm64/boot/dts/allwinner/sun50i-a64-recore.dts    |  37 +
- arch/arm64/boot/dts/allwinner/sun50i-a64-recore.dtsi   | 414 ++++++++++
- 7 files changed, 768 insertions(+)
+ arch/arm64/boot/dts/allwinner/sun50i-a64-recore.dtsi   | 428 ++++++++++
+ 7 files changed, 782 insertions(+)
 
 diff --git a/arch/arm64/boot/dts/allwinner/Makefile b/arch/arm64/boot/dts/allwinner/Makefile
 index 29f306260b79..7a02a8fb405b 100644
@@ -414,7 +414,7 @@ new file mode 100644
 index 000000000000..390af27157d6
 --- /dev/null
 +++ b/arch/arm64/boot/dts/allwinner/sun50i-a64-recore.dtsi
-@@ -0,0 +1,414 @@
+@@ -0,0 +1,428 @@
 +// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
 +
 +/dts-v1/;
@@ -515,6 +515,8 @@ index 000000000000..390af27157d6
 +		regulator-min-microvolt = <5000000>;
 +		regulator-max-microvolt = <5000000>;
 +		regulator-always-on;
++		/* see reg_hdmi_vbus: always-on alone still blips the rail low */
++		regulator-boot-on;
 +		enable-active-high;
 +		vin-supply = <&reg_5v>;
 +	};
@@ -527,6 +529,8 @@ index 000000000000..390af27157d6
 +		regulator-max-microvolt = <5000000>;
 +		startup-delay-us = <100000>;
 +		regulator-always-on;
++		/* see reg_hdmi_vbus: always-on alone still blips the rail low */
++		regulator-boot-on;
 +		enable-active-high;
 +		vin-supply = <&reg_5v>;
 +	};
@@ -538,6 +542,16 @@ index 000000000000..390af27157d6
 +		regulator-min-microvolt = <5000000>;
 +		regulator-max-microvolt = <5000000>;
 +		regulator-always-on;
++		/*
++		 * regulator-boot-on, not just always-on. reg-fixed-voltage sets
++		 * enabled_at_boot only from boot-on, and without it the enable
++		 * GPIO is requested GPIOD_OUT_LOW at probe - actively pulling
++		 * HDMI 5V down - before the always-on constraint turns it back
++		 * on. u-boot leaves this rail up and is displaying the splash,
++		 * so the panel sees its 5V drop and return. Some panels re-sync
++		 * and some latch into a state only a power cycle clears.
++		 */
++		regulator-boot-on;
 +		enable-active-high;
 +	};
 +};
