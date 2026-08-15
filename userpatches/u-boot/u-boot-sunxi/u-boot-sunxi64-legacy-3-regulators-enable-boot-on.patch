@@ -1,0 +1,74 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Elias Bakken <elias@iagent.no>
+Date: Wed, 13 Aug 2026 00:00:00 +0000
+Subject: sunxi: enable regulator-always-on / regulator-boot-on regulators
+
+U-Boot's driver model probes devices lazily, so regulators marked
+regulator-always-on / regulator-boot-on in the DT are only ever enabled
+if something happens to probe them. rockchip, exynos, stm32mp1, amlogic
+and veyron board init all call regulators_enable_boot_on() for exactly
+this reason - sunxi did not, so on Recore the DT properties silently did
+nothing.
+
+The USB VBUS rails were instead being powered by "regulator status" in
+CONFIG_PREBOOT, which probes every regulator as a side effect. That ran
+milliseconds before "usb reset", leaving devices no time to warm up, and
+cost roughly half of all boots a USB device during enumeration with
+"EHCI timed out on TD" (intelligent-agent/Reflash#88).
+
+Enabling them here instead - much earlier in boot - fixes that: 20/20
+clean boots versus a ~50% failure rate before.
+
+Signed-off-by: Elias Bakken <elias@iagent.no>
+---
+ board/sunxi/board.c | 31 +++++++++++++++++++++++++++++++
+ 1 file changed, 31 insertions(+)
+
+diff --git a/board/sunxi/board.c b/board/sunxi/board.c
+@@ -22,6 +22,7 @@
+ #include <axp_pmic.h>
+ #include <generic-phy.h>
+ #include <phy-sun4i-usb.h>
++#include <power/regulator.h>
+ #include <asm/arch/clock.h>
+ #include <asm/arch/cpu.h>
+ #include <asm/arch/display.h>
+@@ -244,6 +245,36 @@
+ #endif
+ 	eth_init_board();
+ 
++#if CONFIG_IS_ENABLED(DM_REGULATOR)
++	/*
++	 * Enable regulators marked regulator-always-on / regulator-boot-on
++	 * in the device tree.
++	 *
++	 * Unlike Linux, U-Boot's driver model probes devices lazily - only
++	 * when something asks for them. Those two properties are acted on
++	 * in regulator_autoset(), which runs at probe time, so on a board
++	 * where nothing references a regulator it is simply never enabled
++	 * and the DT properties silently do nothing. rockchip, exynos,
++	 * stm32mp1, amlogic and veyron board init all call this for that
++	 * reason; sunxi was the odd one out.
++	 *
++	 * Boards that worked around this by putting "regulator status" in
++	 * CONFIG_PREBOOT (it probes every regulator as a documented side
++	 * effect) can drop it once this is in place.
++	 *
++	 * On Recore this also fixes intermittent USB enumeration failures.
++	 * The six USB VBUS rails used to come up from that PREBOOT command
++	 * milliseconds before "usb reset" ran, leaving devices no time to
++	 * warm up; roughly half of all boots lost a device with
++	 * "EHCI timed out on TD" during the bus scan. Enabling them here
++	 * instead - much earlier in boot - gives them time to settle:
++	 * 20/20 clean boots afterwards versus a ~50% failure rate before.
++	 */
++	ret = regulators_enable_boot_on(false);
++	if (ret)
++		debug("%s: Cannot enable boot on regulators\n", __func__);
++#endif
++
+ 	return 0;
+ }
+ 
+-- 
+Created with Armbian build tools https://github.com/armbian/build

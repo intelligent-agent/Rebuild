@@ -12,6 +12,8 @@ setenv rootfstype "ext4"
 setenv console "both"
 setenv docker_optimizations "on"
 setenv bootlogo "false"
+setenv splashfile "boot.bmp"
+setenv splashimage "0x66000000"
 
 setenv vendor "allwinner"
 
@@ -34,6 +36,30 @@ echo "Boot script loaded from ${devtype}"
 if test -e ${devtype} ${devnum} ${prefix}armbianEnv.txt; then
 	load ${devtype} ${devnum} ${load_addr} ${prefix}armbianEnv.txt
 	env import -t ${load_addr} ${filesize}
+fi
+
+# Show a splash image from the boot partition, if one is there.
+# ${devtype}/${devnum} rather than a fixed device, so this works whether we
+# booted from eMMC or USB. The load is guarded: an image without a splash
+# file simply skips it rather than failing the boot.
+# Disable by setting splashfile= (empty) in armbianEnv.txt.
+if test -n "${splashfile}"; then
+	if load ${devtype} ${devnum} ${splashimage} ${prefix}${splashfile}; then
+		# Nested if so a failure here cannot abort the boot script. An
+		# older u-boot on eMMC without CONFIG_CMD_BMP would fail on an
+		# unknown command, and that must not stop the board booting.
+		if bmp display ${splashimage} m m; then
+			echo "Splash displayed"
+			# Stop U-Boot printing over its own splash. stdout/stderr
+			# include vidconsole, so everything echoed from here on is
+			# drawn onto the panel - unrotated, since U-Boot knows
+			# nothing about the panel orientation. Serial keeps the
+			# full log, and the kernel gets its console from
+			# ${consoleargs} regardless of this.
+			setenv stdout serial
+			setenv stderr serial
+		fi
+	fi
 fi
 
 # Delete the vendor's name from the fdtfile variable and record the result

@@ -11,8 +11,8 @@ Signed-off-by: Elias Bakken <elias@iagent.no>
  arch/arm64/boot/dts/allwinner/sun50i-a64-recore-a7.dts |  54 ++
  arch/arm64/boot/dts/allwinner/sun50i-a64-recore-a8.dts | 149 ++++
  arch/arm64/boot/dts/allwinner/sun50i-a64-recore.dts    |  37 +
- arch/arm64/boot/dts/allwinner/sun50i-a64-recore.dtsi   | 396 ++++++++++
- 7 files changed, 750 insertions(+)
+ arch/arm64/boot/dts/allwinner/sun50i-a64-recore.dtsi   | 414 ++++++++++
+ 7 files changed, 768 insertions(+)
 
 diff --git a/arch/arm64/boot/dts/allwinner/Makefile b/arch/arm64/boot/dts/allwinner/Makefile
 index 29f306260b79..7a02a8fb405b 100644
@@ -414,7 +414,7 @@ new file mode 100644
 index 000000000000..390af27157d6
 --- /dev/null
 +++ b/arch/arm64/boot/dts/allwinner/sun50i-a64-recore.dtsi
-@@ -0,0 +1,396 @@
+@@ -0,0 +1,414 @@
 +// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
 +
 +/dts-v1/;
@@ -811,6 +811,24 @@ index 000000000000..390af27157d6
 +
 +
 +
++
++/*
++ * sun50i-a64.dtsi provides two simple-framebuffer templates under /chosen for
++ * u-boot to fill in, both status = "disabled": framebuffer-lcd (mixer0-lcd0)
++ * first, then framebuffer-hdmi (mixer1-lcd1-hdmi). Recore only ever drives the
++ * panel over HDMI, but u-boot locates the node with of_get_compatible_child(),
++ * which returns the first compatible child regardless of status; creating the
++ * device then fails because that node is disabled, and there is no fallback to
++ * the next one. The result is an empty /chosen and no handover at all.
++ *
++ * Deleting the lcd template makes framebuffer-hdmi the first match, so u-boot
++ * populates it with the mode it actually programmed and simpledrm adopts that
++ * framebuffer at the panel's native resolution.
++ *
++ * Done here at the end of the file rather than inside the chosen node, so it
++ * does not move the context that reserve-memory-for-atf patches at line 16.
++ */
++/delete-node/ &{/chosen/framebuffer-lcd};
 -- 
 Created with Armbian build tools https://github.com/armbian/build
 

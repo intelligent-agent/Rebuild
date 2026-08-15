@@ -23,6 +23,7 @@ HOMEDIR="/home/${USER}"
 
 source /tmp/overlay/install_components/add_overlays.sh
 source /tmp/overlay/install_components/autohotspot.sh
+source /tmp/overlay/install_components/uboot_splash.sh
 
 post_build() {
     
@@ -123,6 +124,7 @@ echo "🍰 Rebuild starting..."
 prep_install
 add_overlays
 install_autohotspot
+install_uboot_splash
 post_build
 
 echo "🍰 Rebuild finished"

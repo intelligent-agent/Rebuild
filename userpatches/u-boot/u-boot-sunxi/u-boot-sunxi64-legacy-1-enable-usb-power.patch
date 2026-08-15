@@ -1,7 +1,17 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Elias Bakken <elias@iagent.no>
 Date: Mon, 25 Dec 2023 01:56:11 +0000
-Subject: Patching u-boot sunxi64 files configs/recore_defconfig
+Subject: recore: enable USB boot via PREBOOT
+
+Note: this used to also carry "regulator status", not as a diagnostic
+but purely for its side effect of probing (and thus enabling) every
+regulator, because sunxi board_init never called
+regulators_enable_boot_on(). That also powered the USB VBUS rails
+immediately before "usb reset", which left devices no time to warm up
+and cost ~50% of boots a USB device during enumeration
+(intelligent-agent/Reflash#88). The regulators are now enabled properly
+and much earlier by u-boot-sunxi64-legacy-3-regulators-enable-boot-on -
+do not put it back.
 
 Signed-off-by: Elias Bakken <elias@iagent.no>
 ---
@@ -19,7 +29,7 @@ index 0162a4ae39..97e6957e4b 100644
  CONFIG_DM_REGULATOR_FIXED=y
  CONFIG_CMD_REGULATOR=y
 +CONFIG_USE_PREBOOT=y
-+CONFIG_PREBOOT="mw.l 0x01f01400 0x00020102; regulator status; usb reset; run bootcmd_usb0"
++CONFIG_PREBOOT="mw.l 0x01f01400 0x00020102; usb reset; run bootcmd_usb0"
 -- 
 Created with Armbian build tools https://github.com/armbian/build
 
