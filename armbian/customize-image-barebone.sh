@@ -35,10 +35,25 @@ post_build() {
     sed -i "s/PRETTY_NAME=\"/PRETTY_NAME=\"Rebuild ${TAG}\//" /etc/os-release
 
  cat <<EOF > /etc/udev/rules.d/99-recore-otg.rules
-# Trigger the ConfigFS script only when the role is 'device'
+# Bring the gadget up when the USB device controller appears. This is the
+# trigger that works on every revision: only the A8 device tree declares a
+# Type-C controller (fcs,fusb302 / usb-c-connector / usb-role-switch), so on
+# A5, A6 and A7 there is no usb_role class device at all, the role rule below
+# could never fire, and the board simply never enumerated - nothing in lsusb
+# on the host (#75). Reflash hit the same thing and moved to this trigger.
+SUBSYSTEM=="udc", ACTION=="add", TAG+="systemd", ENV{SYSTEMD_WANTS}="usb-gadget-setup.service"
+
+# Kept alongside the UDC rule rather than replaced by it. On A8 the role switch
+# tears the gadget down when the cable is unplugged or flipped to host, and
+# only this rule can bring it back: the UDC does not reappear, it is the
+# controller itself and is present regardless of cable state. Starting an
+# already-active oneshot with RemainAfterExit is a no-op, so the two triggers
+# do not fight.
 SUBSYSTEM=="usb_role", ATTR{role}=="device", RUN+="/usr/bin/systemctl start usb-gadget-setup.service"
 
-# Tear down the gadget if the cable is removed or switched to host
+# Tear down the gadget if the cable is removed or switched to host. These are
+# also role-based and so also A8-only; on A5-A7 they never fire and the gadget
+# stays up, which is what Reflash does on every revision.
 SUBSYSTEM=="usb_role", ATTR{role}=="none", RUN+="/usr/bin/systemctl stop usb-gadget-setup.service"
 SUBSYSTEM=="usb_role", ATTR{role}=="host", RUN+="/usr/bin/systemctl stop usb-gadget-setup.service"
 
@@ -50,11 +65,28 @@ EOF
 #!/bin/bash
 
 GADGET_DIR="/sys/kernel/config/usb_gadget/g1"
-UDC_NAME="musb-hdrc.4.auto"
 
 case "\$1" in
     start)
-        modprobe libcomposite
+        # usb_f_acm pulls in libcomposite and u_serial and registers the
+        # usb_gadget configfs subsystem.
+        modprobe usb_f_acm || { echo "modprobe usb_f_acm failed" >&2; exit 1; }
+
+        # configfs registration is asynchronous - wait for it rather than
+        # racing it.
+        for i in \$(seq 1 50); do
+            [ -d /sys/kernel/config/usb_gadget ] && break
+            sleep 0.1
+        done
+        [ -d /sys/kernel/config/usb_gadget ] || { echo "usb_gadget configfs unavailable" >&2; exit 1; }
+
+        # Bind to whichever UDC exists instead of a hardcoded name. The musb
+        # platform device instance number comes from device tree ordering, so
+        # it is not the same everywhere - this board has musb-hdrc.4.auto,
+        # while Reflash's universal DTB gives musb-hdrc.2.auto.
+        UDC_NAME="\$(ls /sys/class/udc 2>/dev/null | head -1)"
+        [ -n "\$UDC_NAME" ] || { echo "no UDC available" >&2; exit 1; }
+
         mkdir -p \$GADGET_DIR
         cd \$GADGET_DIR
 
@@ -75,7 +107,7 @@ case "\$1" in
         ln -s functions/acm.usb0 configs/c.1/ 2>/dev/null
 
         # Bind to hardware
-        echo \$UDC_NAME > UDC
+        echo "\$UDC_NAME" > UDC
         ;;
     stop)
         if [ -d "\$GADGET_DIR" ]; then
