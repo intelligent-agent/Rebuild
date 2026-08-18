@@ -12,17 +12,28 @@ post_build() {
     # Ssh needs to be enabled for moonraker to see it
     systemctl enable ssh.service
 
-    # armbian-firstrun needs to be type=oneshot in order to the autodisable to wait for it.
-    sed -i 's/Type=.*/Type=oneshot/' /lib/systemd/system/armbian-firstrun.service
+    # armbian-firstrun must be Type=oneshot so auto-disable-ssh.timer, ordered
+    # After=armbian-firstrun.service, waits for it instead of racing it.
+    # A drop-in, not sed: the unit belongs to armbian-bsp-cli, so an in-place
+    # edit is silently undone on the next upgrade of that package.
+    mkdir -p /etc/systemd/system/armbian-firstrun.service.d
+    cat <<'EOF' > /etc/systemd/system/armbian-firstrun.service.d/oneshot.conf
+[Service]
+Type=oneshot
+EOF
 
     # Enable SSH service discovery
     cp /usr/share/doc/avahi-daemon/examples/ssh.service /etc/avahi/services/
 
-    # Increase burstlimit on ssh
-    sed '/RuntimeDirectoryMode=0755/a StartLimitBurst=10' /lib/systemd/system/ssh.service
-
-    # Disable SSH root access
-    sed -i 's/^PermitRootLogin.*$/#PermitRootLogin/g' /etc/ssh/sshd_config
+    # Stop root logging in over ssh with a password. prohibit-password, not no,
+    # to match the previous behaviour: this used to comment out Armbian's
+    # "PermitRootLogin yes", which falls back to OpenSSH's default of
+    # prohibit-password - key logins were always still allowed.
+    # sshd_config.d rather than sshd_config, which is a dpkg conffile.
+    mkdir -p /etc/ssh/sshd_config.d
+    cat <<'EOF' > /etc/ssh/sshd_config.d/10-recore-rootlogin.conf
+PermitRootLogin prohibit-password
+EOF
 
     # Remove all temporary permission granted during install
     sed -i 's/printer ALL=(ALL) NOPASSWD: ALL//g' /etc/sudoers.d/printer
