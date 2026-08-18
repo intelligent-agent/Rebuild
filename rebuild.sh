@@ -11,7 +11,9 @@ barebone | mainsail | fluidd | octoprint)
     ;;
 *)
     echo "Wrong argument '$1'"
-    echo "Usage: $0 <barebone|mainsail|fluidd|octoprint>"
+    echo "Usage: $0 <barebone|mainsail|fluidd|octoprint> [cores]"
+    echo "  cores  number of CPU cores to give the build container."
+    echo "         Defaults to all available ($(nproc))."
     exit 1
     ;;
 esac
@@ -26,10 +28,9 @@ fi
 
 if [ -z "$cores" ] || [ $cores -gt $reported_cores ] || [ $cores -lt 1 ]; then
     echo "😻 Allowing docker to use all available cores ($reported_cores)"
-    cores=$reported_cores # Set cores to reported number of cores
+    cores=$reported_cores
 else
     echo "😺 Allowing docker to use $cores cores"
-    cores=$reported_cores # Set cores to reported number of cores
 fi
 
 BUILD_DIR="../build-${VERSION}"
@@ -62,7 +63,12 @@ cd "$ROOT_DIR"
 cp -r "userpatches" "${BUILD_DIR}"
 cp armbian/customize-image-"${VERSION}".sh "${BUILD_DIR}"/userpatches/customize-image.sh
 cp armbian/recore.csc "${BUILD_DIR}"/config/boards
-rm -f "${BUILD_DIR}/patch/u-boot/u-boot-sunxi/allwinner-boot-splash.patch"
+# NOTE: Armbian's patch/u-boot/u-boot-sunxi/allwinner-boot-splash.patch used to
+# be deleted here (since 1c0c889, Jun 2023, "Patch is not overrwritten"). It is
+# left in place now and adapted to instead - see
+# userpatches/u-boot/u-boot-sunxi/u-boot-sunxi64-legacy-8-splash-preboot.patch.
+# Patches are applied in alphabetical order by filename, so "allwinner-*" lands
+# before "u-boot-sunxi64-legacy-*" and ours can build on top of it.
 
 mkdir -p "${BUILD_DIR}"/userpatches/overlay/rebuild/
 echo "${NAME}" >"${BUILD_DIR}"/userpatches/overlay/rebuild/rebuild-version
