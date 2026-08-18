@@ -153,6 +153,8 @@ prep_install() {
 
 echo "🍰 Rebuild starting..."
 
+set -e
+
 prep_install
 add_overlays
 install_autohotspot
