@@ -1,0 +1,62 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Elias Bakken <elias@iagent.no>
+Date: Tue, 18 Aug 2026 00:00:00 +0000
+Subject: recore: drop the preboot= that Armbian's splash patch defines
+
+Armbian carries patch/u-boot/u-boot-sunxi/allwinner-boot-splash.patch, which
+adds a splash loader and, as a side effect, defines preboot:
+
+	#ifdef CONFIG_USB_KEYBOARD
+	#if defined CONFIG_VIDEO
+	#define CONSOLE_STDIN_SETTINGS \
+		"preboot=run loadsplash; usb start\0" \
+		"stdin=serial,usbkbd\0"
+
+Both conditions hold on Recore - CONFIG_VIDEO=y from recore_defconfig, and
+CONFIG_USB_KEYBOARD=y inherited from the sunxi defaults - so that preboot is
+real, and it collides with ours.
+
+recore_defconfig sets CONFIG_PREBOOT to
+"mw.l 0x01f01400 0x00020102; usb reset; run bootcmd_usb0", which is what boots
+the board from USB for Reflash. Both definitions land in the same default
+environment blob - CONFIG_PREBOOT via env_default.h:63, theirs via
+CFG_EXTRA_ENV_SETTINGS at env_default.h:119 - and which one survives depends on
+U-Boot's duplicate-key handling during env import. That is not a detail the USB
+boot path should rest on, so remove theirs and leave exactly one definition.
+
+Nothing of value is lost. Their loadsplash does "load mmc 0 ... boot.bmp",
+which cannot work when booting from USB; ours is in
+userpatches/bootscripts/boot-sun50i-next.cmd, uses ${devtype}/${devnum}, is
+guarded so a missing image cannot break boot, and can be turned off with
+splashfile= in armbianEnv.txt. The other half of their patch is welcome and
+kept: CMD_BMP defaulting to y, and the CONFIG_SPLASH_*/CONFIG_BMP_* defines
+(all of which recore_defconfig also sets explicitly).
+
+This replaces deleting the whole Armbian patch from the build tree in
+rebuild.sh, which is what we used to do. Patches are applied in alphabetical
+order by filename, so "allwinner-boot-splash.patch" is applied before
+"u-boot-sunxi64-legacy-*", and this can simply build on top of it.
+
+Only the preboot line is removed. The two CONSOLE_STDIN_SETTINGS branches are
+left identical rather than collapsing the now-redundant #if, to keep the diff
+against Armbian's patch as small as possible - the smaller it is, the less
+likely it is to conflict when they touch that file.
+
+Signed-off-by: Elias Bakken <elias@iagent.no>
+---
+ include/configs/sunxi-common.h | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/include/configs/sunxi-common.h b/include/configs/sunxi-common.h
+--- a/include/configs/sunxi-common.h
++++ b/include/configs/sunxi-common.h
+@@ -303,7 +303,6 @@
+ #ifdef CONFIG_USB_KEYBOARD
+ #if defined CONFIG_VIDEO
+ #define CONSOLE_STDIN_SETTINGS \
+-	"preboot=run loadsplash; usb start\0" \
+ 	"stdin=serial,usbkbd\0"
+ #else
+ #define CONSOLE_STDIN_SETTINGS \
+--
+Created with Armbian build tools https://github.com/armbian/build
