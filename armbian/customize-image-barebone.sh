@@ -148,6 +148,11 @@ EOF
 }
 
 prep_install() {
+    # install_autohotspot apt-installs dnsmasq-base, and barebone has no
+    # prepare_build to have refreshed the lists first - post_build's apt update
+    # runs after it, too late.
+    apt update
+
     echo root:temppwd | chpasswd
 }
 
