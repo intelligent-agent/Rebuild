@@ -1,0 +1,81 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Elias Bakken <elias@iagent.no>
+Date: Tue, 18 Aug 2026 00:00:00 +0000
+Subject: recore: drive PD7 low so the board never sources VBUS on USB-C
+
+PD7 (EN-USB-OTG) gates U9, the MT9700 load switch that sources 5V onto
+the USB-C connector's VBUS pin.
+
+On Recore A7 there is no pull-down on U9's enable input. A64 pins come
+out of reset as high-impedance inputs, so from power-on until something
+drives PD7 the enable line floats and the switch may turn itself on -
+putting 5V onto VBUS while the port is wired as a peripheral
+(usb_otg has dr_mode = "peripheral"). Any attached host is already
+driving VBUS, so the two supplies end up fighting across U9. A8 adds
+the missing pull-down (R174); A5 and A6 leave PD7 unconnected.
+
+Declaring the rail as a fixed regulator gets it driven low without any
+board code. regulators_enable_boot_on() - added for this board in
+u-boot-sunxi64-legacy-3-regulators-enable-boot-on - walks the regulator
+uclass with uclass_first_device()/uclass_next_device(), and those probe
+each device as they go. regulator_autoset() then bails out with
+-EMEDIUMTYPE for a regulator that is neither always-on nor boot-on, but
+by that point it has already been probed, and probing is what
+configures the GPIO: regulator_common_of_to_plat() asks for
+GPIOD_IS_OUT, and adds GPIOD_IS_OUT_ACTIVE only when
+regulator-boot-on is present. sunxi's set_flags() writes the level
+before switching the pin to an output, so there is no glitch high on
+the way down.
+
+So the absence of regulator-always-on and regulator-boot-on here is
+load-bearing, and deliberately unlike every other regulator in this
+file. Adding either one would enable the rail and reintroduce exactly
+the conflict this removes.
+
+Driving PD7 low is correct on A7 and harmless on the revisions that
+either pull it down already or do not connect it, which matters because
+this device tree is shared by all of them.
+
+This shortens the window rather than closing it: the pin still floats
+from power-on until u-boot's board_init() runs. Only the pull-down
+resistor fixes that completely.
+
+Signed-off-by: Elias Bakken <elias@iagent.no>
+---
+ arch/arm/dts/sun50i-a64-recore.dts | 22 ++++++++++++++++++++++
+ 1 file changed, 22 insertions(+)
+
+diff --git a/arch/arm/dts/sun50i-a64-recore.dts b/arch/arm/dts/sun50i-a64-recore.dts
+--- a/arch/arm/dts/sun50i-a64-recore.dts
++++ b/arch/arm/dts/sun50i-a64-recore.dts
+@@ -102,6 +102,28 @@
+ 		enable-active-high;
+ 	};
+
++	/*
++	 * VBUS source for the USB-C port, gated by PD7 (EN-USB-OTG).
++	 *
++	 * Deliberately has neither regulator-always-on nor
++	 * regulator-boot-on: without them the enable GPIO is requested
++	 * as GPIOD_IS_OUT without GPIOD_IS_OUT_ACTIVE, so probing this
++	 * regulator drives PD7 low instead of high. That is the entire
++	 * point of the node - A7 has no pull-down on the load switch's
++	 * enable input, and a floating enable can make the board source
++	 * 5V into a host that is already driving VBUS.
++	 *
++	 * Do not "fix" this by adding boot-on to match its neighbours.
++	 */
++	reg_usb0_vbus: usb0-vbus {
++		compatible = "regulator-fixed";
++		regulator-name = "usb0-vbus";
++		gpio = <&pio 3 7 GPIO_ACTIVE_HIGH>; /* PD7 */
++		regulator-min-microvolt = <5000000>;
++		regulator-max-microvolt = <5000000>;
++		enable-active-high;
++	};
++
+ 	reg_hdmi_vbus: hdmi-vbus {
+ 		compatible = "regulator-fixed";
+ 		regulator-name = "hdmi-vbus";
+--
+Created with Armbian build tools https://github.com/armbian/build
