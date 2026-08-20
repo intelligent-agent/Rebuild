@@ -7,10 +7,22 @@ chmod 600 /etc/rebuild-settings
 wifidev=`nmcli dev | grep "wifi " | cut -d' ' -f1`
 hotspot_SSID="Recore"
 hotspot_PW="12345678"
-# How long to wait for the configured network at boot before falling
-# back to the hotspot. Only boot-time availability matters here - if
-# the connection later drops, we deliberately do not fall back.
-CLIENT_TIMEOUT=60
+# How long to wait for the configured network at boot before falling back to the
+# hotspot. Only boot-time availability matters here - if the connection later
+# drops, we deliberately do not fall back.
+#
+# Two minutes, and then the board is an access point for the rest of this boot.
+# That is the whole rule, on purpose: it can be explained to a user in one
+# sentence, and it bounds how long they wait before something they can connect
+# to appears. A periodic retry was considered and rejected (#80) - the radio
+# cannot be an AP and a station at the same time, so every retry would take the
+# hotspot away from whoever came to use it precisely because the network is
+# down.
+#
+# 120s rather than the previous 60s because a single transient miss used to be
+# permanent, and NetworkManager starts while a USB dongle behind a hub may still
+# be enumerating.
+CLIENT_TIMEOUT=120
 
 create_hotspot() {
   echo "Creating hotspot"
@@ -51,8 +63,35 @@ fi
 # autoconnect disabled, so NetworkManager never arbitrates between them
 # itself - the choice is made explicitly, once, here.
 if [ -n "$WIFI_SSID" ] && [ -f /etc/NetworkManager/system-connections/Client.nmconnection ]; then
-  echo "Trying to connect to $WIFI_SSID (timeout ${CLIENT_TIMEOUT}s)..."
-  if nmcli -w "$CLIENT_TIMEOUT" con up Client; then
+  echo "Trying to connect to $WIFI_SSID for up to ${CLIENT_TIMEOUT}s..."
+  # Retry against a wall-clock deadline instead of handing the whole budget to
+  # one nmcli call. `nmcli -w` only bounds how long *nmcli* waits; NetworkManager
+  # gives up on its own well before that. Measured on an A8: an SSID that is not
+  # present fails with "The Wi-Fi network could not be found" after 27s, so
+  # -w 120 spent 27s and fell back - the timeout was never the thing in control.
+  #
+  # Rescan before each attempt, because that failure is usually NM answering
+  # from a stale scan cache: at boot the cache can predate the USB dongle
+  # finishing enumeration, and one miss then used to be permanent (#80).
+  #
+  # Deliberately attempt every round rather than first checking the SSID appears
+  # in the scan - a hidden network never appears, and skipping the attempt would
+  # break it.
+  deadline=$(( $(date +%s) + CLIENT_TIMEOUT ))
+  connected=no
+  while :; do
+    nmcli dev wifi rescan >/dev/null 2>&1
+    sleep 3
+    if nmcli -w 20 con up Client; then
+      connected=yes
+      break
+    fi
+    [ "$(date +%s)" -ge "$deadline" ] && break
+    echo "  ...still looking for $WIFI_SSID"
+    sleep 5
+  done
+
+  if [ "$connected" = yes ]; then
     echo "Connected to $WIFI_SSID"
   else
     echo "Could not connect to $WIFI_SSID within ${CLIENT_TIMEOUT}s, falling back to hotspot"
