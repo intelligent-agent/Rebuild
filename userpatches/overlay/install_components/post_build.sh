@@ -162,4 +162,33 @@ EOF
 DPkg::Pre-Invoke {"mount -o remount,rw /boot 2>/dev/null || true";};
 DPkg::Post-Invoke {"mount -o remount,ro /boot 2>/dev/null || true";};
 EOF
+
+    # Ask the watchdog for a timeout it can actually do (#82).
+    #
+    # systemd's default RebootWatchdogSec is 10min. sunxi-wdt maxes out at 16s
+    # (/sys/class/watchdog/watchdog0/max_timeout), so the driver returns EINVAL,
+    # systemd logs one line and carries on with the watchdog NEVER ARMED:
+    #
+    #   systemd-shutdown[1]: Failed to set watchdog hardware timeout to 10min:
+    #   Invalid argument
+    #
+    # On a console that normally runs quiet, nobody sees it. So the protection
+    # against a board wedging during shutdown has never been present.
+    #
+    # 15s is chosen against measurement, not taste: ten controlled shutdowns on
+    # an A8 fluidd image all completed in 6-7s wall clock ("reboot: Power down"
+    # at 8.07s on the serial console), and that is the *whole* shutdown - the
+    # phase this timeout covers is a subset of it. So 15s is roughly 2x headroom
+    # and still inside the 16s ceiling. Do not raise it past 16 or it silently
+    # goes back to being unarmed.
+    #
+    # RuntimeWatchdogSec is deliberately NOT set here. Unlike this one it is
+    # petted continuously, so the 16s ceiling is no obstacle - but it would
+    # reset a printer that stalls for 16s mid-print, which is a product
+    # decision rather than a bug fix.
+    mkdir -p /etc/systemd/system.conf.d
+    cat <<'EOF' > /etc/systemd/system.conf.d/10-watchdog.conf
+[Manager]
+RebootWatchdogSec=15s
+EOF
 }
