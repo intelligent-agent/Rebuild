@@ -1,0 +1,77 @@
+#!/bin/bash
+#
+# Flash Klipper onto any attached RP2040 running Klipper - the ReTool A2, and
+# Remote when it lands (#38).
+#
+# No BOOTSEL button and no pin short. ReTool ships with Klipper already on it,
+# so it enumerates as 1d50:614e and can be reset into the RP2 bootloader over
+# USB; the pads on the back of the PCB are only needed to recover a board
+# running foreign or broken firmware.
+#
+# MUST RUN AS ROOT. rp2040_flash talks PICOBOOT over libusb, and without raw USB
+# access it fails with
+#     No rp2040 in BOOTSEL mode was found
+# which reads as "nothing is plugged in" rather than "permission denied" and is
+# a good way to lose an afternoon. rebuild-first-run already runs as root.
+
+set -u
+
+FIRMWARE=/opt/firmware/rp2040.uf2
+KLIPPER=/home/printer/klipper
+BOOTLOADER_ID=2e8a:0003
+
+log() { echo "$1"; }
+
+[ -f "$FIRMWARE" ] || { log "No $FIRMWARE - nothing to flash"; exit 0; }
+
+# Match Klipper's own by-id names, never a bare VID:PID.
+#
+# There is usually more than one RP2040 on this bus: the Renits A5 screen is
+# also an RP2040 (2e8a:000a) running its own firmware, and flashing Klipper onto
+# it would brick the display. Worse, once any device enters the bootloader it
+# becomes an anonymous 2e8a:0003 with nothing to say which board it was - so the
+# only safe order is to reset a device we have already identified, then flash
+# the bootloader device that appears as a result.
+mapfile -t DEVICES < <(ls /dev/serial/by-id/usb-Klipper_rp2040_*-if00 2>/dev/null)
+
+if [ "${#DEVICES[@]}" -eq 0 ]; then
+    log "No Klipper RP2040 attached - skipping"
+    exit 0
+fi
+
+for dev in "${DEVICES[@]}"; do
+    log "Flashing $(basename "$dev")"
+
+    if lsusb | grep -q "$BOOTLOADER_ID"; then
+        log "  something is already in the bootloader - refusing to guess which board it is"
+        exit 1
+    fi
+
+    ( cd "$KLIPPER/scripts" && python3 -c \
+        "import flash_usb as u; u.enter_bootloader('$dev')" ) || {
+        log "  could not reset $dev into the bootloader"
+        continue
+    }
+
+    # The device re-enumerates; wait for it rather than assuming a delay.
+    for _ in $(seq 1 30); do
+        lsusb | grep -q "$BOOTLOADER_ID" && break
+        sleep 0.5
+    done
+    if ! lsusb | grep -q "$BOOTLOADER_ID"; then
+        log "  never appeared as $BOOTLOADER_ID"
+        continue
+    fi
+
+    if /usr/local/bin/rp2040_flash "$FIRMWARE"; then
+        log "  flashed"
+    else
+        log "  rp2040_flash failed (running as $(id -un); this needs root)"
+    fi
+
+    # Back as a Klipper device, so the next iteration is not confused by it.
+    for _ in $(seq 1 30); do
+        lsusb | grep -q "$BOOTLOADER_ID" || break
+        sleep 0.5
+    done
+done

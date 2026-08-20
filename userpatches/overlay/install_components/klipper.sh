@@ -23,9 +23,10 @@ install_klipper(){
     cp /tmp/overlay/klipper/tmc2130_a5.py ${HOMEDIR}/klipper/klippy/extras/
 
     cp /tmp/overlay/klipper/flash-stm32 /usr/local/bin
+    cp /tmp/overlay/klipper/flash-rp2040 /usr/local/bin
     cp /tmp/overlay/klipper/flash-ar100.py /usr/local/bin
     cp /tmp/overlay/klipper/set-ar100-clock.py /usr/local/bin
-    chmod +x /usr/local/bin/flash-ar100.py /usr/local/bin/set-ar100-clock.py
+    chmod +x /usr/local/bin/flash-ar100.py /usr/local/bin/set-ar100-clock.py /usr/local/bin/flash-rp2040
     mkdir -p /var/log/klipper_logs
     chown ${USER}:${USER} /var/log/klipper_logs
     mkdir -p /opt/firmware/
@@ -121,6 +122,29 @@ EOF
     make olddefconfig
     make -j
     cp ${HOMEDIR}/klipper/out/klipper.bin /opt/firmware/stm32-32KB.bin
+
+    # Compile RP2040 - ReTool A2, and Remote when it lands (#38).
+    #
+    # Upstream's own config rather than one of ours: it is two lines
+    # (MACH_RPXXXX + MACH_RP2040) and olddefconfig's defaults are already what
+    # this board needs - USB rather than UART, and VID:PID 1d50:614e, which is
+    # how a flashed board identifies itself.
+    #
+    # Note the artefact is klipper.uf2, not klipper.bin like the STM32 builds.
+    cp ${HOMEDIR}/klipper/test/configs/rp2040.config ${HOMEDIR}/klipper/.config
+    make clean
+    make olddefconfig
+    make -j
+    cp ${HOMEDIR}/klipper/out/klipper.uf2 /opt/firmware/rp2040.uf2
+
+    # ...and the flashing tool, which the firmware target does not build. It
+    # talks PICOBOOT over libusb (libusb-1.0-0-dev is already in PKGLIST above),
+    # so no block device has to be found and mounted - which matters because
+    # /dev/sda on these boards is just as likely to be a user's USB stick as the
+    # RP2 bootloader drive.
+    make -C ${HOMEDIR}/klipper/lib/rp2040_flash
+    cp ${HOMEDIR}/klipper/lib/rp2040_flash/rp2040_flash /usr/local/bin/
+    chmod +x /usr/local/bin/rp2040_flash
     
     # Revert the patch to get rid of the warning
     git reset --hard

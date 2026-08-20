@@ -16,5 +16,11 @@ echo "--Beginning of first run script--" > /var/log.hdd/rebuild-first-run.log
 log "Running flash-stm32 script"
 /usr/local/bin/flash-stm32
 
+# Any attached RP2040 (ReTool A2, Remote). Exits 0 when none is present, so a
+# board without one is not a failed first boot - unlike flash-stm32, the target
+# here is optional hardware.
+log "Running flash-rp2040 script"
+/usr/local/bin/flash-rp2040 2>&1 | tee -a /var/log.hdd/rebuild-first-run.log
+
 log "Disabling rebuild-first-run.service"
 systemctl disable rebuild-first-run.service
