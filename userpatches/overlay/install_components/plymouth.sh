@@ -22,6 +22,29 @@ install_plymouth() {
 
     plymouth-set-default-theme -R recore
 
+    # ...and make sure -R actually regenerated something.
+    #
+    # It does not, during an Armbian build. update-initramfs gets deferred by a
+    # dpkg trigger that never runs, so the image ships the initrd.img built at
+    # kernel-install time - i.e. from before this theme existed. The 282ba24
+    # image was built with everything here correct (plymouthd.conf said
+    # Theme=recore, all 38 files present in the rootfs) and still booted the
+    # stock spinner theme, because its initramfs predated them. The build log
+    # gives it away by what is missing: "Converting to u-boot format" with no
+    # "Generating /boot/initrd.img-..." above it.
+    update-initramfs -u
+
+    # Guard it, because this failure is silent in every other way: Plymouth just
+    # renders a different theme, no error anywhere, and it can only be caught by
+    # looking at a booted panel.
+    KVER_IRD=$(ls /boot/initrd.img-* 2>/dev/null | head -1)
+    if [ -z "$KVER_IRD" ] || ! lsinitramfs "$KVER_IRD" | grep -q 'themes/recore/recore.script'; then
+        echo "FATAL: the recore theme is not in $KVER_IRD" >&2
+        echo "FATAL: Plymouth would boot whatever theme the initramfs does carry" >&2
+        exit 1
+    fi
+    echo "🍰 recore theme confirmed in $(basename "$KVER_IRD")"
+
     # Hold the splash across the handover to KlipperScreen.
     #
     # plymouth-quit finishes ~30ms before KlipperScreen.service even starts,
