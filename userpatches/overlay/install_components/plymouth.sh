@@ -4,13 +4,23 @@ install_plymouth() {
     echo "🍰 install Plymouth"
     apt install -y plymouth plymouth-themes
 
-    # Use Recore's own watermark as the spinner theme's logo. The
-    # theme's default WatermarkVerticalAlignment (.96) puts it right
-    # near the bottom of the screen - center it instead.
-    cp /tmp/overlay/plymouth/watermark.png /usr/share/plymouth/themes/spinner/watermark.png
-    sed -i 's/^WatermarkVerticalAlignment=.*/WatermarkVerticalAlignment=.5/' /usr/share/plymouth/themes/spinner/spinner.plymouth
+    # Recore's own theme, on the "script" plugin.
+    #
+    # spinner uses the "two-step" plugin, which blits its watermark 1:1. Once
+    # simpledrm gave us the panel's real mode instead of a guessed 1024x768,
+    # the same bitmap covered 10% of a 1920 canvas and 14% of a 1280 one, so
+    # the logo was both smaller than before and inconsistent between panels
+    # (#74). The script plugin can read the canvas at runtime and scale to it,
+    # and it also gives us status/message hooks that two-step does not have.
+    # Copy the whole theme directory rather than listing files. The theme is now
+    # a script, two images and 34 animation frames, and a frame that fails to
+    # copy does not fail loudly - Plymouth just renders nothing and you get a
+    # black screen at boot with nothing in any log. A wildcard cannot go stale
+    # the way a hand-maintained list can.
+    install -d -m 755 /usr/share/plymouth/themes/recore
+    install -m 644 /tmp/overlay/plymouth/recore/* /usr/share/plymouth/themes/recore/
 
-    plymouth-set-default-theme -R spinner
+    plymouth-set-default-theme -R recore
 
     # Hold the splash across the handover to KlipperScreen.
     #

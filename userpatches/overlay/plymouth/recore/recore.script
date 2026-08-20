@@ -1,0 +1,208 @@
+# Recore boot splash: wireframe cube, RECORE wordmark, animation below.
+#
+# Uses the "script" plugin rather than "two-step" (which spinner uses) because
+# two-step blits its watermark 1:1, so the logo's apparent size changed with the
+# panel once we stopped guessing 1024x768 and started using the real mode from
+# EDID (#74). script can read the canvas at runtime, and it also gives us the
+# status/message hooks two-step lacks.
+#
+# Everything is sized in units of min(width, height), never off a single axis:
+# Recore drives a 720x1280 portrait panel and a 1080x1920 one, and sizing off
+# width alone makes the group tiny on one and huge on the other.
+#
+# Note the panel this was designed against reports a 1080x1920 mode while being
+# physically landscape - the kernel is told so with
+# video=Unknown-1:panel_orientation=left_side_up, and Plymouth rotates to match.
+# min(width, height) is 1080 either way, which is why the same numbers hold.
+
+BG_GREY        = 0.0;     # pure black - matches u-boot's splash and the gap
+                          # before KlipperScreen paints, so the handover has no
+                          # visible transition at either end (#73)
+
+CUBE_SIZE      = 0.137;   # widths, as fractions of min(width, height),
+WORD_SIZE      = 0.252;   # measured off the design mockup
+ANIM_SIZE      = 0.080;
+
+GAP            = 0.069;   # equal gap above and below the wordmark
+
+STATUS_OFFSET  =  0.30;   # systemd's "Starting foo..." sits below the group
+MESSAGE_OFFSET =  0.36;
+TEXT_GREY      =  0.65;
+
+Window.SetBackgroundTopColor (BG_GREY, BG_GREY, BG_GREY);
+Window.SetBackgroundBottomColor (BG_GREY, BG_GREY, BG_GREY);
+
+screen_width  = Window.GetWidth ();
+screen_height = Window.GetHeight ();
+
+min_dim = screen_width;
+if (screen_height < screen_width)
+  {
+    min_dim = screen_height;
+  }
+
+centre_x = screen_width  / 2;
+centre_y = screen_height / 2;
+
+# The group is anchored on the wordmark, not on the middle of the screen: its
+# TOP edge sits on the vertical centre, and the cube and animation hang off it
+# by an equal gap. Anchoring each element to the centre independently made the
+# spacing drift as soon as any element changed size.
+#
+# Everything is in units of min(width, height) so the same numbers hold on the
+# 720x1280 Manga Screen 2 and the 1080x1920 panel.
+
+fun scaled_to (image, size_fraction)
+  {
+    factor = (min_dim * size_fraction) / image.GetWidth ();
+    return image.Scale (image.GetWidth () * factor, image.GetHeight () * factor);
+  }
+
+fun sprite_at (image, top, z)
+  {
+    sprite = Sprite (image);
+    sprite.SetX (centre_x - image.GetWidth () / 2);
+    sprite.SetY (top);
+    sprite.SetZ (z);
+    return sprite;
+  }
+
+gap_px = min_dim * GAP;
+
+word.image = scaled_to (Image ("wordmark.png"), WORD_SIZE);
+word.top   = centre_y;                                    # the anchor
+word.sprite = sprite_at (word.image, word.top, 1);
+
+cube.image = scaled_to (Image ("cube.png"), CUBE_SIZE);
+cube.sprite = sprite_at (cube.image,
+                         word.top - gap_px - cube.image.GetHeight (), 1);
+
+anim.top = word.top + word.image.GetHeight () + gap_px;
+
+# ----------------------------------------------------------------- text -----
+# systemd feeds "Starting foo..." to the status hook; display-message is for
+# anything we push ourselves, e.g. Reflash reporting progress on the panel.
+
+fun centred_text (sprite, text, offset_fraction)
+  {
+    if (text == "")
+      {
+        sprite.SetOpacity (0);
+        return;
+      }
+    image = Image.Text (text, TEXT_GREY, TEXT_GREY, TEXT_GREY, 1);
+    sprite.SetImage (image);
+    sprite.SetX (centre_x - image.GetWidth () / 2);
+    sprite.SetY (centre_y + min_dim * offset_fraction);
+    sprite.SetOpacity (1);
+  }
+
+status.sprite = Sprite ();
+status.sprite.SetZ (2);
+fun update_status_callback (status)
+  {
+    centred_text (status.sprite, status, STATUS_OFFSET);
+  }
+Plymouth.SetUpdateStatusFunction (update_status_callback);
+
+message.sprite = Sprite ();
+message.sprite.SetZ (3);
+fun display_message_callback (text)
+  {
+    centred_text (message.sprite, text, MESSAGE_OFFSET);
+  }
+fun hide_message_callback (text)
+  {
+    message.sprite.SetOpacity (0);
+  }
+Plymouth.SetDisplayMessageFunction (display_message_callback);
+Plymouth.SetHideMessageFunction (hide_message_callback);
+
+# ----------------------------------------------------------------- quit -----
+# plymouth-quit runs with --retain-splash so the panel keeps this frame until
+# KlipperScreen has painted; drop only the text.
+
+fun quit_callback ()
+  {
+    status.sprite.SetOpacity (0);
+    message.sprite.SetOpacity (0);
+    anim.sprite.SetOpacity (0);
+  }
+Plymouth.SetQuitFunction (quit_callback);
+
+
+# ------------------------------------------------------------ animation -----
+# spinfinity's throbber, reused frame-for-frame. It reads as "working" without
+# being a progress bar - unlike glow's progress sequence, which is a percentage
+# fill and would need wiring to real boot progress to mean anything.
+#
+# The frame list is written out literally on purpose. DO NOT fold it into a
+# for-loop building names like "anim" + i + ".png": this Plymouth's script
+# language has no string formatting, number-to-string concatenation is the
+# usual place these themes break, and a splash that fails to load its frames
+# fails silently - you get a blank screen at boot with nothing in any log.
+#
+# ANIM_DIVISOR sets the rate: Plymouth refreshes at ~50Hz, so 2 gives ~25fps
+# and a 34-frame loop of about 1.4s.
+
+ANIM_DIVISOR = 2;
+
+anim_frames[0] = Image ("anim01.png");
+anim_frames[1] = Image ("anim02.png");
+anim_frames[2] = Image ("anim03.png");
+anim_frames[3] = Image ("anim04.png");
+anim_frames[4] = Image ("anim05.png");
+anim_frames[5] = Image ("anim06.png");
+anim_frames[6] = Image ("anim07.png");
+anim_frames[7] = Image ("anim08.png");
+anim_frames[8] = Image ("anim09.png");
+anim_frames[9] = Image ("anim10.png");
+anim_frames[10] = Image ("anim11.png");
+anim_frames[11] = Image ("anim12.png");
+anim_frames[12] = Image ("anim13.png");
+anim_frames[13] = Image ("anim14.png");
+anim_frames[14] = Image ("anim15.png");
+anim_frames[15] = Image ("anim16.png");
+anim_frames[16] = Image ("anim17.png");
+anim_frames[17] = Image ("anim18.png");
+anim_frames[18] = Image ("anim19.png");
+anim_frames[19] = Image ("anim20.png");
+anim_frames[20] = Image ("anim21.png");
+anim_frames[21] = Image ("anim22.png");
+anim_frames[22] = Image ("anim23.png");
+anim_frames[23] = Image ("anim24.png");
+anim_frames[24] = Image ("anim25.png");
+anim_frames[25] = Image ("anim26.png");
+anim_frames[26] = Image ("anim27.png");
+anim_frames[27] = Image ("anim28.png");
+anim_frames[28] = Image ("anim29.png");
+anim_frames[29] = Image ("anim30.png");
+anim_frames[30] = Image ("anim31.png");
+anim_frames[31] = Image ("anim32.png");
+anim_frames[32] = Image ("anim33.png");
+anim_frames[33] = Image ("anim34.png");
+
+anim.count  = 34;
+anim.frame  = 0;
+anim.tick   = 0;
+anim.sprite = Sprite ();
+anim.sprite.SetZ (4);
+
+fun anim_refresh ()
+  {
+    anim.tick++;
+    if (anim.tick % ANIM_DIVISOR) return;
+
+    image  = anim_frames[anim.frame];
+    factor = (min_dim * ANIM_SIZE) / image.GetWidth ();
+    scaled = image.Scale (image.GetWidth () * factor, image.GetHeight () * factor);
+
+    anim.sprite.SetImage (scaled);
+    anim.sprite.SetX (centre_x - scaled.GetWidth () / 2);
+    anim.sprite.SetY (anim.top);
+
+    anim.frame++;
+    if (anim.frame >= anim.count) anim.frame = 0;
+  }
+
+Plymouth.SetRefreshFunction (anim_refresh);

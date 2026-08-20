@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=Recore
+Description=Recore boot splash - logo scaled to the panel, with status text
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/recore
+ScriptFile=/usr/share/plymouth/themes/recore/recore.script
