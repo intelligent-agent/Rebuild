@@ -45,19 +45,44 @@ fi
 # Disable by setting splashfile= (empty) in armbianEnv.txt.
 if test -n "${splashfile}"; then
 	if load ${devtype} ${devnum} ${splashimage} ${prefix}${splashfile}; then
+		# Wipe the panel before drawing, or the splash lands on top of the
+		# console text rather than replacing it (#84). boot.bmp is 480x480
+		# and centred, U-Boot has no scaler, and the panel is far bigger -
+		# so `bmp display` only ever covers the middle of a screen that by
+		# now holds ~20 lines of output (USB enumeration, the autoboot
+		# countdown, the mmc scan), and the rest stays visible around it.
+		#
+		# Our u-boot no longer puts vidconsole in stdout, so on a current
+		# board there is nothing here to clear. Keep it anyway: u-boot
+		# lives in eMMC and is not necessarily as new as this script.
+		#
+		# Point stdout at vidconsole alone for that one command: with
+		# CONFIG_VIDEO_ANSI=y cls clears by *printing* an escape sequence,
+		# not by touching the video device, so it only works while
+		# vidconsole is a console - and leaving serial in would blank the
+		# boot log in whatever terminal is watching it.
+		setenv stdout vidconsole
+		cls
+		# Stop U-Boot printing over its own splash. Everything echoed from
+		# here on would otherwise be drawn onto the panel - unrotated,
+		# since U-Boot knows nothing about the panel orientation. Serial
+		# keeps the full log, and the kernel gets its console from
+		# ${consoleargs} regardless of this.
+		#
+		# stderr is left alone on purpose: the panel should stay quiet,
+		# not go mute. See the failure branches below.
+		setenv stdout serial
 		# Nested if so a failure here cannot abort the boot script. An
 		# older u-boot on eMMC without CONFIG_CMD_BMP would fail on an
 		# unknown command, and that must not stop the board booting.
 		if bmp display ${splashimage} m m; then
 			echo "Splash displayed"
-			# Stop U-Boot printing over its own splash. stdout/stderr
-			# include vidconsole, so everything echoed from here on is
-			# drawn onto the panel - unrotated, since U-Boot knows
-			# nothing about the panel orientation. Serial keeps the
-			# full log, and the kernel gets its console from
-			# ${consoleargs} regardless of this.
-			setenv stdout serial
-			setenv stderr serial
+		else
+			# Nothing on the panel left to protect, so give the video
+			# console back - a board failing this early is one someone
+			# will want to watch without a serial cable.
+			setenv stdout serial,vidconsole
+			echo "Splash failed to display"
 		fi
 	fi
 fi
@@ -109,7 +134,14 @@ setenv bootargs "root=${rootdev} rootwait rootfstype=${rootfstype} ${consoleargs
 
 if test "${docker_optimizations}" = "on"; then setenv bootargs "${bootargs} cgroup_enable=memory"; fi
 
-load ${devtype} ${devnum} ${fdt_addr_r} ${fdtdir}/${fdtfile}
+if load ${devtype} ${devnum} ${fdt_addr_r} ${fdtdir}/${fdtfile}; then
+	echo "Loaded ${fdtdir}/${fdtfile}"
+else
+	# The search above already gave up out loud, but only on serial. Without
+	# a device tree nothing after this works, so say it on the panel too.
+	setenv stdout serial,vidconsole
+	echo "BOOT FAILED: no device tree at ${fdtdir}/${fdtfile}"
+fi
 fdt addr ${fdt_addr_r}
 fdt resize 65536
 for overlay_file in ${overlays}; do
@@ -139,10 +171,29 @@ else
 	fi
 fi
 
-load ${devtype} ${devnum} ${ramdisk_addr_r} ${prefix}uInitrd
-load ${devtype} ${devnum} ${kernel_addr_r} ${prefix}Image
+# From here the panel is showing the splash and nothing else, which is right
+# until something goes wrong - at which point a board that just sits on a nice
+# logo forever is worse than one that says why. U-Boot routes almost nothing to
+# stderr (see u-boot patch 9), so these are the messages a user actually gets:
+# put the video console back and print in plain words what could not be loaded.
+if load ${devtype} ${devnum} ${ramdisk_addr_r} ${prefix}uInitrd; then
+	echo "Loaded ${prefix}uInitrd"
+else
+	setenv stdout serial,vidconsole
+	echo "BOOT FAILED: cannot load ${prefix}uInitrd from ${devtype} ${devnum}"
+fi
+if load ${devtype} ${devnum} ${kernel_addr_r} ${prefix}Image; then
+	echo "Loaded ${prefix}Image"
+else
+	setenv stdout serial,vidconsole
+	echo "BOOT FAILED: cannot load ${prefix}Image from ${devtype} ${devnum}"
+fi
 
 booti ${kernel_addr_r} ${ramdisk_addr_r} ${fdt_addr_r}
+
+# Only reached if booti did not boot - it does not return on success.
+setenv stdout serial,vidconsole
+echo "BOOT FAILED: the kernel did not start"
 
 # Recompile with:
 # mkimage -C none -A arm -T script -d /boot/boot.cmd /boot/boot.scr

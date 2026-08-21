@@ -1,0 +1,108 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Elias Bakken <elias@iagent.no>
+Date: Thu, 21 Aug 2026 00:00:00 +0000
+Subject: recore: keep U-Boot's routine output and logo off the panel
+
+The running commentary U-Boot prints does not belong on a printer's front
+panel. Until now the default environment put the video console in stdout, so
+from console_init_r onwards every line was drawn on the display: the
+In:/Out:/Err: banner, the network probe, USB enumeration, the autoboot
+countdown and the mmc scan - roughly twenty lines over about five seconds - and
+only then did the boot script draw boot.bmp on top of it.
+
+That is what #84 is about. boot.bmp is 480x480 and centred, U-Boot has no
+scaler, and the panel is much larger, so the splash never covered the text
+around it. The boot script now clears the screen before drawing, which fixes
+the overlap, but the text is still there to be seen for the seconds before it.
+Not putting it on the panel in the first place is the actual fix; the clear
+stays as a safety net for a board whose eMMC still holds an older U-Boot.
+
+The video device itself is unaffected. stdio_add_devices() probes UCLASS_VIDEO
+unconditionally, independently of what stdout names, and video_post_probe()
+clears the framebuffer - so the panel comes up black (CONFIG_SYS_WHITE_ON_BLACK
+is set), the framebuffer handover to the kernel's simpledrm is unchanged, and
+`bmp display` still works because it talks to the video uclass rather than to
+the console. The boot script re-binds vidconsole for the single `cls` call it
+needs, because with CONFIG_VIDEO_ANSI=y cls clears by printing an escape
+sequence rather than by touching the device.
+
+Dropping CONFIG_VIDEO_LOGO removes the other thing on the panel, which is not
+the console and so survives the change above. Armbian's boot-splash patch puts
+"splashimage=66000000" and "splashpos=m,m" in the default environment, and
+stdio_add_devices() calls splash_display() as soon as the video device is
+probed - long before the boot script runs. With no CONFIG_SPLASH_SOURCE the
+weak splash_screen_prepare() falls through to splash_video_logo_load(), which
+copies U-Boot's built-in 80x80 logo to that address, and bmp_display() draws it
+centred on the panel. Ours covers it five seconds later, at the same address
+and also centred, so it has only ever been a brief flash of someone else's
+branding. Without VIDEO_LOGO, splash_video_logo_load() returns -ENOSYS,
+splash_display() gives up, and the panel stays as video_post_probe() left it.
+CONFIG_VIDEO_BMP_RLE8 is select'ed by VIDEO_LOGO, but recore_defconfig also
+sets it explicitly, so nothing is lost.
+
+Silent while it is going well, loud when it is not. That needs three things,
+because a boot can fail in three different places, and only one of them is
+somewhere the boot script can reach:
+
+1. stderr deliberately keeps vidconsole. A panel that goes black and stays
+   black tells a user nothing, so the few things U-Boot does route to stderr
+   should still reach it - on this board that is sunxi_de2.c's three "Cannot
+   setup simplefb" failures, which are worth seeing precisely because they mean
+   Linux is about to come up with no display. It is a thin channel: everything
+   else, including "Unknown command", failed loads and hush syntax errors, goes
+   through printf() to stdout.
+
+2. CONFIG_BOOTCOMMAND wraps distro_bootcmd. distro_bootcmd only returns when it
+   has run out of boot targets, so reaching the end of it means nothing on this
+   board was bootable - which is the one failure that happens before any boot
+   script exists to report it. Put the video console back and say so.
+
+   This is not hypothetical. On a cold boot on 2026-08-21 the eMMC answered
+   `Card did not respond to voltage select! : -110` from mmc_start_init(), and
+   with no SD slot and no USB stick still enumerating, U-Boot fell through to
+   PXE. Without this, that board is a black panel.
+
+3. The boot script does the rest, once it is running: it puts the video console
+   back and names the file on any load it sees fail.
+
+stdin is left as serial,usbkbd. A USB keyboard is little use with no visible
+console, but leaving the line alone keeps this diff to one line.
+
+Signed-off-by: Elias Bakken <elias@iagent.no>
+---
+ configs/recore_defconfig       | 3 ++-
+ include/configs/sunxi-common.h | 2 +-
+ 2 files changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/configs/recore_defconfig b/configs/recore_defconfig
+--- a/configs/recore_defconfig
++++ b/configs/recore_defconfig
+@@ -21,7 +21,7 @@
+ CONFIG_LED=y
+ CONFIG_LED_GPIO=y
+ CONFIG_SPLASH_SCREEN_ALIGN=y
+-CONFIG_VIDEO_LOGO=y
++# CONFIG_VIDEO_LOGO is not set
+ CONFIG_SPLASH_SCREEN=y
+ CONFIG_BMP_16BPP=y
+ CONFIG_BMP_24BPP=y
+@@ -33,3 +33,4 @@
+ CONFIG_USE_PREBOOT=y
+ CONFIG_PREBOOT="mw.l 0x01f01400 0x00020102; usb reset; run bootcmd_usb0"
+ CONFIG_CMD_BMP=y
++CONFIG_BOOTCOMMAND="run distro_bootcmd; setenv stdout serial,vidconsole; echo; echo 'BOOT FAILED: nothing to boot from'; echo 'The eMMC did not answer. Connect the serial header for detail.'"
+diff --git a/include/configs/sunxi-common.h b/include/configs/sunxi-common.h
+--- a/include/configs/sunxi-common.h
++++ b/include/configs/sunxi-common.h
+@@ -315,8 +315,8 @@
+
+ #ifdef CONFIG_VIDEO
+ #define CONSOLE_STDOUT_SETTINGS \
+-	"stdout=serial,vidconsole\0" \
++	"stdout=serial\0" \
+ 	"stderr=serial,vidconsole\0"
+ #else
+ #define CONSOLE_STDOUT_SETTINGS \
+ 	"stdout=serial\0" \
+--
+Created with Armbian build tools https://github.com/armbian/build
