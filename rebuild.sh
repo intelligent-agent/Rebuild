@@ -76,26 +76,21 @@ echo "${TAG}" >"${BUILD_DIR}"/userpatches/overlay/rebuild/rebuild-tag
 
 cd "$BUILD_DIR"
 
-# Drop Armbian's initrd cache before every build, or the image can ship an
-# initramfs that has nothing to do with the rootfs beside it (#74).
+# If you change the Plymouth theme (or anything else the initramfs carries but
+# Armbian does not hash), clear its initrd cache by hand first:
 #
-# lib/functions/image/initrd.sh keys that cache on a manifest of hashes of the
-# modules dir, /usr/bin/bash, /etc/initramfs, /etc/initramfs-tools,
-# /usr/share/initramfs-tools and /etc/modprobe.d. Plymouth is in none of them,
-# so changing the theme does not change the key - and on a hit it does
+#     rm -f "${BUILD_DIR}"/cache/initrd/*
 #
-#     cp "${initrd_cache_file_path}" "${initrd_file}"
-#
-# straight over /boot/initrd.img-*, replacing whatever customize-image.sh built.
+# lib/functions/image/initrd.sh keys that cache on a manifest of the modules
+# dir, /usr/bin/bash, /etc/initramfs, /etc/initramfs-tools,
+# /usr/share/initramfs-tools and /etc/modprobe.d. Nothing under /etc/plymouth or
+# /usr/share/plymouth is in it, so a theme change does not change the key - and
+# on a hit it does `cp "${initrd_cache_file_path}" "${initrd_file}"` straight
+# over /boot/initrd.img-*, discarding whatever customize-image.sh built.
 # Proven on rebuild-fluidd-22ae943: the shipped initrd was byte-identical
 # (md5 830df592edcb2ad7c9258cedc5974b98) to a cached one carrying Theme=spinner,
-# while the rootfs next to it correctly had Theme=recore and all 38 theme files.
-# That is why the panel kept booting the stock spinner however often the theme
-# was fixed.
-#
-# Costs one initramfs rebuild per image; it is seconds against a full build.
-rm -f "${BUILD_DIR}"/cache/initrd/* 2>/dev/null || true
-
+# while the rootfs beside it correctly had Theme=recore and all 38 theme files
+# (#74). Left manual on purpose - it costs an initramfs rebuild every image.
 DOCKER_EXTRA_ARGS="--cpus=${cores}" ./compile.sh rebuild
 IMG=$(ls -1 output/images/ | grep "img.xz$")
 

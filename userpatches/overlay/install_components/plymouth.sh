@@ -24,14 +24,6 @@ install_plymouth() {
 
     # ...and make sure -R actually regenerated something.
     #
-    # It does not, during an Armbian build. update-initramfs gets deferred by a
-    # dpkg trigger that never runs, so the image ships the initrd.img built at
-    # kernel-install time - i.e. from before this theme existed. The 282ba24
-    # image was built with everything here correct (plymouthd.conf said
-    # Theme=recore, all 38 files present in the rootfs) and still booted the
-    # stock spinner theme, because its initramfs predated them. The build log
-    # gives it away by what is missing: "Converting to u-boot format" with no
-    # "Generating /boot/initrd.img-..." above it.
     # -c, not -u. The kernel is installed *before* customize-image.sh runs and
     # its postinst defers the initramfs, so at this point /boot/initrd.img-*
     # does not exist yet and there is nothing to update - `update-initramfs -u`
@@ -54,8 +46,8 @@ install_plymouth() {
     # copies a previously cached initramfs straight over this file. Its cache
     # key does not hash anything under /etc/plymouth or /usr/share/plymouth, so
     # a theme change alone never invalidates it. That is what actually caused
-    # #74, and the protection against it is the cache wipe in rebuild.sh - not
-    # this check.
+    # #74. After changing the theme, clear the cache by hand before building -
+    # see the note above ./compile.sh in rebuild.sh.
     IRD=/boot/initrd.img-$KVER
     if [ ! -f "$IRD" ] || ! lsinitramfs "$IRD" | grep -q 'themes/recore/recore.script'; then
         echo "FATAL: initramfs-tools did not pick up the recore theme" >&2
@@ -63,7 +55,7 @@ install_plymouth() {
         ls -l /boot/ >&2
         exit 1
     fi
-    echo "🍰 recore theme resolved by initramfs-tools (rebuild.sh clears Armbian's initrd cache so this survives)"
+    echo "🍰 recore theme resolved by initramfs-tools"
 
     # Hold the splash across the handover to KlipperScreen.
     #
