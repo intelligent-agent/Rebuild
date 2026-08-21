@@ -156,16 +156,26 @@ if [ "$VARIANT" != "barebone" ]; then
   echo "== Checking Klipper reached its MCUs =="
 
   # klipper.service is Type=simple with RemainAfterExit=yes, so "active" only
-  # means the klippy process was started - it says nothing about whether klippy
-  # ever talked to the microcontrollers. A board with a dead AR100 or an
-  # unflashed STM32 passes the service check above and cannot print. The MCUs
-  # announce themselves in klippy.log when the connection handshake completes,
-  # so that is the signal worth checking.
-  for mcu in mcu ar100; do
-    if run_remote grep -q "\"Loaded MCU '${mcu}'\"" /var/log/klipper_logs/klippy.log 2>/dev/null; then
-      printf '  [OK]   MCU %s connected\n' "$mcu"
+  # means the klippy process started - it says nothing about whether klippy ever
+  # talked to the microcontrollers. A board with a dead AR100 or an unflashed
+  # STM32 passes the service check above and still cannot print.
+  #
+  # Ask Moonraker rather than grepping klippy.log: it reports mcu_version per
+  # configured MCU over HTTP, which is both cleaner and the same source the web
+  # UI uses. Note it can only see MCUs that are in printer.cfg.
+  MCUS=$(curl -s --max-time 10 "http://${HOST}:7125/printer/objects/query?mcu&mcu%20ar100" 2>/dev/null) || true
+  for mcu in "mcu" "mcu ar100"; do
+    VER=$(printf '%s' "$MCUS" | python3 -c "
+import sys, json
+try:
+    d = json.load(sys.stdin)
+    print(d['result']['status'][sys.argv[1]]['mcu_version'])
+except Exception:
+    pass" "$mcu" 2>/dev/null) || true
+    if [ -n "$VER" ]; then
+      printf '  [OK]   %s connected (%s)\n' "$mcu" "$VER"
     else
-      printf '  [FAIL] MCU %s never connected\n' "$mcu"
+      printf '  [FAIL] %s did not report a version\n' "$mcu"
       FAIL=1
     fi
   done
@@ -173,29 +183,45 @@ if [ "$VARIANT" != "barebone" ]; then
 
   echo "== Checking RP2040 firmware (ReTool A2, #38) =="
 
-  # Only meaningful if one is attached - these boards ship without a ReTool, so
-  # absence is not a failure. Presence in the wrong state is.
+  # A ReTool ships WITH Klipper already on it, so finding a usb-Klipper_rp2040_*
+  # device proves only that one is attached - it looks identical whether
+  # flash-rp2040 wrote our firmware or did nothing at all. The flash itself is
+  # what needs checking, and first-run records it.
   #
-  # A flashed RP2040 running Klipper enumerates as 1d50:614e and gets a by-id
-  # name of usb-Klipper_rp2040_*. One sitting in the RP2 bootloader is
-  # 2e8a:0003 and anonymous - which is what you see if flash-rp2040 reset it
-  # and then failed to write, leaving it unbootable and needing a manual
-  # recovery. That state is the one worth catching.
+  # The RP2040 is not in printer.cfg, so Moonraker cannot report its version
+  # either; it only sees configured MCUs.
+  # Extract from "Running flash-rp2040" to the next "Running ... script" line
+  # rather than a fixed -A count: the real output is ten lines (Loaded UF2
+  # image, Erasing, Rebooting device, ...) and an -A6 window cut off before
+  # "flashed", which reported a successful flash as a failure.
+  RP_LOG=$(run_remote 'sudo awk "/Running flash-rp2040/{f=1;next} /^Running /{f=0} f" /var/log.hdd/rebuild-first-run.log 2>/dev/null' 2>/dev/null) || true
   RP_KLIPPER=$(run_remote 'ls /dev/serial/by-id/usb-Klipper_rp2040_*-if00 2>/dev/null | head -1' 2>/dev/null) || true
   RP_BOOTSEL=$(run_remote 'lsusb 2>/dev/null | grep -c 2e8a:0003' 2>/dev/null) || true
-  if [ -n "$RP_KLIPPER" ]; then
-    printf '  [OK]   RP2040 running Klipper (%s)\n' "$(basename "$RP_KLIPPER")"
+
+  if printf '%s' "$RP_LOG" | grep -q "flashed"; then
+    printf '  [OK]   flash-rp2040 reported a successful write\n'
+    if [ -n "$RP_KLIPPER" ]; then
+      printf '  [OK]   RP2040 came back running Klipper (%s)\n' "$(basename "$RP_KLIPPER")"
+    else
+      printf '  [FAIL] flashed, but no Klipper RP2040 came back\n'
+      FAIL=1
+    fi
+  elif printf '%s' "$RP_LOG" | grep -q "No Klipper RP2040 attached"; then
+    printf '  [SKIP] no RP2040 attached at first boot\n'
   elif [ "${RP_BOOTSEL:-0}" != "0" ]; then
     printf '  [FAIL] an RP2040 is stuck in the bootloader - flashing did not complete\n'
     FAIL=1
+  elif [ -z "$RP_LOG" ]; then
+    printf '  [SKIP] no flash-rp2040 record in the first-run log\n'
   else
-    printf '  [SKIP] no RP2040 attached\n'
+    printf '  [FAIL] flash-rp2040 ran but did not report success\n'
+    FAIL=1
   fi
 
-  # The Renits A5 screen is also an RP2040 (2e8a:000a) running its own
-  # firmware. flash-rp2040 targets Klipper by-id names precisely so it can
-  # never be flashed - doing so would brick the display. Assert it is still
-  # itself, because that mistake is silent until someone looks at a dead panel.
+  # The Renits A5 screen is also an RP2040 (2e8a:000a) running its own firmware.
+  # flash-rp2040 targets Klipper by-id names precisely so it can never be
+  # flashed - doing so bricks the display. Assert it is still itself, because
+  # that mistake is silent until someone looks at a dead panel.
   RENITS=$(run_remote 'lsusb 2>/dev/null | grep -c 2e8a:000a' 2>/dev/null) || true
   if [ "${RENITS:-0}" != "0" ]; then
     printf '  [OK]   Renits A5 screen still on its own firmware (2e8a:000a)\n'
