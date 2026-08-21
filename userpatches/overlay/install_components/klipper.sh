@@ -44,7 +44,13 @@ install_klipper(){
 
     # Trixie optimized package list
     PKGLIST="python3-venv python3-dev libffi-dev build-essential python3-cffi"
-    PKGLIST="${PKGLIST} libncurses-dev libusb-1.0-0-dev stm32flash"
+    # pkg-config is not optional: lib/rp2040_flash's Makefile gets its libusb
+    # include path only from `pkg-config libusb-1.0 --cflags`. Without it the
+    # backticks expand to nothing and the build dies on <libusb.h>, even though
+    # libusb-1.0-0-dev is installed - the header is under /usr/include/libusb-1.0.
+    # A booted Recore has pkg-config, which is why building it by hand there
+    # succeeds and the image build does not.
+    PKGLIST="${PKGLIST} libncurses-dev libusb-1.0-0-dev stm32flash pkg-config"
     PKGLIST="${PKGLIST} gcc-arm-none-eabi binutils-arm-none-eabi libnewlib-arm-none-eabi"
     # In Trixie, use the system numpy for speed
     PKGLIST="${PKGLIST} python3-matplotlib"
