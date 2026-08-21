@@ -132,7 +132,7 @@ esac
 EOF
 
     chmod +x /usr/local/bin/usb-gadget-init.sh
-    
+
 cat <<EOF > /etc/systemd/system/usb-gadget-setup.service
 [Unit]
 Description=USB ConfigFS Gadget Manager
@@ -144,6 +144,31 @@ ExecStop=/usr/local/bin/usb-gadget-init.sh stop
 RemainAfterExit=yes
 
 [Install]
+EOF
+
+    # Tie the getty's lifetime to the gadget's, or a reboot can end in a kernel
+    # panic instead of a reboot (#86).
+    #
+    # The teardown above does `rmdir functions/acm.usb0`, which frees the
+    # gs_port - but /dev/ttyGS0 belongs to u_serial's TTY driver and outlives
+    # it, so there is a window where the node is still openable and its port is
+    # already gone. serial-getty@ttyGS0 is a stock getty unit, so systemd opens
+    # the device itself in PID 1; land in that window and tty_open fails,
+    # tty_release calls gs_close() on a NULL port, and init takes a SIGSEGV:
+    #
+    #   lr : gs_close+0x24/0x240 [u_serial]
+    #   Kernel panic - not syncing: Attempted to kill init!
+    #
+    # Nothing ordered the two before this. SYSTEMD_WANTS in the udev rule binds
+    # the getty to dev-ttyGS0.device and to nothing else, so at shutdown - and
+    # on every usb_role change that stops the gadget - the order was arbitrary.
+    # After= gets the getty stopped first (shutdown is reverse-order), BindsTo=
+    # takes it down whenever the gadget goes away for any other reason.
+    mkdir -p /etc/systemd/system/serial-getty@ttyGS0.service.d
+    cat <<'EOF' > /etc/systemd/system/serial-getty@ttyGS0.service.d/gadget.conf
+[Unit]
+BindsTo=usb-gadget-setup.service
+After=usb-gadget-setup.service
 EOF
     
     cp /tmp/overlay/rebuild/rebuild-version /etc/

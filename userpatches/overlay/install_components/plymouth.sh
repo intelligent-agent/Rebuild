@@ -44,17 +44,26 @@ install_plymouth() {
     fi
     update-initramfs -c -k "$KVER" 2>&1 | tail -3 || update-initramfs -u -k "$KVER" 2>&1 | tail -3
 
-    # Guard it, because this failure is silent in every other way: Plymouth just
-    # renders a different theme, reports nothing, and it can only be caught by
-    # looking at a booted panel - which is how it was found.
+    # Check that the theme is installed and that initramfs-tools resolves it -
+    # the hook reads `plymouth-set-default-theme` and copies whatever that
+    # names, so a theme that is present but not selected fails silently and can
+    # only be caught by looking at a booted panel.
+    #
+    # This does NOT prove the shipped image gets this initrd, and must not be
+    # read that way: Armbian's own initrd step runs later, and on a cache hit it
+    # copies a previously cached initramfs straight over this file. Its cache
+    # key does not hash anything under /etc/plymouth or /usr/share/plymouth, so
+    # a theme change alone never invalidates it. That is what actually caused
+    # #74, and the protection against it is the cache wipe in rebuild.sh - not
+    # this check.
     IRD=/boot/initrd.img-$KVER
     if [ ! -f "$IRD" ] || ! lsinitramfs "$IRD" | grep -q 'themes/recore/recore.script'; then
-        echo "FATAL: the recore theme is not in $IRD" >&2
-        echo "FATAL: Plymouth would boot whatever theme the initramfs does carry" >&2
+        echo "FATAL: initramfs-tools did not pick up the recore theme" >&2
+        echo "FATAL: check 'plymouth-set-default-theme' and /etc/plymouth/plymouthd.conf" >&2
         ls -l /boot/ >&2
         exit 1
     fi
-    echo "🍰 recore theme confirmed in $(basename "$IRD")"
+    echo "🍰 recore theme resolved by initramfs-tools (rebuild.sh clears Armbian's initrd cache so this survives)"
 
     # Hold the splash across the handover to KlipperScreen.
     #
