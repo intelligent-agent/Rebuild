@@ -32,18 +32,29 @@ install_plymouth() {
     # stock spinner theme, because its initramfs predated them. The build log
     # gives it away by what is missing: "Converting to u-boot format" with no
     # "Generating /boot/initrd.img-..." above it.
-    update-initramfs -u
-
-    # Guard it, because this failure is silent in every other way: Plymouth just
-    # renders a different theme, no error anywhere, and it can only be caught by
-    # looking at a booted panel.
-    KVER_IRD=$(ls /boot/initrd.img-* 2>/dev/null | head -1)
-    if [ -z "$KVER_IRD" ] || ! lsinitramfs "$KVER_IRD" | grep -q 'themes/recore/recore.script'; then
-        echo "FATAL: the recore theme is not in $KVER_IRD" >&2
-        echo "FATAL: Plymouth would boot whatever theme the initramfs does carry" >&2
+    # -c, not -u. The kernel is installed *before* customize-image.sh runs and
+    # its postinst defers the initramfs, so at this point /boot/initrd.img-*
+    # does not exist yet and there is nothing to update - `update-initramfs -u`
+    # is a no-op and the deferred trigger later wraps a stale or absent initrd.
+    # Create it here instead, now that the theme is set.
+    KVER=$(ls /lib/modules | head -1)
+    if [ -z "$KVER" ]; then
+        echo "FATAL: no kernel in /lib/modules - cannot build an initramfs" >&2
         exit 1
     fi
-    echo "🍰 recore theme confirmed in $(basename "$KVER_IRD")"
+    update-initramfs -c -k "$KVER" 2>&1 | tail -3 || update-initramfs -u -k "$KVER" 2>&1 | tail -3
+
+    # Guard it, because this failure is silent in every other way: Plymouth just
+    # renders a different theme, reports nothing, and it can only be caught by
+    # looking at a booted panel - which is how it was found.
+    IRD=/boot/initrd.img-$KVER
+    if [ ! -f "$IRD" ] || ! lsinitramfs "$IRD" | grep -q 'themes/recore/recore.script'; then
+        echo "FATAL: the recore theme is not in $IRD" >&2
+        echo "FATAL: Plymouth would boot whatever theme the initramfs does carry" >&2
+        ls -l /boot/ >&2
+        exit 1
+    fi
+    echo "🍰 recore theme confirmed in $(basename "$IRD")"
 
     # Hold the splash across the handover to KlipperScreen.
     #
