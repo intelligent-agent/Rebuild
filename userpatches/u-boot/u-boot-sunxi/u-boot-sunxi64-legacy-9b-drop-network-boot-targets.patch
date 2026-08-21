@@ -1,0 +1,68 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Elias Bakken <elias@iagent.no>
+Date: Thu, 21 Aug 2026 22:00:00 +0000
+Subject: recore: stop hunting for a netboot server that does not exist
+
+When nothing bootable is found, U-Boot spends 61 seconds looking for a PXE
+server on a machine that has never netbooted and has no infrastructure to do so.
+Measured on a real failure (#88), an A8 that hit the intermittent eMMC init
+problem in #85:
+
+    1728.97  Card did not respond to voltage select! : -110
+    1733.03  ethernet@1c30000 Waiting for PHY auto negotiation ... TIMEOUT !
+    1733.04  Retrieving file: pxelinux.cfg/01-02-ba-21-9e-0e-af
+             ... eight more, one 4s PHY timeout each ...
+    1793.96  BOOT FAILED: nothing to boot from
+
+    first PXE attempt -> BOOT FAILED : 60.92 s
+
+distro_bootcmd walks eight pxelinux.cfg names and then dhcp, and every one waits
+out a full PHY auto-negotiation timeout on a link that never comes up.
+
+This costs nothing on a healthy boot, which is worth stating because "remove
+networking to make it boot faster" is the obvious idea and it would not work.
+Measured across four healthy boots, `Net:` to `resetting USB` is 0.00-0.01s and
+there is no PHY negotiation at all: nothing uses the network, so nothing waits
+on it. The entire 61 seconds lands on the failure path.
+
+Only the *boot targets* are removed, not networking. CONFIG_CMD_PXE and
+CONFIG_CMD_DHCP stay enabled, so `dhcp` and `tftp` remain available by hand from
+the U-Boot prompt - worth keeping for recovery, where the board is already in
+trouble and a serial console is already attached. Disabling those two symbols
+would also have dropped the targets, since sunxi-common.h gates
+BOOT_TARGET_DEVICES_PXE/DHCP on them, but it would have taken the commands with
+them.
+
+A Recore boots from eMMC, or from a USB stick running Reflash via
+CONFIG_PREBOOT's bootcmd_usb0. Neither path is affected: mmc_auto and usb0 are
+left exactly as they were.
+
+The shorter dead time matters beyond the 61 seconds. In the first recorded
+instance of #85 the board reset partway through the PXE hunt, so distro_bootcmd
+never returned, the "nothing to boot from" message was never reached, and the
+user got a black panel with no explanation. Getting to the end of the boot
+targets sooner makes it far likelier the failure is actually reported.
+
+Signed-off-by: Elias Bakken <elias@iagent.no>
+---
+ include/configs/sunxi-common.h | 4 +---
+ 1 file changed, 1 insertion(+), 3 deletions(-)
+
+diff --git a/include/configs/sunxi-common.h b/include/configs/sunxi-common.h
+--- a/include/configs/sunxi-common.h
++++ b/include/configs/sunxi-common.h
+@@ -277,11 +277,9 @@
+ #define BOOT_TARGET_DEVICES(func) \
+ 	func(FEL, fel, na) \
+ 	BOOT_TARGET_DEVICES_MMC(func) \
+ 	BOOT_TARGET_DEVICES_SCSI(func) \
+-	BOOT_TARGET_DEVICES_USB(func) \
+-	BOOT_TARGET_DEVICES_PXE(func) \
+-	BOOT_TARGET_DEVICES_DHCP(func)
++	BOOT_TARGET_DEVICES_USB(func)
+
+ #ifdef CONFIG_OLD_SUNXI_KERNEL_COMPAT
+ #define BOOTCMD_SUNXI_COMPAT \
+ 	"bootcmd_sunxi_compat=" \
+--
+Created with Armbian build tools https://github.com/armbian/build
