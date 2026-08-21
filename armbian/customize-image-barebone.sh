@@ -24,6 +24,7 @@ HOMEDIR="/home/${USER}"
 source /tmp/overlay/install_components/add_overlays.sh
 source /tmp/overlay/install_components/autohotspot.sh
 source /tmp/overlay/install_components/uboot_splash.sh
+source /tmp/overlay/install_components/barebone_console.sh
 
 post_build() {
     
@@ -164,6 +165,7 @@ prep_install
 add_overlays
 install_autohotspot
 install_uboot_splash
+install_barebone_console
 post_build
 
 echo "🍰 Rebuild finished"
