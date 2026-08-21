@@ -152,10 +152,61 @@ if [ "$VARIANT" != "barebone" ]; then
   fi
   echo
 fi
+if [ "$VARIANT" != "barebone" ]; then
+  echo "== Checking Klipper reached its MCUs =="
+
+  # klipper.service is Type=simple with RemainAfterExit=yes, so "active" only
+  # means the klippy process was started - it says nothing about whether klippy
+  # ever talked to the microcontrollers. A board with a dead AR100 or an
+  # unflashed STM32 passes the service check above and cannot print. The MCUs
+  # announce themselves in klippy.log when the connection handshake completes,
+  # so that is the signal worth checking.
+  for mcu in mcu ar100; do
+    if run_remote grep -q "\"Loaded MCU '${mcu}'\"" /var/log/klipper_logs/klippy.log 2>/dev/null; then
+      printf '  [OK]   MCU %s connected\n' "$mcu"
+    else
+      printf '  [FAIL] MCU %s never connected\n' "$mcu"
+      FAIL=1
+    fi
+  done
+  echo
+
+  echo "== Checking RP2040 firmware (ReTool A2, #38) =="
+
+  # Only meaningful if one is attached - these boards ship without a ReTool, so
+  # absence is not a failure. Presence in the wrong state is.
+  #
+  # A flashed RP2040 running Klipper enumerates as 1d50:614e and gets a by-id
+  # name of usb-Klipper_rp2040_*. One sitting in the RP2 bootloader is
+  # 2e8a:0003 and anonymous - which is what you see if flash-rp2040 reset it
+  # and then failed to write, leaving it unbootable and needing a manual
+  # recovery. That state is the one worth catching.
+  RP_KLIPPER=$(run_remote 'ls /dev/serial/by-id/usb-Klipper_rp2040_*-if00 2>/dev/null | head -1' 2>/dev/null) || true
+  RP_BOOTSEL=$(run_remote 'lsusb 2>/dev/null | grep -c 2e8a:0003' 2>/dev/null) || true
+  if [ -n "$RP_KLIPPER" ]; then
+    printf '  [OK]   RP2040 running Klipper (%s)\n' "$(basename "$RP_KLIPPER")"
+  elif [ "${RP_BOOTSEL:-0}" != "0" ]; then
+    printf '  [FAIL] an RP2040 is stuck in the bootloader - flashing did not complete\n'
+    FAIL=1
+  else
+    printf '  [SKIP] no RP2040 attached\n'
+  fi
+
+  # The Renits A5 screen is also an RP2040 (2e8a:000a) running its own
+  # firmware. flash-rp2040 targets Klipper by-id names precisely so it can
+  # never be flashed - doing so would brick the display. Assert it is still
+  # itself, because that mistake is silent until someone looks at a dead panel.
+  RENITS=$(run_remote 'lsusb 2>/dev/null | grep -c 2e8a:000a' 2>/dev/null) || true
+  if [ "${RENITS:-0}" != "0" ]; then
+    printf '  [OK]   Renits A5 screen still on its own firmware (2e8a:000a)\n'
+  fi
+  echo
+fi
+
 if [ "$FAIL" -eq 0 ]; then
-  echo "All expected systemd services are active."
+  echo "All checks passed."
 else
-  echo "One or more services are not active." >&2
+  echo "One or more checks failed." >&2
 fi
 
 exit $FAIL
