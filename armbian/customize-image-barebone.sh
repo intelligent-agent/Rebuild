@@ -25,6 +25,7 @@ source /tmp/overlay/install_components/add_overlays.sh
 source /tmp/overlay/install_components/autohotspot.sh
 source /tmp/overlay/install_components/uboot_splash.sh
 source /tmp/overlay/install_components/barebone_console.sh
+source /tmp/overlay/install_components/usb_gadget_getty.sh
 
 post_build() {
     
@@ -127,7 +128,9 @@ esac
 EOF
 
     chmod +x /usr/local/bin/usb-gadget-init.sh
-    
+
+    install_usb_gadget_getty
+
 cat <<EOF > /etc/systemd/system/usb-gadget-setup.service
 [Unit]
 Description=USB ConfigFS Gadget Manager

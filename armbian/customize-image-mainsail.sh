@@ -34,6 +34,7 @@ source /tmp/overlay/install_components/autohotspot.sh
 source /tmp/overlay/install_components/auto_disable_ssh.sh
 source /tmp/overlay/install_components/auto_switch_role.sh
 source /tmp/overlay/install_components/rebuild_first_run.sh
+source /tmp/overlay/install_components/usb_gadget_getty.sh
 source /tmp/overlay/install_components/post_build.sh
 source /tmp/overlay/install_components/add_overlays.sh
 source /tmp/overlay/install_components/uboot_splash.sh

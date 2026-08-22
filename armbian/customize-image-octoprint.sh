@@ -33,6 +33,7 @@ source /tmp/overlay/install_components/ustreamer.sh
 source /tmp/overlay/install_components/prep_install.sh
 source /tmp/overlay/install_components/add_overlays.sh
 source /tmp/overlay/install_components/uboot_splash.sh
+source /tmp/overlay/install_components/usb_gadget_getty.sh
 source /tmp/overlay/install_components/post_build.sh
 
 set -e
