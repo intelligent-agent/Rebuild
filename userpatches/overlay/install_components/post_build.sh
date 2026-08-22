@@ -35,6 +35,8 @@ EOF
 PermitRootLogin prohibit-password
 EOF
 
+    strip_machine_identity
+
     # Remove all temporary permission granted during install
     sed -i 's/printer ALL=(ALL) NOPASSWD: ALL//g' /etc/sudoers.d/printer
     chmod 0440 /etc/sudoers.d/printer
