@@ -17,7 +17,11 @@ losetup -P "$LODEV" /dev/mmcblk2boot0
 # Worst case is precisely first boot after a flash, when udev is busy
 # enumerating everything else. Same race as partprobe in Reflash's
 # flash-cleanup, and settled the same way.
-udevadm settle --timeout=30 || true
+# 10s, not the 30 this was borrowed from: settle waits on every pending udev
+# event, not just ours, so a slow unrelated device could hold up boot for the
+# whole budget. The node poll below is what actually closes the race - this is
+# only belt-and-braces, and falling through to the poll early costs nothing.
+udevadm settle --timeout=10 || true
 for _ in $(seq 1 50); do
     [ -b "${LODEV}p1" ] && break
     sleep 0.1
