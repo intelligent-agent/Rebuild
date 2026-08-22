@@ -83,6 +83,41 @@ function custom_kernel_config__use_simpledrm_for_panel() {
     fi
 }
 
+function custom_kernel_config__drop_unisoc_wireless() {
+    echo "🍰Dropping Unisoc UWE5622 wireless"
+    # Every boot logs an error for hardware this board does not have:
+    #
+    #     WCN_ERR: dts node for bt_wake not found
+    #
+    # There is no device tree node to delete. Nothing under
+    # arch/arm64/boot/dts matches the driver's "unisoc,uwe_bsp" - it
+    # manufactures its own device on module load and then binds to it:
+    #
+    #     platform_device_register(&uwe_device);          wcn_boot.c marlin_init()
+    #     platform_driver_register(&marlin_driver);
+    #
+    # The probe then looks for an "allwinner,sunxi-btlpm" node - Bluetooth
+    # low-power management - and correctly fails to find one, because there is
+    # no Bluetooth on Recore. That failure is not cosmetic either: the caller
+    # does `if (ret) return ret`, so the whole probe aborts.
+    #
+    # Adding a btlpm node would mean declaring Bluetooth we do not have in order
+    # to satisfy a driver we do not want, and it would fail one line later on an
+    # invalid bt_hostwake gpio regardless. Not loading the driver is the fix.
+    #
+    # SPARD_WLAN_SUPPORT is the only switch worth touching: it selects
+    # AW_WIFI_DEVICE_UWE5622 and gates unisocwcn, unisocwifi and tty-sdio, so
+    # setting those children to n individually just loses to the select. Recore's
+    # WiFi is a USB dongle, so none of this stack is in use.
+    #
+    # Same re-entrancy/hash rule as the hooks above.
+    if [[ -f .config ]]; then
+        kernel_config_set_n "CONFIG_SPARD_WLAN_SUPPORT"
+    else
+        kernel_config_modifying_hashes+=("CONFIG_SPARD_WLAN_SUPPORT=n")
+    fi
+}
+
 function format_partitions__make_boot_ro() {
     echo "🍰Making boot partition ro"
     sed -i -E 's:/boot ext4 defaults,commit=[0-9]+,errors=remount-ro:/boot ext4 ro,defaults:' $SDCARD/etc/fstab
