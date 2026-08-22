@@ -17,18 +17,18 @@ install_barebone_console() {
     # the other variants the deferral is what stops fbcon clobbering the splash
     # before Plymouth takes the display, so it is wanted there.
     #
-    # fbcon=rotate:3 ships alongside it on purpose. Reflash's rotate-screen
-    # decides whether to ADD fbcon=rotate:N by grepping for "fbcon=", but its
-    # sed only rewrites "fbcon=rotate:" - so an image carrying nodefer alone
-    # matches the guard, skips the add, and ends up with no rotation at all.
-    # Having a rotate: value already present gives that sed something to
-    # rewrite. Reflash #125 tightens the guard; this stays correct either way.
+    # Only nodefer. Reflash's rotate-screen adds fbcon=rotate:N itself when it
+    # applies the chosen rotation, so hardcoding one here would just be
+    # overwritten. That needed Reflash's guard to test for "fbcon=rotate:"
+    # rather than "fbcon=" - an image carrying nodefer alone used to satisfy the
+    # loose test, skip the add, and end up with no rotation at all
+    # (Reflash fix/fbcon-rotate-guard).
     if [ ! -f /boot/armbianEnv.txt ]; then
         echo "FATAL: /boot/armbianEnv.txt is missing - cannot set fbcon=nodefer" >&2
         ls -l /boot/ >&2
         exit 1
     fi
-    sed -i '/^extraargs=/ s/$/ fbcon=rotate:3 fbcon=nodefer/' /boot/armbianEnv.txt
+    sed -i '/^extraargs=/ s/$/ fbcon=nodefer/' /boot/armbianEnv.txt
     grep '^extraargs=' /boot/armbianEnv.txt
 
     # ...and give that console a shell rather than a login prompt. This is a
