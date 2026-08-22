@@ -6,7 +6,26 @@ mkdir -p /mnt/config
 umount -q /mnt/config || true
 LODEV=$(losetup -f)
 losetup -P "$LODEV" /dev/mmcblk2boot0
-mount -r "$LODEV"p1 /mnt/config/ 2>/dev/null
+
+# losetup -P starts the partition scan asynchronously and returns before udev
+# has created the partition node, so mount can arrive too early and fail with
+# exit 32. set -e then propagates that out through flash-stm32 and takes the
+# whole rebuild-first-run service down - which is what happened on the first
+# boot of rebuild-fluidd-46f454d. It only ever looks like a spurious failure
+# because Restart=on-failure retries 10s later, by which point the node exists.
+#
+# Worst case is precisely first boot after a flash, when udev is busy
+# enumerating everything else. Same race as partprobe in Reflash's
+# flash-cleanup, and settled the same way.
+udevadm settle --timeout=30 || true
+for _ in $(seq 1 50); do
+    [ -b "${LODEV}p1" ] && break
+    sleep 0.1
+done
+
+# stderr deliberately not silenced: it was, and that is why the failure logged
+# nothing and had to be diagnosed from mount's exit code alone.
+mount -r "${LODEV}p1" /mnt/config/
 
 CONFIG=$(ls /mnt/config/*.json)
 REVISION=$(grep Revision "$CONFIG" | cut -d '"' -f 4 | tr '[:upper:]' '[:lower:]')
