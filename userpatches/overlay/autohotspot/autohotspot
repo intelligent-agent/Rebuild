@@ -5,6 +5,25 @@
 # regardless of how/when it was last written.
 chmod 600 /etc/rebuild-settings
 wifidev=`nmcli dev | grep "wifi " | cut -d' ' -f1`
+
+# No radio, nothing to do - and this has to be checked before anything else
+# uses $wifidev. Empty means `nmcli con add type wifi ifname ""`, which lets
+# NetworkManager choose a device for us, and it chooses lo:
+#
+#   Error: Connection activation failed: No suitable device found for this
+#   connection (device lo not available because profile is not compatible
+#   with device (connection type is not "loopback")).
+#
+# What that cost on an A5 with no dongle: the full CLIENT_TIMEOUT spent hunting
+# for an SSID no radio could ever see, then a hotspot that could not be created
+# either, then exit 4 and a failed unit on every boot. None of it is an error
+# worth reporting - a board with only Ethernet is a supported configuration, so
+# say so once and leave quietly, the way Reflash's wifi-bringup does.
+if [ -z "$wifidev" ]; then
+  echo "No wifi device present - skipping hotspot (board is usable over Ethernet)"
+  exit 0
+fi
+
 hotspot_SSID="Recore"
 hotspot_PW="12345678"
 # How long to wait for the configured network at boot before falling back to the
