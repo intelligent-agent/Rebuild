@@ -5,11 +5,33 @@ on:
       - main
     tags:
       - 'v*'
+  # Build any variant on demand, from any branch, without cutting a tag.
+  # Previously the only ways to get a fluidd/mainsail/octoprint image were to
+  # tag a release or to ssh into the runner and drive rebuild.sh by hand - and
+  # the hand-driven route has to be sequenced against whatever CI is already
+  # doing, because both use the same build directories.
+  workflow_dispatch:
+    inputs:
+      variant:
+        description: 'Image to build'
+        type: choice
+        default: barebone
+        options:
+          - barebone
+          - fluidd
+          - mainsail
+          - octoprint
+          - all
 env:
   TERM: xterm-256color
 
 jobs:
   build-barebone:
+    # Unchanged for push and tag; on a manual run, only when asked for.
+    if: >-
+      github.event_name != 'workflow_dispatch' ||
+      github.event.inputs.variant == 'barebone' ||
+      github.event.inputs.variant == 'all'
     runs-on: self-hosted
     steps:
     - uses: actions/checkout@v3
@@ -30,11 +52,16 @@ jobs:
         prerelease: true
 
   build-mainsail:
-    # Only on tags. A push to main builds barebone alone as a smoke
-    # test - it exercises the same u-boot, kernel and boot script at a
-    # quarter the size, and these three are only ever published from a
-    # tag anyway.
-    if: startsWith(github.ref, 'refs/tags/')
+    # Tags and manual runs only. A push to main builds barebone alone as a
+    # smoke test - it exercises the same u-boot, kernel and boot script at a
+    # quarter the size, and these three are only ever published from a tag.
+    # workflow_dispatch is the escape hatch for building one on demand without
+    # cutting a release.
+    if: >-
+      startsWith(github.ref, 'refs/tags/') ||
+      (github.event_name == 'workflow_dispatch' &&
+       (github.event.inputs.variant == 'mainsail' ||
+        github.event.inputs.variant == 'all'))
     runs-on: self-hosted
     steps:
     - uses: actions/checkout@v3
@@ -55,11 +82,16 @@ jobs:
         prerelease: true
 
   build-octoprint:
-    # Only on tags. A push to main builds barebone alone as a smoke
-    # test - it exercises the same u-boot, kernel and boot script at a
-    # quarter the size, and these three are only ever published from a
-    # tag anyway.
-    if: startsWith(github.ref, 'refs/tags/')
+    # Tags and manual runs only. A push to main builds barebone alone as a
+    # smoke test - it exercises the same u-boot, kernel and boot script at a
+    # quarter the size, and these three are only ever published from a tag.
+    # workflow_dispatch is the escape hatch for building one on demand without
+    # cutting a release.
+    if: >-
+      startsWith(github.ref, 'refs/tags/') ||
+      (github.event_name == 'workflow_dispatch' &&
+       (github.event.inputs.variant == 'octoprint' ||
+        github.event.inputs.variant == 'all'))
     runs-on: self-hosted
     steps:
     - uses: actions/checkout@v3
@@ -78,11 +110,16 @@ jobs:
         prerelease: true
 
   build-fluidd:
-    # Only on tags. A push to main builds barebone alone as a smoke
-    # test - it exercises the same u-boot, kernel and boot script at a
-    # quarter the size, and these three are only ever published from a
-    # tag anyway.
-    if: startsWith(github.ref, 'refs/tags/')
+    # Tags and manual runs only. A push to main builds barebone alone as a
+    # smoke test - it exercises the same u-boot, kernel and boot script at a
+    # quarter the size, and these three are only ever published from a tag.
+    # workflow_dispatch is the escape hatch for building one on demand without
+    # cutting a release.
+    if: >-
+      startsWith(github.ref, 'refs/tags/') ||
+      (github.event_name == 'workflow_dispatch' &&
+       (github.event.inputs.variant == 'fluidd' ||
+        github.event.inputs.variant == 'all'))
     runs-on: self-hosted
     steps:
     - uses: actions/checkout@v3
