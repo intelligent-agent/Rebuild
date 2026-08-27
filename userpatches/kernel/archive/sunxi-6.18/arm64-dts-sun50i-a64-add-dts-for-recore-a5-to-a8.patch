@@ -35,7 +35,7 @@ new file mode 100644
 index 000000000000..22c369c9dea3
 --- /dev/null
 +++ b/arch/arm64/boot/dts/allwinner/sun50i-a64-recore-a5.dts
-@@ -0,0 +1,76 @@
+@@ -0,0 +1,95 @@
 +// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
 +
 +/dts-v1/;
@@ -112,12 +112,31 @@ index 000000000000..22c369c9dea3
 +	assigned-clock-rates = <120000000>;
 +};
 +
++
++&mbus {
++	/* A5/A6 have marginal DRAM signal integrity. A devfreq transition is not
++	 * a small operation - tREFI, tRFC and ODT are all reprogrammed around a
++	 * hardware MDFS cycle - and on this hardware it corrupts memory rather
++	 * than failing cleanly: unpinned, the first kernel fault arrived 24-25s
++	 * after boot on four consecutive boots, each in a different, unrelated
++	 * subsystem. Pinned, the same board ran 25 minutes with none.
++	 *
++	 * Disabling the node stops the driver probing at all, so nothing can
++	 * change the frequency and DRAM stays where U-Boot left it. Nothing on
++	 * Recore depends on it: the only consumer of this interconnect in the
++	 * A64 dtsi is csi, which is itself disabled.
++	 *
++	 * A7/A8/B0 keep scaling. Restores what Reflash 6ea72f2 did in 2023,
++	 * lost when bb90933 deleted the armbian directory it lived in.
++	 */
++	status = "disabled";
++};
 diff --git a/arch/arm64/boot/dts/allwinner/sun50i-a64-recore-a6.dts b/arch/arm64/boot/dts/allwinner/sun50i-a64-recore-a6.dts
 new file mode 100644
 index 000000000000..4a790dcf9d9f
 --- /dev/null
 +++ b/arch/arm64/boot/dts/allwinner/sun50i-a64-recore-a6.dts
-@@ -0,0 +1,33 @@
+@@ -0,0 +1,52 @@
 +// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
 +
 +/dts-v1/;
@@ -151,6 +170,25 @@ index 000000000000..4a790dcf9d9f
 +	assigned-clock-rates = <120000000>;
 +};
 +
++
++&mbus {
++	/* A5/A6 have marginal DRAM signal integrity. A devfreq transition is not
++	 * a small operation - tREFI, tRFC and ODT are all reprogrammed around a
++	 * hardware MDFS cycle - and on this hardware it corrupts memory rather
++	 * than failing cleanly: unpinned, the first kernel fault arrived 24-25s
++	 * after boot on four consecutive boots, each in a different, unrelated
++	 * subsystem. Pinned, the same board ran 25 minutes with none.
++	 *
++	 * Disabling the node stops the driver probing at all, so nothing can
++	 * change the frequency and DRAM stays where U-Boot left it. Nothing on
++	 * Recore depends on it: the only consumer of this interconnect in the
++	 * A64 dtsi is csi, which is itself disabled.
++	 *
++	 * A7/A8/B0 keep scaling. Restores what Reflash 6ea72f2 did in 2023,
++	 * lost when bb90933 deleted the armbian directory it lived in.
++	 */
++	status = "disabled";
++};
 diff --git a/arch/arm64/boot/dts/allwinner/sun50i-a64-recore-a7.dts b/arch/arm64/boot/dts/allwinner/sun50i-a64-recore-a7.dts
 new file mode 100644
 index 000000000000..52ea801b8910
