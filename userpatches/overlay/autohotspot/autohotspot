@@ -46,6 +46,8 @@ CLIENT_TIMEOUT=120
 create_hotspot() {
   echo "Creating hotspot"
   nmcli con add type wifi ifname "$wifidev" con-name Hotspot ssid "$hotspot_SSID"
+  # Unbind from the interface it was created on (#90). See unbind_profiles.
+  nmcli con modify Hotspot connection.interface-name ""
   nmcli con modify Hotspot 802-11-wireless.mode ap
   nmcli con modify Hotspot 802-11-wireless.band bg
   nmcli con modify Hotspot 802-11-wireless.channel 1
@@ -61,9 +63,39 @@ create_hotspot() {
 create_client() {
   echo "Creating wifi client config"
   nmcli con add type wifi ifname "$wifidev" con-name Client ssid "$WIFI_SSID"
+  # Unbind from the interface it was created on (#90). See unbind_profiles.
+  nmcli con modify Client connection.interface-name ""
   nmcli con modify Client connection.autoconnect no
   nmcli con modify Client wifi-sec.key-mgmt wpa-psk
   nmcli con modify Client wifi-sec.psk "$WIFI_PSK"
+}
+
+# Let either profile run on whatever WiFi device is present (#90).
+#
+# `con add ... ifname "$wifidev"` sets connection.interface-name, and
+# NetworkManager will then only activate that profile on an interface with
+# exactly that name. USB dongles get MAC-derived names - the A6's is
+# wlx90de8097db67 - so a different dongle is a different name and neither
+# profile matches it any more. The board stops joining the configured SSID and
+# falls back to the hotspot after the full CLIENT_TIMEOUT, with nothing in the
+# output mentioning the dongle; it reads exactly like the network being out of
+# range. If the Hotspot profile is pinned too, nothing comes up at all.
+#
+# Run on every boot, not just at creation: the guards below only create a
+# profile when its file is absent, so a board that already has pinned profiles
+# would keep them forever. Clearing an already-empty value is a no-op, so this
+# is cheap and idempotent.
+#
+# A board has one WiFi radio, so there is nothing for the binding to
+# disambiguate in the first place.
+unbind_profiles() {
+  local c
+  for c in Hotspot Client; do
+    [ -f "/etc/NetworkManager/system-connections/$c.nmconnection" ] || continue
+    [ -n "$(nmcli -g connection.interface-name con show "$c" 2>/dev/null)" ] || continue
+    echo "Unpinning $c from its original interface (#90)"
+    nmcli con modify "$c" connection.interface-name "" || true
+  done
 }
 
 if [ ! -f /etc/NetworkManager/system-connections/Hotspot.nmconnection ]; then
@@ -77,6 +109,8 @@ if [ ! -f /etc/NetworkManager/system-connections/Client.nmconnection ]; then
     echo "No WIFI_SSID found in /etc/rebuild-settings. Skipping Client setup."
   fi
 fi
+
+unbind_profiles
 
 # Decide which connection to bring up this boot. Both connections have
 # autoconnect disabled, so NetworkManager never arbitrates between them
