@@ -4,7 +4,27 @@
 
 set -e
 
+# pipefail so a `... | tee` reports the script's status and not tee's (#92).
+#
+# Without it the flash-rp2040 pipe below already swallowed failures - tolerated
+# only because it exits 0 when no RP2040 is attached - and piping flash-stm32
+# the same way would have quietly turned a failed STM32 flash into a successful
+# first run, which is far worse than the loop it replaced.
+set -o pipefail
+
 . /etc/rebuild-settings
+
+# Say so in the log that survives a reboot, not just the journal. An
+# unrecoverable first run is now bounded by StartLimitBurst (see the unit), so
+# without this the persistent log would simply stop mid-sentence and give no
+# hint that anything had gone wrong at all.
+report_failure() {
+    rc=$?
+    [ "$rc" -eq 0 ] && return 0
+    log "--First run FAILED (exit $rc)-- see: journalctl -u rebuild-first-run"
+    return 0
+}
+trap report_failure EXIT
 
 log() {
     echo "$1" | tee -a /var/log.hdd/rebuild-first-run.log
@@ -14,7 +34,11 @@ echo "Starting rebuild first run script"
 echo "--Beginning of first run script--" > /var/log.hdd/rebuild-first-run.log
 
 log "Running flash-stm32 script"
-/usr/local/bin/flash-stm32
+# Captured, like flash-rp2040 below. This is the mandatory step and the one that
+# actually failed in #92, yet its output went only to the journal - so the
+# persistent log ended at "Running flash-stm32 script" and the reason was gone
+# by the time anyone looked. Safe to pipe now that pipefail is set above.
+/usr/local/bin/flash-stm32 2>&1 | tee -a /var/log.hdd/rebuild-first-run.log
 
 # Any attached RP2040 (ReTool A2, Remote). Exits 0 when none is present, so a
 # board without one is not a failed first boot - unlike flash-stm32, the target

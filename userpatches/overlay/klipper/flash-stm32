@@ -14,13 +14,44 @@ fi
 
 systemctl stop klipper
 
+# Release the boot pin however this script exits (#92).
+#
+# gpioset -z daemonises and holds GPIO 197 until something kills it. With the
+# only pkill on the success path, any failure in between - a bad stm32flash, a
+# missing binary, the get-recore-revision above - leaked a daemon that outlived
+# the script, reparented to init, and kept the line claimed. Every later attempt
+# then died at the FIRST step with
+#
+#   gpioset: unable to request lines on chip '/dev/gpiochip1': Device or resource busy
+#
+# so rebuild-first-run's Restart=on-failure retried forever and the original
+# error was permanently masked - observed at restart 98, ~16 minutes in, with
+# the leaked gpioset still alive across every one of them.
+#
+# Matched on 'gpioset.*boot-pin', not the bare 'boot-pin' this used: -f matches
+# the whole command line, so the looser pattern kills ANY process that merely
+# mentions the string - a shell script, an editor, a tail on this file. Requiring
+# it to be a gpioset keeps that from reaching something unrelated. Not an exact
+# match, because gpioset rewrites its own argv: it is invoked with "197=1" below
+# and shows up in ps as "197 1".
+drop_boot_pin() { pkill -f 'gpioset.*boot-pin' 2>/dev/null || true; }
+
+# On the success path drop_boot_pin has already run, so this finds nothing and
+# stays quiet; it only speaks up when it is actually cleaning up after a failure.
+release_boot_pin() {
+    if pkill -f 'gpioset.*boot-pin' 2>/dev/null; then
+        echo "flash-stm32: released a leaked boot-pin hold on exit" >&2
+    fi
+}
+trap release_boot_pin EXIT
+
 # Set boot-pin high while flashing
 gpioset -z -C "boot-pin" -c 1 197=1
 # Set reset-pin 196 low, then high after 10 ms
 gpioset -t 10ms,0 -c 1 196=0
 stm32flash -w ${STM32_BINARY} -v -g 0 ${FLASH_DEVICE}
 # Set boot-pin low
-pkill -f boot-pin
+drop_boot_pin
 # 196 needs to be pull-up so the STM32 can use reset
 gpioget -c 1 -b pull-up 196
 

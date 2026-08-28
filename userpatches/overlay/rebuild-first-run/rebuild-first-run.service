@@ -3,6 +3,19 @@ Description=Runs on first boot after flashing
 After=var-log.hdd.mount
 Requires=dev-loop0.device
 
+# Give up rather than retry forever (#92). Restart=on-failure with no limit
+# meant an unrecoverable first run looped indefinitely - seen at restart 98,
+# ~16 minutes after boot, filling the console with
+#
+#   [FAILED] Failed to start rebuild-first-run.… Runs on first boot after flashing.
+#
+# and burying the one message that mattered. Six attempts over ten minutes is
+# well clear of the transient case this Restart= exists for (the losetup -P
+# partition-scan race in get-recore-revision, which clears on the next try),
+# while an unrecoverable one now lands in `systemctl --failed` where it belongs.
+StartLimitIntervalSec=600
+StartLimitBurst=6
+
 [Service]
 Type=oneshot
 RemainAfterExit=yes
