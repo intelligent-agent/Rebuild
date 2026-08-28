@@ -9,4 +9,21 @@ Restart=always
 RestartSec=5
 
 [Install]
-WantedBy=multi-user.target
+# Started by the camera appearing, not by boot reaching multi-user.
+#
+# This was WantedBy=multi-user.target, so every boot tried to start ustreamer
+# whether a camera was attached or not. BindsTo/After above then pulled in
+# dev-webcam.device, which on a board with no camera never appears - and boot
+# sat there for the full DefaultTimeoutStartSec before giving up:
+#
+#   [ TIME ] Timed out waiting for device dev-webcam.device
+#   [DEPEND] Dependency failed for ustreamer.service - streams webcam data
+#
+# A minute of dead boot time and two red lines, on every camera-less board.
+#
+# The udev rule in ustreamer.sh already sets TAG+="systemd" on the video
+# device, which is what makes dev-webcam.device a unit systemd will act on, so
+# wanting it from there is all that was missing. No camera means nothing is
+# attempted and boot does not wait; plugging one in later starts the stream
+# without a reboot, which multi-user.target could never do.
+WantedBy=dev-webcam.device
