@@ -44,7 +44,17 @@ log "Running flash-stm32 script"
 # board without one is not a failed first boot - unlike flash-stm32, the target
 # here is optional hardware.
 log "Running flash-rp2040 script"
-/usr/local/bin/flash-rp2040 2>&1 | tee -a /var/log.hdd/rebuild-first-run.log
+# Explicitly non-fatal, which pipefail would otherwise have changed.
+#
+# The RP2040 is optional hardware, and this script exits 1 on conditions that
+# say nothing about the board's health - "something is already in the bootloader
+# - refusing to guess which board it is" being the live one. Before pipefail,
+# tee swallowed that status and first run carried on. With pipefail it would
+# propagate, set -e would abort, and Restart=on-failure would retry to the burst
+# limit - failing a perfectly good board over a peripheral. Keep the status
+# visible in the log, but do not let it end the run.
+/usr/local/bin/flash-rp2040 2>&1 | tee -a /var/log.hdd/rebuild-first-run.log \
+    || log "flash-rp2040 exited non-zero (optional hardware) - continuing"
 
 log "Disabling rebuild-first-run.service"
 systemctl disable rebuild-first-run.service
