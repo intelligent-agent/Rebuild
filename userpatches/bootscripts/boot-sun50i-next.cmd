@@ -53,25 +53,38 @@ if test -n "${splashfile}"; then
 		# countdown, the mmc scan), and the rest stays visible around it.
 		#
 		# Our u-boot no longer puts vidconsole in stdout, so on a current
-		# board there is nothing here to clear. Keep it anyway: u-boot
-		# lives in eMMC and is not necessarily as new as this script.
-		#
-		# Point stdout at vidconsole alone for that one command: with
-		# CONFIG_VIDEO_ANSI=y cls clears by *printing* an escape sequence,
-		# not by touching the video device, so it only works while
-		# vidconsole is a console - and leaving serial in would blank the
-		# boot log in whatever terminal is watching it.
-		setenv stdout vidconsole
-		cls
-		# Stop U-Boot printing over its own splash. Everything echoed from
-		# here on would otherwise be drawn onto the panel - unrotated,
-		# since U-Boot knows nothing about the panel orientation. Serial
-		# keeps the full log, and the kernel gets its console from
-		# ${consoleargs} regardless of this.
-		#
-		# stderr is left alone on purpose: the panel should stay quiet,
-		# not go mute. See the failure branches below.
-		setenv stdout serial
+		# board there is nothing here to clear, and both lines below can
+		# only do harm (#93). Keep the block anyway: u-boot lives in eMMC
+		# and is not necessarily as new as this script. Testing ${stdout}
+		# is what tells the two apart - if the panel is not a console,
+		# nothing was ever drawn on it.
+		if test "${stdout}" != "serial"; then
+			# Point stdout at vidconsole alone for that one command: with
+			# CONFIG_VIDEO_ANSI=y cls clears by *printing* an escape
+			# sequence, not by touching the video device, so it only works
+			# while vidconsole is a console - and leaving serial in would
+			# blank the boot log in whatever terminal is watching it.
+			#
+			# Guarded, because this setenv genuinely fails: on a board
+			# with no panel the video device never probes, so there is no
+			# vidconsole stdio device, iomux_doenv() finds no device in
+			# the new value and the env callback rejects the write with
+			# EINVAL. Unguarded, cls then ran with stdout still on serial
+			# and cleared the boot log on every boot - the exact thing the
+			# paragraph above says not to do.
+			if setenv stdout vidconsole; then
+				cls
+			fi
+			# Stop U-Boot printing over its own splash. Everything echoed
+			# from here on would otherwise be drawn onto the panel -
+			# unrotated, since U-Boot knows nothing about the panel
+			# orientation. Serial keeps the full log, and the kernel gets
+			# its console from ${consoleargs} regardless of this.
+			#
+			# stderr is left alone on purpose: the panel should stay quiet,
+			# not go mute. See the failure branches below.
+			setenv stdout serial
+		fi
 		# Nested if so a failure here cannot abort the boot script. An
 		# older u-boot on eMMC without CONFIG_CMD_BMP would fail on an
 		# unknown command, and that must not stop the board booting.
