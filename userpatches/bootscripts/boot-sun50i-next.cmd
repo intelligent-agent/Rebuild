@@ -93,9 +93,20 @@ if test -n "${splashfile}"; then
 		else
 			# Nothing on the panel left to protect, so give the video
 			# console back - a board failing this early is one someone
-			# will want to watch without a serial cable.
+			# will want to watch without a serial cable. On a unit with no
+			# display this adds nothing, and costs nothing: iomux keeps the
+			# devices it can resolve rather than failing on the ones it
+			# cannot, so stdout stays serial.
 			setenv stdout serial,vidconsole
-			echo "Splash failed to display"
+			# This is the display test, and it is the only one the script
+			# gets: bmp display fails here because UCLASS_VIDEO has no
+			# device, which is the same reason vidconsole does not exist.
+			# Everything else either lies (cls always succeeds under
+			# CONFIG_VIDEO_ANSI) or is noisy (setenv stdout vidconsole
+			# prints an error - see #93). So say what it means. A corrupt
+			# boot.bmp is the other way to reach this branch, and u-boot
+			# announces that itself on the line above.
+			echo "No display detected - splash skipped"
 		fi
 	fi
 fi
