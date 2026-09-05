@@ -28,6 +28,21 @@ source /tmp/overlay/install_components/machine_identity.sh
 source /tmp/overlay/install_components/barebone_console.sh
 source /tmp/overlay/install_components/usb_gadget_getty.sh
 
+# One tool, not install_bins: barebone stays minimal, and the rest of the bins
+# belong to a printer this variant does not have.
+#
+# It earns its place because the rig asks a board which board it is before it
+# writes anything to it, and barebone was the only variant that could not
+# answer - so the check was skipped there by construction. On 2026-09-05 a job
+# aimed at one board reached another that had taken the same DHCP lease and
+# rebooted it; that one only cost a reboot, but the same mix-up on a rebuild
+# image writes the stick. A guard that cannot fire on a quarter of the matrix
+# is not a guard.
+install_serial_tool() {
+    echo "🍰 install get-serial-number"
+    install -m 755 /tmp/overlay/bins/get-serial-number /usr/local/bin/get-serial-number
+}
+
 post_build() {
     
     cp /tmp/overlay/rebuild/rebuild-version /etc/
@@ -171,6 +186,7 @@ add_overlays
 install_autohotspot
 install_uboot_splash
 install_barebone_console
+install_serial_tool
 post_build
 
 echo "🍰 Rebuild finished"
