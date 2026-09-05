@@ -1,64 +1,42 @@
 #!/usr/bin/python3
 
-import configparser
 import yaml
 import secrets
 import string
-import hashlib
 import os
 
 def make_key(length):
-    alphabet = string.ascii_letters + string.digits
-    return ''.join(secrets.choice(alphabet) for i in range(length))
+    return ''.join(secrets.choice(string.ascii_letters + string.digits) for i in range(length))
 
-def hash_password(password):
-    salt = get_salt()
-    return hashlib.sha512((password + salt).encode()).hexdigest()
 
-def get_salt():
-    fname = '/home/printer/.octoprint/config.yaml'
-    with open(fname, "r") as f_in:
-        config = yaml.safe_load(f_in)
-        salt = config.get("accessControl", {}).get("salt", make_key(32))
-        config.setdefault("accessControl", {})["salt"] =  salt
-        with open(fname, "w") as f_out:
-            yaml.safe_dump(config, f_out, default_flow_style=False)
-        return salt
+def update_user_config(fname):
+    """Add the `toggle` user OctoPrint's autologin resolves.
 
-def get_password():
-    local = configparser.ConfigParser()
-    local.read('/etc/toggle/local.cfg')
-    return local.get("OctoPrint", 'password', fallback=make_key(10))
+    No password and no API key. Toggle authenticates by accessControl.autologin
+    - OctoPrint logs a local client in as this user - so nothing here ever has to
+    match OctoPrint's password hashing.
 
-def update_toggle_config(password, apikey):
-    local = configparser.ConfigParser()
-    local["OctoPrint"] = {
-      'user': 'toggle',
-      'password': password,
-      'authentication': apikey
-    }
-    with open('/etc/toggle/local.cfg', 'w') as configfile:
-      local.write(configfile)
-
-def update_user_config(password, fname):
-    password_hash = hash_password(password)
+    That used to be sha512(password + salt), which was OctoPrint's old format.
+    1.11 stores argon2id, so the hash written here could not authenticate and the
+    touchscreen waited forever on a board whose wizard had been completed. The
+    user still has to EXIST, because autologinAs resolves through find_user(),
+    but its password is deliberately unusable: a random value that no hashing
+    scheme will ever verify, so password login for this account simply fails.
+    """
     with open(fname, 'r') as f_in:
-      users = yaml.safe_load(f_in) or {}
-      toggle = users.get('toggle', {})
-      apikey = toggle.get('apikey', make_key(30))
-      toggle = {
+        users = yaml.safe_load(f_in) or {}
+    users['toggle'] = {
         'active': True,
-        'apikey': apikey,
+        'apikey': None,
         'groups': ['users'],
-        'password': password_hash,
+        'password': make_key(64),
         'permissions': [],
         'roles': ['user'],
         'settings': {}
-      }
-      users['toggle'] = toggle
-      with open(fname, 'w') as f_out:
-          yaml.safe_dump(users, f_out, default_flow_style=False)
-      return apikey
+    }
+    with open(fname, 'w') as f_out:
+        yaml.safe_dump(users, f_out, default_flow_style=False)
+
 
 fname = '/home/printer/.octoprint/users.yaml'
 MARKER = '/var/lib/toggle-runfirst.done'
@@ -77,9 +55,7 @@ if not os.path.exists(fname):
   print("no %s yet - toggle-runfirst.path should have waited for it" % fname)
   raise SystemExit(0)
 
-passwd = get_password()
-apikey = update_user_config(passwd, fname)
-update_toggle_config(passwd, apikey)
+update_user_config(fname)
 
 # Leave a marker BEFORE touching the units, and stop the path unit as well as
 # disabling it.
@@ -98,4 +74,4 @@ update_toggle_config(passwd, apikey)
 open(MARKER, "w").close()
 os.system("systemctl disable toggle-runfirst.path toggle-runfirst.service")
 os.system("systemctl stop toggle-runfirst.path")
-print("added the toggle user and wrote /etc/toggle/local.cfg")
+print("added the toggle user; autologin does the rest")

@@ -1,3 +1,22 @@
+accessControl:
+  # The touchscreen talks to OctoPrint over the loopback, and this is how it
+  # authenticates: OctoPrint logs a local client in as `toggle`, so Toggle sends
+  # no password and holds no API key.
+  #
+  # That is not just tidier, it removes a whole class of bug. toggle-runfirst
+  # used to write its user's password as sha512(password + salt); OctoPrint 1.11
+  # stores argon2id. The user existed, in the right group, with a hash that could
+  # never authenticate - so the screen sat at "waiting" forever on a board whose
+  # wizard had been completed. Nothing verifies a hash now.
+  #
+  # ::1/128 is load-bearing: Toggle connects over the IPv6 loopback, so a v4-only
+  # list matches nothing and autologin silently never happens.
+  autologinLocal: true
+  autologinAs: toggle
+  localNetworks:
+  - 127.0.0.0/8
+  - ::1/128
+  - 192.168.0.0/16
 appearance:
   name: Recore
 folder:
