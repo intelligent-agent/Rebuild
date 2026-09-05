@@ -99,20 +99,42 @@ EOF
     cd octoprint_toggle
     ${HOMEDIR}/OctoPrint/venv/bin/python setup.py install
 
-    cat > /etc/systemd/system/toggle-runfirst.service <<EOF
+    # A path unit rather than a poll loop.
+    #
+    # toggle-runfirst can only do its work once OctoPrint's setup wizard has
+    # created users.yaml, which may be minutes or never. It used to wait by
+    # sleeping a second at a time in a resident Python process; systemd watches
+    # the path with inotify and starts the job when the file appears.
+    cat > /etc/systemd/system/toggle-runfirst.path <<EOF
 [Unit]
-Description=Allow Toggle to register access to OctoPrint
-Before=octoprint.service toggle.service
+Description=Wait for OctoPrint to have a user before registering Toggle
 
-[Service]
-Type=simple
-RemainAfterExit=yes
-ExecStart=/usr/lib/toggle-runfirst
+[Path]
+PathExists=/home/printer/.octoprint/users.yaml
+Unit=toggle-runfirst.service
 
 [Install]
 WantedBy=multi-user.target
 EOF
+
+    cat > /etc/systemd/system/toggle-runfirst.service <<EOF
+[Unit]
+Description=Allow Toggle to register access to OctoPrint
+
+# ConditionPathExists=! makes a second run a no-op even if the path unit is
+# somehow still armed - PathExists= re-triggers as soon as the service exits
+# while the file is still there, so the service has to be the thing that stops
+# being runnable.
+ConditionPathExists=!/var/lib/toggle-runfirst.done
+
+[Service]
+# oneshot, not simple: it does its work and exits. Started by
+# toggle-runfirst.path, which is what waits.
+Type=oneshot
+ExecStart=/usr/lib/toggle-runfirst
+EOF
     cp /tmp/overlay/toggle/toggle-runfirst /usr/lib
     chmod +x /usr/lib/toggle-runfirst
-    systemctl enable toggle-runfirst
+    # The path unit is what gets enabled; it starts the service.
+    systemctl enable toggle-runfirst.path
 }
