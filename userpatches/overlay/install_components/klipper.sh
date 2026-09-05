@@ -24,6 +24,11 @@ install_klipper(){
 
     cp /tmp/overlay/klipper/flash-stm32 /usr/local/bin
     cp /tmp/overlay/klipper/flash-rp2040 /usr/local/bin
+    # Ships with flash-rp2040 because it exists solely to keep that script quiet:
+    # the RP2 bootloader presents a mass-storage interface we never use, and udev
+    # probing it produces I/O errors on every first boot (#94).
+    mkdir -p /etc/udev/rules.d
+    cp /tmp/overlay/klipper/55-rp2040-bootloader.rules /etc/udev/rules.d/
     cp /tmp/overlay/klipper/flash-ar100.py /usr/local/bin
     cp /tmp/overlay/klipper/set-ar100-clock.py /usr/local/bin
     chmod +x /usr/local/bin/flash-ar100.py /usr/local/bin/set-ar100-clock.py /usr/local/bin/flash-rp2040

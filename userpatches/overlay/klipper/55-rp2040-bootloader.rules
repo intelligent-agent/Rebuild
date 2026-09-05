@@ -1,0 +1,18 @@
+# The RP2 bootloader is not a disk, so stop probing it like one.
+#
+# flash-rp2040 resets the ReTool into the RP2 bootloader and flashes it over
+# PICOBOOT. That bootloader exposes USB Mass Storage alongside PICOBOOT, so the
+# kernel registers a block device we never intend to mount, udev runs blkid
+# against it, and rp2040_flash then reboots the chip out of the bootloader while
+# that probe is still in flight. The reads fail because the device went away:
+#
+#   I/O error, dev sdb, sector 297 op 0x0:(READ)
+#   Buffer I/O error on dev sdb1, logical block 296, async page read
+#
+# Harmless, but it reads exactly like a failing USB drive on every first boot,
+# and it cost real time once already (Rebuild #94).
+#
+# Numbered 55 so it is processed before 60-persistent-storage.rules, which is
+# what honours both of these flags - the second one skips the blkid probe that
+# does the actual reading.
+SUBSYSTEM=="block", SUBSYSTEMS=="usb", ATTRS{idVendor}=="2e8a", ATTRS{idProduct}=="0003", ENV{UDEV_DISABLE_PERSISTENT_STORAGE_RULES_FLAG}="1", ENV{UDEV_DISABLE_PERSISTENT_STORAGE_BLKID_FLAG}="1", ENV{UDISKS_IGNORE}="1", OPTIONS+="nowatch"
