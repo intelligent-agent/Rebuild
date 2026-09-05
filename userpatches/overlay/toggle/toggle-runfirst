@@ -6,7 +6,6 @@ import secrets
 import string
 import hashlib
 import os
-import time
 
 def make_key(length):
     alphabet = string.ascii_letters + string.digits
@@ -62,13 +61,41 @@ def update_user_config(password, fname):
       return apikey
 
 fname = '/home/printer/.octoprint/users.yaml'
+MARKER = '/var/lib/toggle-runfirst.done'
 
-while True:
-  if os.path.exists(fname):
-    passwd = get_password()
-    apikey = update_user_config(passwd, fname)
-    update_toggle_config(passwd, apikey)
-    os.system("systemctl disable toggle-runfirst")
-    exit(0)
-  else:
-    time.sleep(1)
+# Runs once, when users.yaml exists. The waiting is systemd's job - see
+# toggle-runfirst.path, which watches this path with inotify.
+#
+# This used to be a `while True: sleep(1)` here, which meant a resident Python
+# process spending a wakeup a second for however long it takes somebody to
+# finish OctoPrint's setup wizard - possibly never. The wait itself is not
+# avoidable: OctoPrint decides the access-control wizard is needed by asking
+# whether users.yaml exists at all, so creating the toggle user any earlier
+# would satisfy that check and ship a printer whose owner is never asked to
+# make an admin account.
+if not os.path.exists(fname):
+  print("no %s yet - toggle-runfirst.path should have waited for it" % fname)
+  raise SystemExit(0)
+
+passwd = get_password()
+apikey = update_user_config(passwd, fname)
+update_toggle_config(passwd, apikey)
+
+# Leave a marker BEFORE touching the units, and stop the path unit as well as
+# disabling it.
+#
+# PathExists= re-arms the moment the service deactivates, so a service that does
+# not make the condition false gets restarted immediately, forever - it is meant
+# for units that consume the path, like a spool directory. Measured here: 18
+# invocations in the seconds it took to notice. `disable` alone does not help,
+# it only affects the next boot, and systemd says so:
+#
+#   Disabling 'toggle-runfirst.service', but its triggering units are still
+#   active: toggle-runfirst.path
+#
+# So: stop kills it for this boot, disable for the next, and the marker makes the
+# service itself a no-op through ConditionPathExists= if either is ever missed.
+open(MARKER, "w").close()
+os.system("systemctl disable toggle-runfirst.path toggle-runfirst.service")
+os.system("systemctl stop toggle-runfirst.path")
+print("added the toggle user and wrote /etc/toggle/local.cfg")
