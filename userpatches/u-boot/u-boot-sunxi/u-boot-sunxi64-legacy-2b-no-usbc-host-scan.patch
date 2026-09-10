@@ -1,0 +1,51 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Elias Bakken <elias@iagent.no>
+Date: Fri, 29 Aug 2026 00:00:00 +0000
+Subject: recore: stop u-boot scanning the USB-C port for boot devices
+
+ohci0 is the USB-C port. On the A64, usb_otg, ehci0 and ohci0 all sit on
+usbphy 0; ehci1 and ohci1 are the type-A host port on usbphy 1. Patch 2
+disabled ehci0 but left ohci0 enabled, so PHY0 is half-enabled and u-boot
+scans the USB-C connector for storage - at full speed only, since the
+high-speed half of that port is off.
+
+That is not what the connector is for. usb_otg is a peripheral on this
+board, and patch 7 deliberately drives PD7 low so the board never sources
+VBUS on USB-C. A bus-powered stick plugged in there gets no power and
+cannot enumerate, so the scan is structurally incapable of finding
+anything. Patch 6 says the same from the other side: "phy0 is the idle
+OTG phy; phy1 serves the populated bus".
+
+It is not free. Measured on an A5, of the 3.66s "resetting USB" takes:
+
+    +0.06s  scanning bus usb@1c1a400 (ohci0, USB-C)  -> 1 device  1.12s
+    +1.18s  scanning bus usb@1c1b000 (ehci1, type-A) -> 2 devices 1.35s
+    +2.53s  scanning bus usb@1c1b400 (ohci1, type-A) -> 1 device  1.13s
+
+The one device on each OHCI is its own root hub. So this removes 1.12s
+from every boot and takes the USB-C port out of the boot search, which is
+where it should never have been: booting from whatever someone plugs into
+the port used for the serial gadget is not a behaviour anyone asked for.
+
+The type-A port keeps both halves and is unaffected - that is where the
+Reflash stick lives, and it is found by ehci1 at high speed.
+
+Signed-off-by: Elias Bakken <elias@iagent.no>
+---
+ arch/arm/dts/sun50i-a64-recore.dts | 4 ----
+ 1 file changed, 4 deletions(-)
+
+diff --git a/arch/arm/dts/sun50i-a64-recore.dts b/arch/arm/dts/sun50i-a64-recore.dts
+--- a/arch/arm/dts/sun50i-a64-recore.dts
++++ b/arch/arm/dts/sun50i-a64-recore.dts
+@@ -147,10 +147,6 @@
+ 	max-frequency = <100000000>;
+ };
+ 
+-&ohci0 {
+-	status = "okay";
+-};
+-
+ &ohci1 {
+   status = "okay";
+ };
