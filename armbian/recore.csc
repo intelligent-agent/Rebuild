@@ -3,8 +3,18 @@ BOARD_NAME="Recore"
 BOARD_VENDOR="Iagent"
 BOARDFAMILY="sun50iw1"
 BOOTCONFIG="recore_defconfig"
-KERNEL_TARGET="edge"
-KERNEL_TEST_TARGET="edge"
+# Pin u-boot where it was. From 26.8 the sunxi family defaults moved to
+# BOOTBRANCH=tag:v2026.07 and BOOTPATCHDIR=v2026.07-sunxi, and our ten patches
+# live in userpatches/u-boot/u-boot-sunxi/ - under the new default they would
+# simply not be applied, silently dropping usb power, the ehci disable, the usb
+# phy reset hold and the boot-target trimming. Both the old branch and the old
+# patch dir still exist upstream, so this keeps the u-boot side identical and
+# leaves the armbian and kernel bump as the variables under test. Taking
+# v2026.07 is a separate job: the patches are written against v2024.01.
+BOOTBRANCH="tag:v2024.01"
+BOOTPATCHDIR="u-boot-sunxi"
+KERNEL_TARGET="current"
+KERNEL_TEST_TARGET="current"
 #MODULES="g_serial"
 BOOT_LOGO="yes"
 WIREGUARD=no
@@ -14,9 +24,17 @@ INCLUDE_HOME_DIR="yes"
 
 function post_family_config__pin_kernel() {
     echo "🍰Freeze kernel to a known-good point release for reproducible builds"
+    # 6.18 is "current" for sunxi on 26.8 (legacy 6.12, edge 7.1) and is a
+    # longterm series, so this stays on the same kernel we already ship.
+    #
+    # The point release moves .33 -> .50. Armbian's sunxi-6.18 patch set tracks
+    # the latest 6.18.x, so holding at .33 made a rebased patch miss its context
+    # (0024-Revert-usb-dwc3-Abort-suspend-on-soft-disconnect-fail, which needs
+    # dwc3_disconnect_gadget_sleepable) and left 41 more flagged needs_rebase.
+    # Freezing is still right for reproducible builds - just not that far back.
     declare -g KERNEL_MAJOR_MINOR="6.18"
     declare -g KERNELPATCHDIR="archive/sunxi-6.18"
-    declare -g KERNELBRANCH="tag:v6.18.33"
+    declare -g KERNELBRANCH="tag:v6.18.50"
 }
 
 function post_family_config__shrink_atf() {

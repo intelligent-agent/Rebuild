@@ -53,7 +53,9 @@ TAG=$(git describe --always --tags)
 NAME="rebuild-${VERSION}-${TAG}"
 
 cd $BUILD_DIR
-ARMBIAN_REF="v26.5.1" # sunxi-6.18 patches unchanged since being rewritten against v6.18.33 (see recore.csc)
+ARMBIAN_REF="23ca24aec" # head of armbian's v26.08 branch, 2026-08-25 (26.8.3 is the
+                       # released stable). A sha, not the branch name: rebuild.sh checks
+                       # out ARMBIAN_REF, and a branch moves under us as fixes land.
 git fetch --tags --prune
 git reset --hard
 git checkout "$ARMBIAN_REF"
