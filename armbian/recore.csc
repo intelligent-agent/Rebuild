@@ -19,6 +19,12 @@ KERNEL_TEST_TARGET="current"
 BOOT_LOGO="yes"
 WIREGUARD=no
 BOOTFS_TYPE=ext4
+# Upstream's recore.csc pairs ATF_SKIP_LDFLAGS_WL=yes with ATFBRANCH=tag:v2.8.0,
+# where TF_LDFLAGS goes straight to ld.bfd and the '-Wl,' prefix is rejected. We
+# take the family default (tag:lts-v2.12.9), which wants the prefix, so this
+# stays "no". It used to be contradicted by ATF_SKIP_LDFLAGS_WL="yes" in
+# config-rebuild.conf; the board config loads last, so this value always won and
+# that one was dead. Set in one place now.
 ATF_SKIP_LDFLAGS_WL=no
 INCLUDE_HOME_DIR="yes"
 
@@ -32,6 +38,9 @@ function post_family_config__pin_kernel() {
     # (0024-Revert-usb-dwc3-Abort-suspend-on-soft-disconnect-fail, which needs
     # dwc3_disconnect_gadget_sleepable) and left 41 more flagged needs_rebase.
     # Freezing is still right for reproducible builds - just not that far back.
+    # BRANCH=current already yields 6.18 from the family; these stay explicit so
+    # that if "current" later moves to 6.19, the pinned tag below cannot end up
+    # paired with a 6.19 patch directory.
     declare -g KERNEL_MAJOR_MINOR="6.18"
     declare -g KERNELPATCHDIR="archive/sunxi-6.18"
     declare -g KERNELBRANCH="tag:v6.18.50"
