@@ -1,0 +1,53 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Elias Bakken <elias@iagent.no>
+Date: Thu, 10 Sep 2026 18:33:17 +0200
+Subject: [PATCH] usb: storage: restore USB_READY after a successful transfer
+
+USB_READY means "the device answered TEST UNIT READY, so skip the 5ms
+wake-up delay in usb_stor_BBB_transport()". Three error paths clear it,
+but the only place that sets it is usb_test_unit_ready(), which runs at
+probe. After the first transfer error it therefore stays clear for the
+rest of the boot and every later command pays 5ms.
+
+Measured on an A8 loading an 84MB uInitrd off USB: 714 chunks at the
+stock 120KB transfer size, so 714 * 5ms = 3.6s of pure delay, taking
+throughput from 38.2MB/s down to 14.6MB/s - and it never recovers.
+
+A completed transfer is proof the device is awake, so set the flag again
+there. Symmetric with the clear, and it restores full speed immediately
+after a transient error.
+
+Still present in u-boot master as of 2026-09; not a Recore-specific bug.
+
+Signed-off-by: Elias Bakken <elias@iagent.no>
+---
+--- a/common/usb_storage.c
++++ b/common/usb_storage.c
+@@ -1209,6 +1209,18 @@
+ 			blkcnt -= blks;
+ 			break;
+ 		}
++		/*
++		 * A completed transfer proves the device is awake, so restore
++		 * the flag the error path above just cleared. Without this it
++		 * is cleared once and never set again for the rest of the boot:
++		 * usb_test_unit_ready() is the only other place that sets it,
++		 * and that runs at probe. Every command after the first error
++		 * then pays the 5ms wake-up delay in usb_stor_BBB_transport().
++		 * On an 84MB initrd at the stock 120KB transfer size that is
++		 * 714 chunks * 5ms = 3.6s, dropping throughput from 38MB/s to
++		 * 14.6MB/s for the rest of the boot.
++		 */
++		ss->flags |= USB_READY;
+ 		start += smallblks;
+ 		blks -= smallblks;
+ 		buf_addr += srb->datalen;
+@@ -1296,6 +1308,8 @@
+ 			blkcnt -= blks;
+ 			break;
+ 		}
++		/* See usb_stor_read(): a completed transfer means it is awake. */
++		ss->flags |= USB_READY;
+ 		start += smallblks;
+ 		blks -= smallblks;
+ 		buf_addr += srb->datalen;
