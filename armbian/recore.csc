@@ -3,16 +3,6 @@ BOARD_NAME="Recore"
 BOARD_VENDOR="Iagent"
 BOARDFAMILY="sun50iw1"
 BOOTCONFIG="recore_defconfig"
-# Pin u-boot where it was. From 26.8 the sunxi family defaults moved to
-# BOOTBRANCH=tag:v2026.07 and BOOTPATCHDIR=v2026.07-sunxi, and our ten patches
-# live in userpatches/u-boot/u-boot-sunxi/ - under the new default they would
-# simply not be applied, silently dropping usb power, the ehci disable, the usb
-# phy reset hold and the boot-target trimming. Both the old branch and the old
-# patch dir still exist upstream, so this keeps the u-boot side identical and
-# leaves the armbian and kernel bump as the variables under test. Taking
-# v2026.07 is a separate job: the patches are written against v2024.01.
-BOOTBRANCH="tag:v2024.01"
-BOOTPATCHDIR="u-boot-sunxi"
 KERNEL_TARGET="current"
 KERNEL_TEST_TARGET="current"
 #MODULES="g_serial"

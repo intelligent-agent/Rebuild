@@ -1,0 +1,52 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Elias Bakken <elias@iagent.no>
+Date: Thu, 10 Sep 2026 20:28:04 +0200
+Subject: [PATCH] sunxi: enable regulator-always-on / regulator-boot-on regulators
+
+See the comment in board_init(). u-boot removed regulators_enable_boot_on()
+after v2024.01; uclass_probe_all(UCLASS_REGULATOR) is the replacement.
+
+Signed-off-by: Elias Bakken <elias@iagent.no>
+---
+diff --git a/board/sunxi/board.c b/board/sunxi/board.c
+index 3d1afec7..735a0810 100644
+--- a/board/sunxi/board.c
++++ b/board/sunxi/board.c
+@@ -22,6 +22,8 @@
+ #include <axp_pmic.h>
+ #include <generic-phy.h>
+ #include <phy-sun4i-usb.h>
++#include <dm/uclass.h>
++#include <power/regulator.h>
+ #include <asm/arch/clock.h>
+ #include <asm/arch/cpu.h>
+ #include <asm/arch/display.h>
+@@ -231,6 +233,28 @@ int board_init(void)
+ 
+ 	eth_init_board();
+ 
++#if CONFIG_IS_ENABLED(DM_REGULATOR)
++	/*
++	 * Enable regulators marked regulator-always-on / regulator-boot-on in
++	 * the device tree. U-Boot probes lazily, and those properties are only
++	 * acted on by regulator_autoset() at probe time, so where nothing
++	 * references a regulator it is never enabled and the DT silently does
++	 * nothing.
++	 *
++	 * regulators_enable_boot_on() used to do this and was removed after
++	 * v2024.01; probing the uclass is the replacement, since
++	 * regulator_post_probe() calls regulator_autoset() per device.
++	 *
++	 * On Recore this fixes intermittent USB enumeration failures: the six
++	 * VBUS rails used to be raised by "regulator status" in CONFIG_PREBOOT
++	 * milliseconds before "usb reset", and about half of all boots lost a
++	 * device to "EHCI timed out on TD". Doing it here gives 20/20 clean.
++	 */
++	ret = uclass_probe_all(UCLASS_REGULATOR);
++	if (ret)
++		debug("%s: Cannot enable boot on regulators\n", __func__);
++#endif
++
+ 	return 0;
+ }
+ 
