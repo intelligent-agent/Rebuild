@@ -1,0 +1,77 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Elias Bakken <elias@iagent.no>
+Date: Thu, 10 Sep 2026 23:55:00 +0200
+Subject: [PATCH] sunxi: arm64: make bootm_size cover the layout it ships with
+
+Booting Reflash off USB dies just before the kernel is entered:
+
+    ## Loading init Ramdisk from Legacy Image at 4ff00000 ...
+       Data Size:    87794438 Bytes = 83.7 MiB
+       Verifying Checksum ... OK
+    ## Flattened Device Tree blob at 4fa00000
+       Booting using the fdt blob at 0x4fa00000
+    ramdisk - allocation error
+
+boot_ramdisk_high() allocates the relocated initrd out of
+[bootm_low, bootm_low + bootm_size), which is 0x40000000..0x4a000000 with
+the shipped bootm_size of 160MB. On this board that window holds, in
+order:
+
+    0x40080000..0x428d0000   kernel (loaded 39.7MB, moved to 0x40200000)
+    0x45000000..0x45000eed   armbianEnv.txt, then the DT fixup script
+    0x46000000..0x4600ae14   the eMMC DTB, read to identify the board
+
+leaving a 40MB hole and a 67MB hole. The initrd is 83.7MB, so it fits in
+neither and the allocation fails.
+
+Those scratch reservations are new in effect rather than in kind: the
+boot script has always used load_addr=0x45000000, but LMB is a persistent
+global map now and fs_read_lmb_check() reserves every load destination
+for the rest of the session. Under v2024.01 the map was rebuilt per
+bootm and the scratch loads were invisible by the time booti ran, which
+is why the same image and the same script boot there.
+
+Even unfragmented the window was marginal - 124MB of kernel plus initrd
+in 160MB - and it contradicts the layout immediately below it, which puts
+RAMDISK_ADDR_R at 255MB and reserves "256MB for really big kernels".
+Widen it to the 512MB the same comment says these boards have. LMB never
+hands out memory that is absent or already reserved, so on a smaller
+board this just stops being the binding constraint rather than becoming
+a way to overrun RAM.
+
+Signed-off-by: Elias Bakken <elias@iagent.no>
+---
+--- a/include/configs/sunxi-common.h
++++ b/include/configs/sunxi-common.h
+@@ -76,8 +76,27 @@
+  * There is no compression for arm64 kernels (yet), so leave some space
+  * for really big kernels, say 256MB for now.
+  * Scripts, PXE and DTBs should go afterwards, leaving the rest for the initrd.
++ *
++ * bootm_size has to span that whole layout, not a fraction of it. It bounds
++ * where bootm may relocate the kernel, the FDT and above all the initrd, and
++ * the load addresses below already run to RAMDISK_ADDR_R at 255MB - so a 160MB
++ * window could never hold what this layout loads. Two things then go wrong on a
++ * distro boot:
++ *
++ *  - Size alone. A 40MB kernel plus an 84MB initrd is 124MB of the 160, and
++ *    that is before anything else is placed.
++ *  - Fragmentation. LMB is a persistent global map now, and every "load"
++ *    reserves its destination for the rest of the session (fs_read_lmb_check).
++ *    Armbian's boot script uses load_addr=0x45000000 as scratch, so by the time
++ *    booti runs, the window is cut into 40MB and 67MB pieces with the initrd
++ *    fitting in neither, and boot_ramdisk_high() fails with
++ *    "ramdisk - allocation error".
++ *
++ * 512MB is the whole of the smallest arm64 sunxi board's DRAM, which is the
++ * right bound: LMB will not hand out memory that is absent or already spoken
++ * for, so on a larger board this simply stops being the binding constraint.
+  */
+-#define BOOTM_SIZE        __stringify(0xa000000)
++#define BOOTM_SIZE        __stringify(0x20000000)
+ #define KERNEL_ADDR_R     __stringify(SDRAM_OFFSET(0080000))
+ #define KERNEL_COMP_ADDR_R __stringify(SDRAM_OFFSET(4000000))
+ #define KERNEL_COMP_SIZE  __stringify(0xb000000)
+-- 
+2.43.0
+
