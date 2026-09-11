@@ -1,4 +1,17 @@
 name: Build Armbian
+# The title of the run, as it appears in the Actions list and in the Discord
+# webhook. Recore-CI passes the name of the image the build will produce -
+# rebuild-fluidd-v1.1.0-RC6-17-gaefe069 - which it gets by asking the runner to
+# describe the commit, the same `git describe --always --tags` that names the
+# .img.xz. Blank falls back to GitHub's default ("If run-name is omitted or is
+# only whitespace, then the run name is set to event-specific information"),
+# which is the commit message on a push, and worth keeping.
+#
+# The version cannot be resolved here instead: run-name is evaluated when the
+# run is created, before any checkout exists to describe. Nor can a job `name:`
+# carry it - that works for a job that runs, but a SKIPPED job keeps the
+# literal "${{ ... }}" template, and a push to main skips three of the four.
+run-name: ${{ inputs.label }}
 on:
   push:
     branches:
@@ -22,6 +35,11 @@ on:
           - mainsail
           - octoprint
           - all
+      label:
+        description: 'Title for this run (blank = the default)'
+        type: string
+        required: false
+        default: ''
 env:
   TERM: xterm-256color
 
