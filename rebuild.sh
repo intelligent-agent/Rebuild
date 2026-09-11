@@ -49,7 +49,12 @@ elif [[ ! -d $IMG_DIR ]]; then
 fi
 
 ROOT_DIR=$(pwd)
-TAG=$(git describe --always --tags)
+# Overridable because `git describe` answers differently depending on how the
+# tree was cloned, not on what is being built: a shallow clone has no tags, so
+# --tags matches nothing and the --always fallback emits a bare hash. The
+# workflow now fetches tags, so the default resolves; this stays so a caller can
+# pin the name explicitly rather than depend on clone depth.
+TAG=${REBUILD_VERSION:-$(git describe --always --tags)}
 NAME="rebuild-${VERSION}-${TAG}"
 
 cd $BUILD_DIR

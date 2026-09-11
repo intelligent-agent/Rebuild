@@ -34,7 +34,15 @@ jobs:
       github.event.inputs.variant == 'all'
     runs-on: self-hosted
     steps:
+    # fetch-depth: 0 for the tags. rebuild.sh names the image from
+    # `git describe --always --tags`, and checkout defaults to a shallow clone
+    # with no tags fetched - so --tags matched nothing here and the --always
+    # fallback emitted a bare commit hash. That is why images arrive as
+    # "rebuild-fluidd-343e3e8" rather than carrying the release they came from,
+    # and why the CI and the board can only report a hash. Same fix as Reflash.
     - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
 
     - name: Remove old images
       run: rm -f ../images/rebuild-barebone-*.img.xz
@@ -64,7 +72,15 @@ jobs:
         github.event.inputs.variant == 'all'))
     runs-on: self-hosted
     steps:
+    # fetch-depth: 0 for the tags. rebuild.sh names the image from
+    # `git describe --always --tags`, and checkout defaults to a shallow clone
+    # with no tags fetched - so --tags matched nothing here and the --always
+    # fallback emitted a bare commit hash. That is why images arrive as
+    # "rebuild-fluidd-343e3e8" rather than carrying the release they came from,
+    # and why the CI and the board can only report a hash. Same fix as Reflash.
     - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
 
     - name: Remove old images
       run: rm -f ../images/rebuild-mainsail-*.img.xz
@@ -94,7 +110,15 @@ jobs:
         github.event.inputs.variant == 'all'))
     runs-on: self-hosted
     steps:
+    # fetch-depth: 0 for the tags. rebuild.sh names the image from
+    # `git describe --always --tags`, and checkout defaults to a shallow clone
+    # with no tags fetched - so --tags matched nothing here and the --always
+    # fallback emitted a bare commit hash. That is why images arrive as
+    # "rebuild-fluidd-343e3e8" rather than carrying the release they came from,
+    # and why the CI and the board can only report a hash. Same fix as Reflash.
     - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
     - name: Remove old images
       run: rm -f ../images/rebuild-octoprint-*.img.xz
 
@@ -122,7 +146,15 @@ jobs:
         github.event.inputs.variant == 'all'))
     runs-on: self-hosted
     steps:
+    # fetch-depth: 0 for the tags. rebuild.sh names the image from
+    # `git describe --always --tags`, and checkout defaults to a shallow clone
+    # with no tags fetched - so --tags matched nothing here and the --always
+    # fallback emitted a bare commit hash. That is why images arrive as
+    # "rebuild-fluidd-343e3e8" rather than carrying the release they came from,
+    # and why the CI and the board can only report a hash. Same fix as Reflash.
     - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
 
     - name: Remove old images
       run: rm -f ../images/rebuild-fluidd-*.img.xz
