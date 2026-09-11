@@ -150,6 +150,29 @@ EOF
 
     install_usb_gadget_getty
 
+    # Take armbian-config and armbian-install out. They exist to do the one
+    # thing this product does not support: change the kernel or the bootloader
+    # in place. Rebuild's position is that you flash a fresh image.
+    #
+    # The holds are not enough on their own. linux-image, linux-dtb,
+    # linux-u-boot, armbian-firmware and base-files are all held, and a plain
+    # `apt upgrade` does respect that - measured on an A8, "0 upgraded ... 5 not
+    # upgraded", and `full-upgrade` the same. But armbian-config walks straight
+    # past it: config.system.sh runs `apt-mark unhold`, makes the change and
+    # re-holds, and config.software.sh passes --allow-change-held-packages.
+    #
+    # What that would install is the stock Armbian u-boot, carrying none of our
+    # 14 patches. At least one is load-bearing: without the bootm_size fix a
+    # Reflash USB boot dies at "ramdisk - allocation error". So the board would
+    # be left looking like a hardware fault after nothing more exotic than a
+    # menu selection.
+    #
+    # armbian-config purges cleanly - nothing depends on it. armbian-install
+    # cannot be purged: it is owned by armbian-bsp-cli-recore-current, the held
+    # BSP package, so removing the package would gut the image. Delete the file.
+    apt-get purge -y armbian-config || true
+    rm -f /usr/bin/armbian-install
+
     cp /tmp/overlay/rebuild/rebuild-version /etc/
     # Backwards compatibility with refactor
     cp /tmp/overlay/rebuild/rebuild-version /etc/refactor.version
