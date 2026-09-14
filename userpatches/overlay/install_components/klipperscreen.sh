@@ -5,6 +5,7 @@ install_klipperscreen() {
     cd "${HOMEDIR}"
     apt install -y python3-venv
     git clone https://github.com/jordanruthe/KlipperScreen.git
+    git -C KlipperScreen reset --hard "${KLIPPERSCREEN_VERSION}"
     chown -R ${USER}:${USER} KlipperScreen
     su -c "SERVICE=y BACKEND=x NETWORK=n ${HOMEDIR}/KlipperScreen/scripts/KlipperScreen-install.sh" ${USER}
 

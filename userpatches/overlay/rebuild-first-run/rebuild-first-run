@@ -33,6 +33,24 @@ log() {
 echo "Starting rebuild first run script"
 echo "--Beginning of first run script--" > /var/log.hdd/rebuild-first-run.log
 
+# The A5's analogue frontend and stepper clock need Klipper extras that are
+# neither used nor compatible with later boards. Klipper warns about these
+# out-of-tree modules merely being present, which leaves every non-A5 board
+# looking misconfigured. Do this only after a positive revision read: retaining
+# the files is safer than breaking an A5 if its EEPROM cannot be read.
+revision="$(/usr/local/bin/get-recore-revision 2>/dev/null || true)"
+if [ -n "$revision" ] && [ "${revision,,}" != "a5" ]; then
+    log "Removing A5-only Klipper files for ${revision}"
+    rm -f \
+        /home/printer/klipper/config/generic-recore-a5.cfg \
+        /home/printer/klipper/klippy/extras/recore_adc_temperature.py \
+        /home/printer/klipper/klippy/extras/recore_thermistor.py \
+        /home/printer/klipper/klippy/extras/tmc2209_a5.py \
+        /home/printer/klipper/klippy/extras/tmc2130_a5.py
+else
+    log "Keeping A5-only Klipper files (revision: ${revision:-unreadable})"
+fi
+
 log "Running flash-stm32 script"
 # Captured, like flash-rp2040 below. This is the mandatory step and the one that
 # actually failed in #92, yet its output went only to the journal - so the

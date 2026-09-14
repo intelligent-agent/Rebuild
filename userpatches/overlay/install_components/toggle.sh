@@ -61,6 +61,7 @@ install_toggle(){
 
     cd ${HOMEDIR}
     git clone https://github.com/intelligent-agent/toggle
+    git -C toggle reset --hard "${TOGGLE_VERSION}"
     cd toggle
     pip3 install -r requirements.txt --break-system-packages
     python3 ./install_data.py
@@ -96,6 +97,7 @@ EOF
 
     cd ${HOMEDIR}
     git clone https://github.com/intelligent-agent/octoprint_toggle
+    git -C octoprint_toggle reset --hard "${OCTOPRINT_TOGGLE_REVISION}"
     cd octoprint_toggle
     ${HOMEDIR}/OctoPrint/venv/bin/python setup.py install
 
