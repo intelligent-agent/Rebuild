@@ -6,6 +6,22 @@
 trim_image() {
     echo "🍰 Trim image: English only, no source package cache"
 
+    # The image deliberately contains no regional locale archives.  Use the
+    # libc-provided UTF-8 C locale from the very beginning, both as the image
+    # default and for SSH sessions: sshd otherwise accepts a client's LC_*
+    # value (for example nb_NO.UTF-8) before shell startup files can correct
+    # it, producing a warning on every login.
+    cat > /etc/default/locale <<'EOF'
+LANG=C.UTF-8
+LC_ALL=C.UTF-8
+EOF
+    mkdir -p /etc/ssh/sshd_config.d
+    cat > /etc/ssh/sshd_config.d/00-rebuild-locale.conf <<'EOF'
+# This must override client-supplied AcceptEnv locale variables: Rebuild ships
+# only the libc-provided C.UTF-8 locale, not regional locale archives.
+SetEnv LANG=C.UTF-8 LC_ALL=C.UTF-8
+EOF
+
     # srcpkgcache.bin (~46 MB) indexes source packages for `apt source`, which
     # nothing on a printer runs. pkgcache.bin is left alone: apt needs it, and
     # it is regenerated on the first apt run anyway.
