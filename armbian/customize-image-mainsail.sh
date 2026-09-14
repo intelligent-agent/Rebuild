@@ -21,6 +21,7 @@ ADD_PACKAGE_LIST="avahi-daemon"
 USER=printer
 HOMEDIR="/home/${USER}"
 
+source /tmp/overlay/install_components/software_versions.sh
 source /tmp/overlay/install_components/prep_install.sh
 source /tmp/overlay/install_components/klipper.sh
 source /tmp/overlay/install_components/moonraker.sh
@@ -43,6 +44,7 @@ source /tmp/overlay/install_components/uboot_splash.sh
 set -e
 echo "🍰 Rebuild starting..."
 prepare_build
+record_software_versions
 install_klipper "mainsail"
 install_moonraker "mainsail"
 install_nginx "mainsail"

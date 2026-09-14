@@ -4,7 +4,11 @@ install_klipper(){
     UI=$1
     echo "🍰 install Klipper"
     cd "${HOMEDIR}"
-    git clone https://github.com/Klipper3d/klipper
+    # Blobless, not shallow: Moonraker's update manager needs the full commit
+    # and tag history (a --depth 1 clone showed as unknown, Refactor #329),
+    # but not every old file version.  Cuts .git from ~250 MB to ~20 MB.
+    git clone --filter=blob:none https://github.com/Klipper3d/klipper
+    git -C klipper reset --hard "${KLIPPER_VERSION}"
 
     sed -i 's/select HAVE_GPIO_I2C if !MACH_STM32F031/select HAVE_GPIO_I2C/' klipper/src/stm32/Kconfig
 

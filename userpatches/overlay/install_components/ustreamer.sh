@@ -5,6 +5,7 @@ install_ustreamer() {
     cd ${HOMEDIR}
     apt install -y build-essential libevent-dev libjpeg-dev libbsd-dev
     git clone https://github.com/pikvm/ustreamer
+    git -C ustreamer reset --hard "${USTREAMER_VERSION}"
     cd ustreamer
     make -j
     # SYSTEMD_WANTS, not just TAG+="systemd", because the tag alone only makes

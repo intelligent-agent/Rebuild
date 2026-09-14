@@ -5,6 +5,7 @@ install_moonraker(){
     echo "🍰 install Moonraker"
     cd ${HOMEDIR}
     git clone https://github.com/Arksine/moonraker
+    git -C moonraker reset --hard "${MOONRAKER_VERSION}"
     chown -R ${USER}:${USER} moonraker
     
     su -c "${HOMEDIR}/moonraker/scripts/install-moonraker.sh" ${USER}

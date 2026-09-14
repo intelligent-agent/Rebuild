@@ -21,6 +21,7 @@ ADD_PACKAGE_LIST="avahi-daemon"
 USER=printer
 HOMEDIR="/home/${USER}"
 
+source /tmp/overlay/install_components/software_versions.sh
 source /tmp/overlay/install_components/klipper.sh
 source /tmp/overlay/install_components/octoprint.sh
 source /tmp/overlay/install_components/toggle.sh
@@ -42,6 +43,7 @@ set -e
 echo "🍰 Rebuild starting..."
 
 prepare_build
+record_software_versions
 install_klipper
 install_octoprint
 install_weston

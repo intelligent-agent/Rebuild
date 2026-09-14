@@ -9,7 +9,7 @@ install_octoprint(){
 	python3 -m venv venv
 	source venv/bin/activate
 	pip install --upgrade pip wheel
-	pip install octoprint
+	pip install "octoprint==${OCTOPRINT_VERSION}"
 	cp /tmp/overlay/octoprint/octoprint.service /etc/systemd/system/octoprint.service
 	systemctl enable octoprint
 	mkdir -p ${HOMEDIR}/.octoprint
@@ -31,18 +31,21 @@ install_octoprint(){
 	# Install plugins
 	cd ${HOMEDIR}
 	git clone https://github.com/thelastWallE/OctoprintKlipperPlugin.git
+	git -C OctoprintKlipperPlugin reset --hard "${OCTOPRINT_KLIPPER_PLUGIN_VERSION}"
 	chown -R ${USER}:${USER} OctoprintKlipperPlugin
 	cd OctoprintKlipperPlugin
 	${HOMEDIR}/OctoPrint/venv/bin/python setup.py install
 	
 	cd ${HOMEDIR}
 	git clone https://github.com/LazeMSS/OctoPrint-TopTemp.git
+	git -C OctoPrint-TopTemp reset --hard "${OCTOPRINT_TOPTEMP_VERSION}"
 	chown -R ${USER}:${USER} OctoPrint-TopTemp
 	cd OctoPrint-TopTemp
 	${HOMEDIR}/OctoPrint/venv/bin/python setup.py install
 
 	cd ${HOMEDIR}
 	git clone https://github.com/intelligent-agent/octoprint_recore.git
+	git -C octoprint_recore reset --hard "${OCTOPRINT_RECORE_REVISION}"
 	chown -R ${USER}:${USER} octoprint_recore
 	cd octoprint_recore
 	${HOMEDIR}/OctoPrint/venv/bin/python setup.py install
@@ -53,8 +56,8 @@ install_octodash() {
 	apt install -y libgtk-3-0 libnotify4 libnss3 libxss1 libxtst6 xdg-utils libatspi2.0-0 \
 	libuuid1 libappindicator3-1 libsecret-1-0 xserver-xorg ratpoison x11-xserver-utils xinit \
 	libgtk-3-0 bc desktop-file-utils libavahi-compat-libdnssd1 libpam0g-dev libx11-dev
-	wget https://github.com/UnchartedBull/OctoDash/releases/download/v2.3.1/octodash_2.3.1_arm64.deb
-	dpkg -i octodash_2.3.1_arm64.deb
+	wget "https://github.com/UnchartedBull/OctoDash/releases/download/${OCTODASH_VERSION}/octodash_${OCTODASH_VERSION#v}_arm64.deb"
+	dpkg -i "octodash_${OCTODASH_VERSION#v}_arm64.deb"
 	${HOMEDIR}/OctoPrint/venv/bin/octoprint config set --bool "api.allowCrossOrigin" true
 	cp /tmp/overlay/octodash/octodash.service /etc/systemd/system/
 	systemctl enable octodash
