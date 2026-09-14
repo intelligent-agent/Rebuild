@@ -67,18 +67,6 @@ install_klipper(){
     python3 -m venv "${PYTHONDIR}"
 
     # Install/update dependencies
-    # Klipper v0.13.0 predates Python 3.13 and pins cffi 1.14.6 plus
-    # greenlet 3.0.3.  Neither can build against Python 3.13's C API, which
-    # is what the Trixie base image provides.  Keep the released Klipper
-    # version intact, but update only those build-incompatible dependencies
-    # when building on Python 3.13 or newer.  These are the maintained
-    # equivalents used by current Klipper for the same dependency roles.
-    if python3 -c 'import sys; raise SystemExit(sys.version_info < (3, 13))'; then
-        sed -i \
-            -e "s/^cffi==1\\.14\\.6$/cffi==${KLIPPER_CFFI_VERSION}/" \
-            -e "s/^greenlet==3\\.0\\.3 ; python_version >= '3\\.12'$/greenlet==${KLIPPER_GREENLET_VERSION} ; python_version >= '3.12'/" \
-            "${HOMEDIR}/klipper/scripts/klippy-requirements.txt"
-    fi
     ${PYTHONDIR}/bin/pip install -r ${HOMEDIR}/klipper/scripts/klippy-requirements.txt
     ${PYTHONDIR}/bin/pip install numpy
 

@@ -9,12 +9,9 @@
 # used where upstream publishes them; the two Recore-specific OctoPrint plugins
 # have neither, so their immutable commits are recorded instead.
 
-KLIPPER_VERSION="v0.13.0"
-# Klipper v0.13.0 predates Python 3.13. Its own cffi/greenlet pins cannot
-# build there, so the installer uses these fixed compatible versions only on
-# Python 3.13 and later.
-KLIPPER_CFFI_VERSION="2.1.1"
-KLIPPER_GREENLET_VERSION="3.3.2"
+# Klipper is pinned to a master commit: v0.13.0, the latest tag, cannot build
+# its host dependencies on Trixie's Python 3.13.
+KLIPPER_VERSION="3a1f884dc83c44714bfc93238525cb57f4474588"
 MOONRAKER_VERSION="v0.11.0"
 KLIPPERSCREEN_VERSION="v0.4.7"
 FLUIDD_VERSION="v1.37.5"
