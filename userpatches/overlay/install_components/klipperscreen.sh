@@ -9,6 +9,12 @@ install_klipperscreen() {
     chown -R ${USER}:${USER} KlipperScreen
     su -c "SERVICE=y BACKEND=x NETWORK=n ${HOMEDIR}/KlipperScreen/scripts/KlipperScreen-install.sh" ${USER}
 
+    # The installer adds Korean and Japanese fonts (~61 MB) for KlipperScreen's
+    # CJK translations; Rebuild ships English only, and DejaVu stays for the UI.
+    # Moonraker will not put them back on an update: with install_script it only
+    # reinstalls packages from PKGLIST="..." lines, and this installer has none.
+    apt-get purge -y fonts-nanum fonts-ipafont fonts-ipafont-gothic fonts-ipafont-mincho
+
     # Stop systemd acquiring a terminal for this unit (#83).
     #
     # Upstream's unit carries TTYPath=/dev/tty7 with TTYReset/TTYVHangup/

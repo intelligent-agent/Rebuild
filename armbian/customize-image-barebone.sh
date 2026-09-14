@@ -21,6 +21,7 @@ ADD_PACKAGE_LIST="avahi-daemon"
 USER=printer
 HOMEDIR="/home/${USER}"
 
+source /tmp/overlay/install_components/trim_image.sh
 source /tmp/overlay/install_components/add_overlays.sh
 source /tmp/overlay/install_components/autohotspot.sh
 source /tmp/overlay/install_components/uboot_splash.sh
@@ -181,6 +182,7 @@ echo "🍰 Rebuild starting..."
 
 set -e
 
+trim_image
 prep_install
 add_overlays
 install_autohotspot
