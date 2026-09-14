@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# Must be set before any sourced build helper or package command runs.  The
+# finished image deliberately has no regional locale archives.
+export LANG=C.UTF-8 LC_ALL=C.UTF-8
+
 # arguments: $RELEASE $LINUXFAMILY $BOARD $BUILD_DESKTOP
 #
 # This is the image customization script
