@@ -22,6 +22,7 @@ USER=printer
 HOMEDIR="/home/${USER}"
 
 source /tmp/overlay/install_components/software_versions.sh
+source /tmp/overlay/install_components/trim_image.sh
 source /tmp/overlay/install_components/prep_install.sh
 source /tmp/overlay/install_components/klipper.sh
 source /tmp/overlay/install_components/moonraker.sh
@@ -44,6 +45,7 @@ echo "🍰 Rebuild starting..."
 
 set -e
 
+trim_image
 prepare_build
 record_software_versions
 install_klipper "fluidd"

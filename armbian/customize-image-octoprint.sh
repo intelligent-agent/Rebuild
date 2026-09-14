@@ -31,6 +31,7 @@ source /tmp/overlay/install_components/autohotspot.sh
 source /tmp/overlay/install_components/auto_disable_ssh.sh
 source /tmp/overlay/install_components/rebuild_first_run.sh
 source /tmp/overlay/install_components/ustreamer.sh
+source /tmp/overlay/install_components/trim_image.sh
 source /tmp/overlay/install_components/prep_install.sh
 source /tmp/overlay/install_components/add_overlays.sh
 source /tmp/overlay/install_components/uboot_splash.sh
@@ -42,6 +43,7 @@ set -e
 
 echo "🍰 Rebuild starting..."
 
+trim_image
 prepare_build
 record_software_versions
 install_klipper
