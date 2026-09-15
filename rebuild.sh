@@ -98,16 +98,10 @@ cd "$BUILD_DIR"
 # (md5 830df592edcb2ad7c9258cedc5974b98) to a cached one carrying Theme=spinner,
 # while the rootfs beside it correctly had Theme=recore and all 38 theme files
 # (#74). Left manual on purpose - it costs an initramfs rebuild every image.
-# CI can place every concurrent Armbian container in one host-level slice.
-# There is deliberately no CPU quota on that slice: one build gets all of the
-# machine, while two CPU-bound builds are fairly scheduled by Linux.  The slice
-# supplies memory-pressure protection for the group instead of permanently
-# splitting RAM between runners.
-DOCKER_ARGS="--cpus=${cores}"
-if [ -n "${REBUILD_CGROUP_PARENT:-}" ]; then
-    DOCKER_ARGS="${DOCKER_ARGS} --cgroup-parent=${REBUILD_CGROUP_PARENT}"
-fi
-DOCKER_EXTRA_ARGS="${DOCKER_ARGS}" ./compile.sh rebuild
+# The cgroup parent is added by the optional rebuild-cgroup Armbian extension.
+# DOCKER_EXTRA_ARGS arrives from the environment as one scalar array member,
+# so it must contain exactly one Docker argument here.
+DOCKER_EXTRA_ARGS="--cpus=${cores}" ./compile.sh rebuild
 IMG=$(ls -1 output/images/ | grep "img.xz$")
 
 mv "$BUILD_DIR"/output/images/"$IMG" "${IMG_DIR}/${NAME}.img.xz"

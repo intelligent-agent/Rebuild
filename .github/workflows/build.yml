@@ -46,6 +46,7 @@ env:
   # It has no CPU quota, so an idle second runner costs nothing; MemoryHigh
   # keeps two simultaneous image builds from pushing the host into OOM.
   REBUILD_CGROUP_PARENT: rebuild-build.slice
+  ENABLE_EXTENSIONS: rebuild-cgroup
 
 jobs:
   build-barebone:
