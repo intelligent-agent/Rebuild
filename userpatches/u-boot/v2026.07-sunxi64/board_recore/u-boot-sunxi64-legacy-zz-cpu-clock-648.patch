@@ -1,0 +1,50 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Elias Bakken <elias@iagent.no>
+Date: Tue, 16 Sep 2026 01:05:00 +0200
+Subject: [PATCH] sunxi: recore: clock the SPL's CPU to 648 MHz, not 816
+
+Reflash #88 (USB reads wedging in u-boot) and Rebuild #85 (eMMC -110)
+both follow from the frequency the SPL picks for the firmware phase.
+
+sunxi_board_init() only clocks the CPU up "if we are reasonably assured
+it's being powered with suitable core voltage" - it checks power_failed,
+which the PMIC code sets. Recore builds with SUNXI_NO_PMIC, so nothing
+ever sets the CPU rail and nothing can fail: power_failed stays 0 and the
+SPL clocks to CONFIG_SYS_CLK_FREQ, 816 MHz by default on sun50i,
+whatever the rail happens to be at. Measured on the bench board, the
+AXP803 comes up with DCDC2/DCDC3 (paralleled, vdd-cpux) at 1.10-1.12 V -
+exactly the A64 OPP minimum for 816 MHz, and on a warm reboot it is
+whatever Linux last left there.
+
+Measured on A8 s/n 0498, the board that reproduces #88 readily, counting
+EHCI timeouts and uInitrd loads per boot from the serial capture:
+
+  816 MHz (stock)      17 boots, 9 with EHCI timeouts, 2 of 3 USB boots
+                       failed to load uInitrd, 1 dead in the SPL on -110
+  816 MHz @ 1.20 V     fails the same way, so this is not rail margin:
+                       the SPL was patched to set DCDC2/3 to 1.20 V and
+                       the very next USB boot lost uInitrd
+  648 MHz              20/20 USB boots clean, 0 timeouts, uInitrd in
+                       2178-2180 ms every time
+  408 MHz              31 boots clean, 0 timeouts
+
+This only affects the firmware phase. Linux reprograms PLL1 from its own
+OPP table with the matching voltage, so the board still runs at full
+speed; it costs about 0.3 s in the SPL and u-boot.
+
+648 MHz is a documented A64 OPP point (1.04 V), so it is in spec even at
+the power-on rail voltage, which 816 MHz is not.
+---
+ configs/recore_defconfig | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/configs/recore_defconfig b/configs/recore_defconfig
+--- a/configs/recore_defconfig
++++ b/configs/recore_defconfig
+@@ -33,3 +33,4 @@ CONFIG_USE_PREBOOT=y
+ CONFIG_PREBOOT="mw.l 0x01f01400 0x00020102; usb reset; run bootcmd_usb0"
+ CONFIG_CMD_BMP=y
+ CONFIG_BOOTCOMMAND="run distro_bootcmd; setenv stdout serial,vidconsole; echo; echo 'BOOT FAILED: nothing to boot from'; echo 'The eMMC did not answer. Connect the serial header for detail.'"
++CONFIG_SYS_CLK_FREQ=648000000
+--
+Created with Armbian build tools https://github.com/armbian/build
