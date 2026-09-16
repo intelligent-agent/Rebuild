@@ -24,23 +24,43 @@
 # is from DHCP: NetworkManager's ipv4.routing-rules needs the source written
 # into the profile, which is not known until the lease arrives. This runs on
 # every up and lease change, so it follows the address.
+#
+# Nothing here calls nmcli, and that is deliberate. Dispatcher scripts run
+# synchronously while NetworkManager waits for them, so a script that asks NM a
+# question through nmcli can deadlock against the daemon that is blocked on it.
+# Everything needed is already in the environment NM provides (IP4_ADDRESS_0,
+# IP4_GATEWAY) or in sysfs.
 IFACE=$1
 ACTION=$2
 TABLE=100
 
 [ -n "$IFACE" ] || exit 0
-[ "$(nmcli -g GENERAL.TYPE device show "$IFACE" 2>/dev/null)" = wifi ] || exit 0
+# Wireless or not, asked of the kernel rather than of NetworkManager.
+[ -e "/sys/class/net/$IFACE/phy80211" ] || exit 0
 
 rules_flush() {
     # Delete by selector, repeatedly: a rule can be left behind by a lease that
     # changed address, and `ip rule del` removes one match at a time.
-    while ip rule del table "$TABLE" 2>/dev/null; do :; done
+    #
+    # BOUNDED on purpose. NetworkManager runs dispatcher scripts synchronously
+    # and waits for them, so an unbounded `while ip rule del ...` here is a way
+    # to hang the daemon if the delete ever keeps reporting success. Ten is far
+    # more rules than this table can accumulate - one per lease, cleared on
+    # every down - and stopping early is harmless where hanging NM is not.
+    local i
+    for i in $(seq 10); do
+        ip rule del table "$TABLE" 2>/dev/null || break
+    done
     ip route flush table "$TABLE" 2>/dev/null || true
 }
 
 case "$ACTION" in
     up | dhcp4-change)
-        addr=$(nmcli -g IP4.ADDRESS device show "$IFACE" 2>/dev/null | head -1)
+        # IP4_ADDRESS_0 is "<addr>/<prefix> <gateway>", set by NM for this
+        # action. Falling back to the kernel covers a dispatcher invocation
+        # that arrives without it.
+        addr=${IP4_ADDRESS_0%% *}
+        [ -n "$addr" ] || addr=$(ip -4 -o addr show dev "$IFACE" | awk '{print $4; exit}')
         [ -n "$addr" ] || exit 0
         ip=${addr%%/*}
         # Only when something else already carries a default route, which is
@@ -49,7 +69,7 @@ case "$ACTION" in
         other=$(ip -4 route show default | grep -v "dev $IFACE" | head -1)
         [ -n "$other" ] || exit 0
 
-        gw=$(ip -4 route show default dev "$IFACE" | awk '{print $3; exit}')
+        gw=${IP4_GATEWAY:-$(ip -4 route show default dev "$IFACE" | awk '{print $3; exit}')}
         net=$(ip -4 route show dev "$IFACE" scope link | awk '{print $1; exit}')
         rules_flush
         [ -n "$net" ] && ip route add "$net" dev "$IFACE" src "$ip" table "$TABLE"
