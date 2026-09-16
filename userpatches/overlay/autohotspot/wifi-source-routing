@@ -1,0 +1,63 @@
+#!/bin/bash
+# NetworkManager dispatcher: keep replies from the Wi-Fi address on Wi-Fi.
+#
+# A board with Ethernet AND a Wi-Fi dongle usually gets both addresses from the
+# same DHCP server, on one subnet. Linux then picks the egress by route metric,
+# and NetworkManager gives Ethernet the lower one, so every reply to traffic
+# addressed to the WI-FI address leaves over the CABLE:
+#
+#   $ ip route get 192.168.32.125 from 192.168.32.173
+#   192.168.32.125 from 192.168.32.173 dev end0        <-- Ethernet
+#
+# The board answers, so ping works and the address looks healthy. TCP is what
+# suffers: the station never transmits on the air, and the path drops packets
+# in bursts lasting minutes. Measured on the CI rig, 2026-09-16: 4 of 11
+# wifi-login checks failed with "0/3 logins" while ping stayed at 4ms
+# throughout, and the board's own stack showed 659 retransmits in 9993 segments
+# (6.6%). Only the two dual-homed boards ever failed; the Wi-Fi-only board and
+# the Ethernet-only boards never did.
+#
+# A policy rule fixes it: traffic sourced from the Wi-Fi address looks up a
+# table whose routes go out the Wi-Fi device, so the path is symmetric.
+#
+# Done from a dispatcher rather than in the Client profile because the address
+# is from DHCP: NetworkManager's ipv4.routing-rules needs the source written
+# into the profile, which is not known until the lease arrives. This runs on
+# every up and lease change, so it follows the address.
+IFACE=$1
+ACTION=$2
+TABLE=100
+
+[ -n "$IFACE" ] || exit 0
+[ "$(nmcli -g GENERAL.TYPE device show "$IFACE" 2>/dev/null)" = wifi ] || exit 0
+
+rules_flush() {
+    # Delete by selector, repeatedly: a rule can be left behind by a lease that
+    # changed address, and `ip rule del` removes one match at a time.
+    while ip rule del table "$TABLE" 2>/dev/null; do :; done
+    ip route flush table "$TABLE" 2>/dev/null || true
+}
+
+case "$ACTION" in
+    up | dhcp4-change)
+        addr=$(nmcli -g IP4.ADDRESS device show "$IFACE" 2>/dev/null | head -1)
+        [ -n "$addr" ] || exit 0
+        ip=${addr%%/*}
+        # Only when something else already carries a default route, which is
+        # the dual-homed case this exists for. On a Wi-Fi-only board the main
+        # table is already correct and a second copy of it buys nothing.
+        other=$(ip -4 route show default | grep -v "dev $IFACE" | head -1)
+        [ -n "$other" ] || exit 0
+
+        gw=$(ip -4 route show default dev "$IFACE" | awk '{print $3; exit}')
+        net=$(ip -4 route show dev "$IFACE" scope link | awk '{print $1; exit}')
+        rules_flush
+        [ -n "$net" ] && ip route add "$net" dev "$IFACE" src "$ip" table "$TABLE"
+        [ -n "$gw" ] && ip route add default via "$gw" dev "$IFACE" table "$TABLE"
+        ip rule add from "$ip" lookup "$TABLE"
+        ;;
+    down)
+        rules_flush
+        ;;
+esac
+exit 0
