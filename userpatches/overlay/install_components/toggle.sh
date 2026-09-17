@@ -85,10 +85,11 @@ Restart=on-failure
 WantedBy=multi-user.target
 EOF
 
+    # Empty, but it has to exist: octoprint_toggle's local.cfg editor opens it
+    # r+. No [OctoPrint] section - toggle logs in through OctoPrint's autologin,
+    # and default.cfg already names the toggle user for the fallback.
     cat > /etc/toggle/local.cfg <<EOF
-[OctoPrint]
-user = toggle
-authentication =
+# Local overrides for toggle, e.g. [Screen] width and height.
 EOF
 
     chown -R ${USER}:${USER} ${HOMEDIR}/toggle
