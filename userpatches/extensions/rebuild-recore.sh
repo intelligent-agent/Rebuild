@@ -23,3 +23,8 @@ function extension_finish_config__rebuild_no_armbian_plymouth() {
     display_alert "Use Rebuild's Plymouth setup, not Armbian's" "rebuild" "info"
     declare -g PLYMOUTH=no
 }
+
+function post_family_config__rebuild_boot_partition() {
+    display_alert "Separate ext4 /boot partition, as Reflash expects" "rebuild" "info"
+    declare -g BOOTFS_TYPE="ext4"
+}

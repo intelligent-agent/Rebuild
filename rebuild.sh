@@ -61,7 +61,7 @@ cd $BUILD_DIR
 # Test build: Rebuild's Armbian pin (23ca24aec) plus the Recore changes
 # planned for upstream, from the fork's recore-upstream-test branch.
 ARMBIAN_FORK="https://github.com/eliasbakken/build"
-ARMBIAN_REF="6030643fca535ff8c7f95f0fef812d33fc4273a2"
+ARMBIAN_REF="3644770ead3d87f19e02ab2305464a928f554b86"
 git fetch --tags --prune
 git fetch "$ARMBIAN_FORK" recore-upstream-test
 git reset --hard
