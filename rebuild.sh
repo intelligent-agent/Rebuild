@@ -58,10 +58,12 @@ TAG=${REBUILD_VERSION:-$(git describe --always --tags)}
 NAME="rebuild-${VERSION}-${TAG}"
 
 cd $BUILD_DIR
-ARMBIAN_REF="23ca24aec" # head of armbian's v26.08 branch, 2026-08-25 (26.8.3 is the
-                       # released stable). A sha, not the branch name: rebuild.sh checks
-                       # out ARMBIAN_REF, and a branch moves under us as fixes land.
+# Test build: Rebuild's Armbian pin (23ca24aec) plus the Recore changes
+# planned for upstream, from the fork's recore-upstream-test branch.
+ARMBIAN_FORK="https://github.com/eliasbakken/build"
+ARMBIAN_REF="6030643fca535ff8c7f95f0fef812d33fc4273a2"
 git fetch --tags --prune
+git fetch "$ARMBIAN_FORK" recore-upstream-test
 git reset --hard
 git checkout "$ARMBIAN_REF"
 rm -rf "userpatches"
@@ -69,7 +71,6 @@ rm -rf "userpatches"
 cd "$ROOT_DIR"
 cp -r "userpatches" "${BUILD_DIR}"
 cp armbian/customize-image-"${VERSION}".sh "${BUILD_DIR}"/userpatches/customize-image.sh
-cp armbian/recore.csc "${BUILD_DIR}"/config/boards
 # NOTE: Armbian's patch/u-boot/u-boot-sunxi/allwinner-boot-splash.patch used to
 # be deleted here (since 1c0c889, Jun 2023, "Patch is not overrwritten"). It is
 # left in place now and adapted to instead - see

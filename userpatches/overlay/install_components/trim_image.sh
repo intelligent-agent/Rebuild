@@ -22,6 +22,14 @@ EOF
 SetEnv LANG=C.UTF-8 LC_ALL=C.UTF-8
 EOF
 
+    # Recore has no Unisoc UWE5622. Its modules come with the shared sunxi64
+    # kernel and log an error on every boot when they load.
+    cat > /etc/modprobe.d/rebuild-no-unisoc.conf <<'EOF2'
+install uwe5622_bsp_sdio /bin/false
+install sprdwl_ng /bin/false
+install sprdbt_tty /bin/false
+EOF2
+
     # srcpkgcache.bin (~46 MB) indexes source packages for `apt source`, which
     # nothing on a printer runs. pkgcache.bin is left alone: apt needs it, and
     # it is regenerated on the first apt run anyway.
