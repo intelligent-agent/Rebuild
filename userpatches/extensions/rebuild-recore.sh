@@ -6,7 +6,7 @@ function post_family_config__rebuild_pin_kernel() {
     display_alert "Pin the kernel to a known-good point release" "rebuild" "info"
     declare -g KERNEL_MAJOR_MINOR="6.18"
     declare -g KERNELPATCHDIR="archive/sunxi-6.18"
-    declare -g KERNELBRANCH="tag:v6.18.50"
+    declare -g KERNELBRANCH="tag:v6.18.54"
 }
 
 function format_partitions__rebuild_boot_ro() {
@@ -27,4 +27,34 @@ function extension_finish_config__rebuild_no_armbian_plymouth() {
 function post_family_config__rebuild_boot_partition() {
     display_alert "Separate ext4 /boot partition, as Reflash expects" "rebuild" "info"
     declare -g BOOTFS_TYPE="ext4"
+}
+
+# Until armbian/build#10853 is merged, carried here together with the U-Boot and
+# TF-A patches in armbian/patch/u-boot/v2026.07-sunxi64/board_recore (copied
+# over Armbian's by rebuild.sh) and userpatches/atf/atf-sunxi64/board_recore;
+# drop all three then.
+#
+# Runs after recore.csc's post_family_config__shrink_atf, which still pins
+# TF-A v2.8.0 in SRAM.
+function post_family_config__900_rebuild_bl31_in_dram() {
+    display_alert "Put BL31 in DRAM to free SRAM A2 for the AR100" "rebuild" "info"
+    declare -g ATFBRANCH="tag:lts-v2.12.9"
+    unset ATF_SKIP_LDFLAGS_WL
+    declare -g ATF_TARGET_MAP="PLAT=$ATF_PLAT DEBUG=0 SUNXI_PSCI_USE_SCPI=0 SUNXI_BL31_IN_DRAM=1 SEPARATE_NOBITS_REGION=0 bl31;;build/$ATF_PLAT/release/bl31.bin"
+}
+
+# Until the sunxi64 kernel configs enable them upstream. simpledrm has to be
+# built in: as a module it loads after the kernel turns off unused clocks, and
+# the panel loses U-Boot's framebuffer for about 0.6 s.
+#
+# The hook can be called more than once and not always with a .config in place;
+# either way it has to contribute to the config hash, or the kernel cache key
+# stops matching the config actually built.
+function custom_kernel_config__rebuild_simpledrm_and_fbcon_rotation() {
+    if [[ -f .config ]]; then
+        kernel_config_set_y "CONFIG_DRM_SIMPLEDRM"
+        kernel_config_set_y "CONFIG_FRAMEBUFFER_CONSOLE_ROTATION"
+    else
+        kernel_config_modifying_hashes+=("CONFIG_DRM_SIMPLEDRM=y" "CONFIG_FRAMEBUFFER_CONSOLE_ROTATION=y")
+    fi
 }

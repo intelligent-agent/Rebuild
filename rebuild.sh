@@ -58,14 +58,19 @@ TAG=${REBUILD_VERSION:-$(git describe --always --tags)}
 NAME="rebuild-${VERSION}-${TAG}"
 
 cd $BUILD_DIR
-# Test build: Rebuild's Armbian pin (23ca24aec) plus the Recore changes
-# planned for upstream, from the fork's recore-upstream-test branch.
-ARMBIAN_FORK="https://github.com/eliasbakken/build"
-ARMBIAN_REF="3644770ead3d87f19e02ab2305464a928f554b86"
+ARMBIAN_REF="6125ad65a2996a5dc8c1fc48ec5fe58ac4706b59"
 git fetch --tags --prune
-git fetch "$ARMBIAN_FORK" recore-upstream-test
 git reset --hard
 git checkout "$ARMBIAN_REF"
+# armbian/build#10853 (U-Boot) is not merged yet. Copy its patches over
+# Armbian's rather than through userpatches: the patch tool keys patches by
+# file name and lets Armbian's own file win over a userpatch of the same name,
+# so a userpatch 0001 was silently replaced by the older one.
+# `git reset --hard` restores the files Armbian tracks but keeps the ones this
+# adds, so clean patch/ first: leftovers from an earlier build in the same tree
+# would otherwise be applied twice.
+git clean -fdq -- patch/
+cp -r "${ROOT_DIR}/armbian/patch/." patch/
 rm -rf "userpatches"
 
 cd "$ROOT_DIR"
