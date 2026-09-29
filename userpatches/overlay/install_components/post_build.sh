@@ -218,4 +218,11 @@ EOF
 [Manager]
 RebootWatchdogSec=15s
 EOF
+
+    # Last, so nothing after it runs apt. Otherwise the image ships the
+    # package indexes and .deb cache from build day (#100): tens of MB, and
+    # an `apt install` on the board before any `apt update` would resolve
+    # against stale lists. apt rebuilds pkgcache.bin on its next run.
+    apt-get clean
+    rm -rf /var/lib/apt/lists/*
 }
