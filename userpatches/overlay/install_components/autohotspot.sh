@@ -14,7 +14,7 @@ install_autohotspot() {
     install -m 755 -o root -g root /tmp/overlay/autohotspot/wifi-source-routing \
         /etc/NetworkManager/dispatcher.d/90-wifi-source-routing
 
-    apt install -y dnsmasq-base
+    apt-get install -y dnsmasq-base
 
     systemctl enable autohotspot.service
 }

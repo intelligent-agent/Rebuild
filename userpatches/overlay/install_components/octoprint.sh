@@ -3,7 +3,7 @@
 install_octoprint(){
 	echo "🍰 install OctoPrint"
 	cd ${HOMEDIR}
-	apt install -y python3 python3-pip python3-dev python3-setuptools python3-venv git libyaml-dev build-essential libffi-dev libssl-dev nftables python3-libxml2
+	apt-get install -y python3 python3-pip python3-dev python3-setuptools python3-venv git libyaml-dev build-essential libffi-dev libssl-dev nftables python3-libxml2
 	mkdir OctoPrint
 	cd OctoPrint
 	python3 -m venv venv
@@ -53,7 +53,7 @@ install_octoprint(){
 
 install_octodash() {
 	cd ${HOMEDIR}
-	apt install -y libgtk-3-0 libnotify4 libnss3 libxss1 libxtst6 xdg-utils libatspi2.0-0 \
+	apt-get install -y libgtk-3-0 libnotify4 libnss3 libxss1 libxtst6 xdg-utils libatspi2.0-0 \
 	libuuid1 libappindicator3-1 libsecret-1-0 xserver-xorg ratpoison x11-xserver-utils xinit \
 	libgtk-3-0 bc desktop-file-utils libavahi-compat-libdnssd1 libpam0g-dev libx11-dev
 	wget "https://github.com/UnchartedBull/OctoDash/releases/download/${OCTODASH_VERSION}/octodash_${OCTODASH_VERSION#v}_arm64.deb"

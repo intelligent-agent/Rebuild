@@ -3,8 +3,8 @@
 prepare_build() {
     echo "🍰 Prepare build"
 
-    apt update
-    apt install -y $PREP_PACKAGE_LIST --no-install-suggests --no-install-recommends
+    apt-get update
+    apt-get install -y $PREP_PACKAGE_LIST --no-install-suggests --no-install-recommends
 
     # Ensure the debian user exists
     useradd -m -d /home/debian -s /bin/bash -G tty,dialout,sudo debian

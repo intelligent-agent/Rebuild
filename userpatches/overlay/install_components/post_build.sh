@@ -3,8 +3,8 @@
 post_build() {
     echo "🍰 Post build"
 
-    apt update
-    apt install -y "$ADD_PACKAGE_LIST" --no-install-suggests --no-install-recommends
+    apt-get update
+    apt-get install -y "$ADD_PACKAGE_LIST" --no-install-suggests --no-install-recommends
 
     # Disable socket activation of ssh
     systemctl disable ssh.socket

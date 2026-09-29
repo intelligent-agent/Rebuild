@@ -65,7 +65,7 @@ install_klipper(){
     PKGLIST="${PKGLIST} python3-matplotlib"
 
     # Install desired packages
-    apt install --yes ${PKGLIST} --no-install-suggests 
+    apt-get install --yes ${PKGLIST} --no-install-suggests 
     
     python3 -m venv "${PYTHONDIR}"
 
