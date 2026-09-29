@@ -33,7 +33,11 @@ EOF
     mkdir -p /etc/ssh/sshd_config.d
     cat <<'EOF' > /etc/ssh/sshd_config.d/10-recore-rootlogin.conf
 PermitRootLogin prohibit-password
+DenyUsers printer
 EOF
+    # printer is a service account; useradd leaves it without a password, and
+    # this keeps it that way even if something set one during the build.
+    passwd -l printer
 
     strip_machine_identity
 

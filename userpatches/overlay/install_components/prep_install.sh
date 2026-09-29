@@ -10,15 +10,19 @@ prepare_build() {
     useradd -m -d /home/debian -s /bin/bash -G tty,dialout,sudo debian
     echo "debian ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/debian
 
-    # Add user printer, all top level software is installed to thios users home directory
-    useradd -m -d /home/printer -s /bin/bash -G tty,dialout,sudo,render,video printer
+    # Add user printer, all top level software is installed to this user's home
+    # directory. Klipper, Moonraker and KlipperScreen run as printer so that
+    # debian's password can be expired below: sudo refuses an expired account,
+    # and Moonraker restarts services through sudo. Not in the sudo group and
+    # no password: its only root access is the NOPASSWD service commands in
+    # /etc/sudoers.d/printer, and you reach it with `sudo -u printer -i`.
+    useradd -m -d /home/printer -s /bin/bash -G tty,dialout,render,video printer
 
     # Give user install permissions during install. This line will be removed after the build.
     echo "printer ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/printer
     
     # Set default passwords
     echo debian:temppwd | chpasswd
-    echo printer:temppwd | chpasswd
     echo root:temppwd | chpasswd
 
     # Force debian to change password
