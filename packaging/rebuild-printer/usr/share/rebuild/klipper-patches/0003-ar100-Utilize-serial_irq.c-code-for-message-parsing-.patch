@@ -1,7 +1,7 @@
-From 154a9ece74f49bd9369f0e0d803a29552fa82d2d Mon Sep 17 00:00:00 2001
+From 6fd02d169f3720543c56007b33d5be8e9955105b Mon Sep 17 00:00:00 2001
 From: Kevin O'Connor <kevin@koconnor.net>
 Date: Mon, 28 Sep 2026 22:06:15 -0400
-Subject: [PATCH 4/6] ar100: Utilize serial_irq.c code for message parsing and
+Subject: [PATCH 3/5] ar100: Utilize serial_irq.c code for message parsing and
  generation
 
 Utilize the generic code.  The previous code could possibly busy wait

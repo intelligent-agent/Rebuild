@@ -4,15 +4,16 @@ for the firmware builds and reverted afterwards, so Klipper itself stays a
 clean upstream checkout that Moonraker can update. They touch only MCU code
 (src/), so the host side needs none of them.
 
-  0001            Klipper3d/klipper#7386 - ar100: build with -O2 and fix
-                  the image size check (replaces two sed edits in klipper.sh)
-  0002-0005       KevinOConnor/klipper-dev work-ar100-20260928 - the
+  0001-0004       KevinOConnor/klipper-dev work-ar100-20260928 - the
                   timer_dispatch_many_polling() rework, ar100 on serial_irq.c,
                   and the same dispatch for the pru (supersedes #7388)
-  0006            ar100: select SERIAL and default SERIAL_BAUD to 1500000;
+  0005            ar100: select SERIAL and default SERIAL_BAUD to 1500000;
                   without it Kevin's branch has a baud rate of 0 and clock
                   sync fails with NaN
 
-Generated with `git format-patch` against Klipper v0.13.0-777-g7bc4d094
+Already merged, and dropped here: Klipper3d/klipper#7386 (ar100 at -O2 with a
+correct image size check), in v0.13.0-778-g738441794.
+
+Generated with `git format-patch` against Klipper v0.13.0-778-g738441794
 (KLIPPER_VERSION in software_versions.sh). Drop each one once it is merged
 and KLIPPER_VERSION has moved past it.

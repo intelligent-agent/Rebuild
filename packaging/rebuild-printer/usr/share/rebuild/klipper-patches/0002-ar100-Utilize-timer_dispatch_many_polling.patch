@@ -1,7 +1,7 @@
-From 8b7b46e31cce51c91f1399630455b49125d144b3 Mon Sep 17 00:00:00 2001
+From ee1f1ea5b11cb9b21a87f64b6aff8bf33f1cfe90 Mon Sep 17 00:00:00 2001
 From: Kevin O'Connor <kevin@koconnor.net>
 Date: Mon, 28 Sep 2026 21:42:36 -0400
-Subject: [PATCH 3/6] ar100: Utilize timer_dispatch_many_polling()
+Subject: [PATCH 2/5] ar100: Utilize timer_dispatch_many_polling()
 
 Convert to timer_dispatch_many_polling() and check for serial activity
 in the dispatch loop.

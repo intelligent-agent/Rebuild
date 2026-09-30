@@ -1,7 +1,7 @@
-From 0990264c85f3b0063fd75261bc1d37e7c81975da Mon Sep 17 00:00:00 2001
+From 1bc9c5242c1d66e9979b0637cd51d8fcfd750d2e Mon Sep 17 00:00:00 2001
 From: Kevin O'Connor <kevin@koconnor.net>
 Date: Mon, 28 Sep 2026 21:30:21 -0400
-Subject: [PATCH 2/6] timer_irq: Add new timer_dispatch_many_polling()
+Subject: [PATCH 1/5] timer_irq: Add new timer_dispatch_many_polling()
 
 Add a new variant of timer_dispatch_many() for chips that do not
 support hardware irqs, or do not support hardware irqs being enabled
