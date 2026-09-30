@@ -1,17 +1,37 @@
 #!/bin/bash
+set -e
 
 revision="$1"
+ENV=/boot/armbianEnv.txt
+DTB=allwinner/sun50i-a64-recore-$revision.dtb
 
 case $revision in
     a3|a4|a5|a6|a7|a8)
-      echo "Using recore revision ${revision}"
-      mount -o remount,rw /dev/mmcblk2p1 /boot
-      cd /boot/dtb/allwinner/
-      ln -sf sun50i-a64-recore-$revision.dtb sun50i-a64-recore.dtb
-      mount -o remount,ro /dev/mmcblk2p1 /boot
       ;;
     *)
       echo "usage: $0 a3|a4|a5|a6|a7|a8"
       exit 1
       ;;
 esac
+
+echo "Using recore revision ${revision}"
+
+# The revision is selected with fdtfile= in armbianEnv.txt, which the boot
+# script imports over U-Boot's default. It used to be a symlink named
+# sun50i-a64-recore.dtb, but that path belongs to the linux-dtb package: every
+# kernel upgrade put the generic Recore-all tree back, and an A6 lost its
+# STM32 UART with it.
+remounted=
+if findmnt -n -o OPTIONS /boot | grep -qE '(^|,)ro(,|$)'; then
+    mount -o remount,rw /boot
+    remounted=1
+fi
+sed -i '/^fdtfile=/d' "$ENV"
+echo "fdtfile=$DTB" >> "$ENV"
+if [ -n "$remounted" ]; then
+    mount -o remount,ro /boot
+fi
+
+if [ ! -f "/boot/dtb/$DTB" ]; then
+    echo "warning: /boot/dtb/$DTB does not exist; the board will boot the generic tree" >&2
+fi

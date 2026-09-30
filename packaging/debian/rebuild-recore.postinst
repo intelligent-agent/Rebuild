@@ -54,6 +54,23 @@ if [ "$1" = configure ]; then
     rm -rf /lib/firmware/qcom /usr/lib/firmware/qcom
 fi
 
+# Boards set up before set-recore-revision wrote fdtfile= select their tree
+# with a symlink the next linux-dtb upgrade will overwrite. Move them over
+# while the symlink still names the revision; if an upgrade already replaced
+# it, ask the eMMC. Only on a running board - not in the image build chroot;
+# Reflash writes the line when it flashes an image.
+if [ "$1" = configure ] && [ -d /run/systemd/system ] && [ -f /boot/armbianEnv.txt ] &&
+   ! grep -q '^fdtfile=' /boot/armbianEnv.txt; then
+    rev=$(readlink /boot/dtb/allwinner/sun50i-a64-recore.dtb 2>/dev/null |
+          sed -n 's/^sun50i-a64-recore-\(a[0-9]\)\.dtb$/\1/p')
+    if [ -z "$rev" ] && [ -b /dev/mmcblk2boot0 ]; then
+        rev=$(get-recore-revision 2>/dev/null) || rev=
+    fi
+    if [ -n "$rev" ]; then
+        set-recore-revision "$rev" || true
+    fi
+fi
+
 if [ "$1" = configure ] && [ -d /run/systemd/system ]; then
     systemctl daemon-reload || true
     udevadm control --reload || true
