@@ -1,0 +1,20 @@
+#!/bin/sh
+set -e
+
+# These two keep their path in /etc, but older images wrote them by hand, so
+# on a board upgraded in place dpkg would meet a file it does not own that
+# differs from the packaged one, and stop to ask - with nobody there when the
+# upgrade runs from Fluidd. Set them aside before unpacking; the packaged
+# versions carry the same settings.
+if [ "$1" = install ]; then
+    for f in /etc/ssh/sshd_config.d/10-recore-rootlogin.conf /etc/apt/apt.conf.d/100update; do
+        if [ -e "$f" ] && [ ! -L "$f" ]; then
+            mkdir -p "/var/backups/rebuild-legacy$(dirname "$f")"
+            mv "$f" "/var/backups/rebuild-legacy$f"
+        fi
+    done
+fi
+
+#DEBHELPER#
+
+exit 0

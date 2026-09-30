@@ -1,0 +1,9 @@
+# Firmware no Recore can load. armbian-firmware ships /lib/firmware/qcom
+# (~300 MB): GPU and DSP firmware for Qualcomm SoCs, useless on an A64. The
+# USB Wi-Fi and Bluetooth firmware a Recore can use lives elsewhere
+# (ath9k_htc, rtw88, rtl*, mediatek, brcm) and is untouched.
+#
+# path-exclude only stops dpkg writing these files from now on; the package's
+# postinst removes the ones already on disk.
+path-exclude=/lib/firmware/qcom/*
+path-exclude=/usr/lib/firmware/qcom/*

@@ -3,6 +3,13 @@
 prepare_build() {
     echo "🍰 Prepare build"
 
+    # The chroot shares the build container's hostname (a random container
+    # id), which the image's /etc/hosts cannot resolve, so every sudo in the
+    # Klipper, Moonraker and KlipperScreen installers printed "sudo: unable
+    # to resolve host ...". Harmless, but 30-odd lines of noise per build.
+    # Build-only: post_build takes the line out again.
+    echo "127.0.1.1 $(hostname) # rebuild-build-only" >> /etc/hosts
+
     apt-get update
     apt-get install -y $PREP_PACKAGE_LIST --no-install-suggests --no-install-recommends
 

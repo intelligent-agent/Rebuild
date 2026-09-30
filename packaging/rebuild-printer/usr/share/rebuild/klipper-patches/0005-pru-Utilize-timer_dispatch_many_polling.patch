@@ -1,0 +1,52 @@
+From c490d61a196b2fbe7b216d63aef70bbe8e4171be Mon Sep 17 00:00:00 2001
+From: Kevin O'Connor <kevin@koconnor.net>
+Date: Mon, 28 Sep 2026 22:18:49 -0400
+Subject: [PATCH 5/6] pru: Utilize timer_dispatch_many_polling()
+
+Convert to timer_dispatch_many_polling() and check for command
+activity in the dispatch loop.
+
+Signed-off-by: Kevin O'Connor <kevin@koconnor.net>
+(cherry picked from commit 59c8994c1277d672244cf0062f6a09d2090e7fb0)
+---
+ src/pru/main.c | 17 ++++++++++++++++-
+ 1 file changed, 16 insertions(+), 1 deletion(-)
+
+diff --git a/src/pru/main.c b/src/pru/main.c
+index 2127479f4..0d7e36925 100644
+--- a/src/pru/main.c
++++ b/src/pru/main.c
+@@ -78,6 +78,21 @@ timer_kick(void)
+     PRU_INTC.SECR0 = 1 << IEP_EVENT;
+ }
+ 
++void
++timer_dispatch_irq_poll(void)
++{
++}
++
++void
++timer_dispatch_task_poll(void)
++{
++    uint32_t secr0 = PRU_INTC.SECR0;
++    if (secr0 & (1 << KICK_PRU1_EVENT)) {
++        PRU_INTC.SECR0 = 1 << KICK_PRU1_EVENT;
++        sched_wake_tasks();
++    }
++}
++
+ static uint32_t in_timer_dispatch;
+ 
+ static void
+@@ -91,7 +106,7 @@ _irq_poll(void)
+     if (secr0 & (1 << IEP_EVENT)) {
+         CT_IEP.TMR_CMP_STS = 0xff;
+         in_timer_dispatch = 1;
+-        uint32_t next = timer_dispatch_many();
++        uint32_t next = timer_dispatch_many_polling();
+         timer_set(next);
+         PRU_INTC.SECR0 = 1 << IEP_EVENT;
+         in_timer_dispatch = 0;
+-- 
+2.47.3
+

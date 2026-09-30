@@ -1,0 +1,24 @@
+# Bring the gadget up when the USB device controller appears. This is the
+# trigger that works on every revision: only the A8 device tree declares a
+# Type-C controller (fcs,fusb302 / usb-c-connector / usb-role-switch), so on
+# A5, A6 and A7 there is no usb_role class device at all, the role rule below
+# could never fire, and the board simply never enumerated - nothing in lsusb
+# on the host (#75). Reflash hit the same thing and moved to this trigger.
+SUBSYSTEM=="udc", ACTION=="add", TAG+="systemd", ENV{SYSTEMD_WANTS}="usb-gadget-setup.service"
+
+# Kept alongside the UDC rule rather than replaced by it. On A8 the role switch
+# tears the gadget down when the cable is unplugged or flipped to host, and
+# only this rule can bring it back: the UDC does not reappear, it is the
+# controller itself and is present regardless of cable state. Starting an
+# already-active oneshot with RemainAfterExit is a no-op, so the two triggers
+# do not fight.
+SUBSYSTEM=="usb_role", ATTR{role}=="device", RUN+="/usr/bin/systemctl start usb-gadget-setup.service"
+
+# Tear down the gadget if the cable is removed or switched to host. These are
+# also role-based and so also A8-only; on A5-A7 they never fire and the gadget
+# stays up, which is what Reflash does on every revision.
+SUBSYSTEM=="usb_role", ATTR{role}=="none", RUN+="/usr/bin/systemctl stop usb-gadget-setup.service"
+SUBSYSTEM=="usb_role", ATTR{role}=="host", RUN+="/usr/bin/systemctl stop usb-gadget-setup.service"
+
+# Start the login prompt only when the serial node appears
+KERNEL=="ttyGS0", ACTION=="add", TAG+="systemd", ENV{SYSTEMD_WANTS}="serial-getty@ttyGS0.service"

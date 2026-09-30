@@ -26,6 +26,7 @@ USER=printer
 HOMEDIR="/home/${USER}"
 
 source /tmp/overlay/install_components/software_versions.sh
+source /tmp/overlay/install_components/rebuild_packages.sh
 source /tmp/overlay/install_components/trim_image.sh
 source /tmp/overlay/install_components/prep_install.sh
 source /tmp/overlay/install_components/klipper.sh
@@ -34,13 +35,9 @@ source /tmp/overlay/install_components/nginx.sh
 source /tmp/overlay/install_components/mainsail.sh
 source /tmp/overlay/install_components/klipperscreen.sh
 source /tmp/overlay/install_components/plymouth.sh
-source /tmp/overlay/install_components/recore_binaries.sh
 source /tmp/overlay/install_components/ustreamer.sh
-source /tmp/overlay/install_components/autohotspot.sh
-source /tmp/overlay/install_components/auto_disable_ssh.sh
 source /tmp/overlay/install_components/auto_switch_role.sh
 source /tmp/overlay/install_components/rebuild_first_run.sh
-source /tmp/overlay/install_components/usb_gadget_getty.sh
 source /tmp/overlay/install_components/machine_identity.sh
 source /tmp/overlay/install_components/post_build.sh
 source /tmp/overlay/install_components/add_overlays.sh
@@ -50,6 +47,7 @@ set -e
 echo "🍰 Rebuild starting..."
 trim_image
 prepare_build
+install_rebuild_packages rebuild-recore rebuild-printer
 record_software_versions
 install_klipper "mainsail"
 install_moonraker "mainsail"
@@ -58,9 +56,6 @@ install_mainsail
 install_klipperscreen
 install_plymouth
 install_ustreamer
-install_bins
-install_autohotspot
-install_auto_disable_ssh
 install_rebuild_first_run
 add_overlays
 install_uboot_splash

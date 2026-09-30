@@ -1,0 +1,29 @@
+# gcc-arm-none-eabi and libnewlib-arm-none-eabi ship prebuilt libraries for
+# 24 Arm targets. Klipper builds only for Cortex-M, always in Thumb mode, so
+# the Cortex-A/R variants and the ARM-mode libraries (~340 MB) are never
+# linked. Every M-profile variant stays - v6-m, v7-m, v7e-m, v8-m and v8.1-m,
+# with and without FPU - so any MCU Klipper supports can still be built on
+# the printer, with any Kconfig option (CAN, USB-CAN bridge, SPI, ...).
+#
+# path-exclude only stops dpkg writing these files from now on; the package's
+# postinst removes the ones already on disk.
+path-exclude=/usr/lib/gcc/arm-none-eabi/*/arm/*
+path-exclude=/usr/lib/arm-none-eabi/newlib/arm/*
+path-exclude=/usr/lib/gcc/arm-none-eabi/*/thumb/v7/*
+path-exclude=/usr/lib/gcc/arm-none-eabi/*/thumb/v7+fp/*
+path-exclude=/usr/lib/gcc/arm-none-eabi/*/thumb/v7-a/*
+path-exclude=/usr/lib/gcc/arm-none-eabi/*/thumb/v7-a+fp/*
+path-exclude=/usr/lib/gcc/arm-none-eabi/*/thumb/v7-a+simd/*
+path-exclude=/usr/lib/gcc/arm-none-eabi/*/thumb/v7ve+simd/*
+path-exclude=/usr/lib/gcc/arm-none-eabi/*/thumb/v7-r+fp.sp/*
+path-exclude=/usr/lib/gcc/arm-none-eabi/*/thumb/v8-a/*
+path-exclude=/usr/lib/gcc/arm-none-eabi/*/thumb/v8-a+simd/*
+path-exclude=/usr/lib/arm-none-eabi/newlib/thumb/v7/*
+path-exclude=/usr/lib/arm-none-eabi/newlib/thumb/v7+fp/*
+path-exclude=/usr/lib/arm-none-eabi/newlib/thumb/v7-a/*
+path-exclude=/usr/lib/arm-none-eabi/newlib/thumb/v7-a+fp/*
+path-exclude=/usr/lib/arm-none-eabi/newlib/thumb/v7-a+simd/*
+path-exclude=/usr/lib/arm-none-eabi/newlib/thumb/v7ve+simd/*
+path-exclude=/usr/lib/arm-none-eabi/newlib/thumb/v7-r+fp.sp/*
+path-exclude=/usr/lib/arm-none-eabi/newlib/thumb/v8-a/*
+path-exclude=/usr/lib/arm-none-eabi/newlib/thumb/v8-a+simd/*

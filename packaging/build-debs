@@ -1,0 +1,48 @@
+#!/bin/bash
+# Build the rebuild-recore and rebuild-printer packages.
+#
+#   packaging/build-debs OUTDIR [VERSION]
+#
+# VERSION is a Rebuild version as rebuild.sh names it (v1.1.0, v1.1.0-RC8,
+# v1.1.0-3-gf229e59) and defaults to `git describe`. Uses the host's debhelper
+# when it has one, otherwise a debian:trixie container - the CI runner has
+# docker but no debhelper.
+
+set -euo pipefail
+
+OUT=$(realpath -m "${1:?usage: build-debs OUTDIR [VERSION]}")
+VERSION=${2:-$(git -C "$(dirname "$0")" describe --tags --always)}
+SRC=$(cd "$(dirname "$0")" && pwd)
+
+# Debian versions must start with a digit, and must sort the way releases do:
+# an RC before its release (~), a later commit after its tag (+).
+debver=${VERSION#v}
+debver=$(sed -E 's/-(RC|rc)([0-9]+)/~rc\2/; s/-([0-9]+)-g([0-9a-f]+)$/+\1.g\2/' <<<"$debver")
+[[ $debver =~ ^[0-9] ]] || debver="0~$debver"
+
+mkdir -p "$OUT"
+WORK=$(mktemp -d)
+trap 'rm -rf "$WORK"' EXIT
+cp -a "$SRC" "$WORK/rebuild"
+rm -f "$WORK/rebuild/build-debs"
+cat > "$WORK/rebuild/debian/changelog" <<CL
+rebuild ($debver) trixie; urgency=medium
+
+  * Rebuild $VERSION.
+
+ -- Elias Bakken <elias@iagent.no>  $(date -R)
+CL
+
+# -d: dpkg-buildpackage insists on build-essential, which an arch-all package
+# of scripts does not need; debhelper, the one real build dependency, is
+# installed just before.
+build='cd /work/rebuild && dpkg-buildpackage -b -d -us -uc -tc >/work/build.log 2>&1 || { tail -40 /work/build.log; exit 1; }'
+if command -v dh >/dev/null; then
+    (cd "$WORK/rebuild" && dpkg-buildpackage -b -us -uc -tc >"$WORK/build.log" 2>&1) || { tail -40 "$WORK/build.log"; exit 1; }
+else
+    docker run --rm -v "$WORK:/work" debian:trixie sh -c "
+        export DEBIAN_FRONTEND=noninteractive && apt-get update -qq >/dev/null && apt-get install -y -qq --no-install-recommends debhelper >/dev/null &&
+        $build && chown -R $(id -u):$(id -g) /work"
+fi
+cp "$WORK"/*.deb "$OUT"/
+ls -1 "$OUT"/*"_${debver}_"*.deb

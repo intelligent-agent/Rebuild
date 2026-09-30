@@ -1,0 +1,26 @@
+Source: rebuild
+Section: misc
+Priority: optional
+Maintainer: Elias Bakken <elias@iagent.no>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.7.0
+Rules-Requires-Root: no
+Homepage: https://github.com/intelligent-agent/Rebuild
+
+Package: rebuild-recore
+Architecture: all
+Depends: ${misc:Depends}, dnsmasq-base, network-manager, udev
+Description: Recore board support for Rebuild images
+ Board identity tools (serial number, revision), the USB gadget serial
+ console, and the Wi-Fi hotspot fallback. Installed on every Rebuild
+ image, barebone included.
+
+Package: rebuild-printer
+Architecture: all
+Depends: ${misc:Depends}, rebuild-recore (= ${binary:Version}), gpiod,
+ plymouth, python3, stm32flash, usbutils
+Description: Printer layer for Rebuild images
+ Tools that flash the Recore's AR100, STM32 and RP2040 firmware, the
+ build configurations for that firmware, the first-boot service, SSH
+ auto-disable, the Recore boot splash, and the system settings the
+ fluidd, mainsail and octoprint images share.

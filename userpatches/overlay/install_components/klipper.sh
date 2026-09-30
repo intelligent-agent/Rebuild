@@ -25,21 +25,9 @@ install_klipper(){
     cp /tmp/overlay/klipper/recore_thermistor.py ${HOMEDIR}/klipper/klippy/extras/
     cp /tmp/overlay/klipper/tmc2209_a5.py ${HOMEDIR}/klipper/klippy/extras/
     cp /tmp/overlay/klipper/tmc2130_a5.py ${HOMEDIR}/klipper/klippy/extras/
-
-    cp /tmp/overlay/klipper/flash-stm32 /usr/local/bin
-    cp /tmp/overlay/klipper/flash-rp2040 /usr/local/bin
-    # Ships with flash-rp2040 because it exists solely to keep that script quiet:
-    # the RP2 bootloader presents a mass-storage interface we never use, and udev
-    # probing it produces I/O errors on every first boot (#94).
-    mkdir -p /etc/udev/rules.d
-    cp /tmp/overlay/klipper/55-rp2040-bootloader.rules /etc/udev/rules.d/
-    cp /tmp/overlay/klipper/flash-ar100.py /usr/local/bin
-    cp /tmp/overlay/klipper/set-ar100-clock.py /usr/local/bin
-    chmod +x /usr/local/bin/flash-ar100.py /usr/local/bin/set-ar100-clock.py /usr/local/bin/flash-rp2040
     mkdir -p /var/log/klipper_logs
     chown ${USER}:${USER} /var/log/klipper_logs
     mkdir -p /opt/firmware/
-    cp /tmp/overlay/klipper/bl31.bin /opt/firmware/
     chown -R ${USER}:${USER} klipper
     
     KLIPPER_USER=printer
@@ -61,8 +49,12 @@ install_klipper(){
     # succeeds and the image build does not.
     PKGLIST="${PKGLIST} libncurses-dev libusb-1.0-0-dev stm32flash pkg-config"
     PKGLIST="${PKGLIST} gcc-arm-none-eabi binutils-arm-none-eabi libnewlib-arm-none-eabi"
-    # In Trixie, use the system numpy for speed
-    PKGLIST="${PKGLIST} python3-matplotlib"
+    # No python3-matplotlib. Klipper never imports it: SHAPER_CALIBRATE needs
+    # only numpy, which is pip-installed into klippy-env below. matplotlib is
+    # for the optional graph scripts (scripts/calibrate_shaper.py and co.),
+    # and with the scipy/sympy it drags in it was 33 packages and 242 MB for
+    # an occasional chart. Graphs are drawn on a PC, or after
+    # `apt install python3-matplotlib` on the printer - see the release notes.
 
     # Install desired packages
     apt-get install --yes ${PKGLIST} --no-install-suggests 
@@ -92,32 +84,41 @@ PermissionsStartOnly=true
 ExecStartPre=/usr/bin/gpioset -c 1 -t0 197=0
 ExecStartPre=/usr/bin/gpioset -c 1 -t0 196=0
 ExecStartPre=/usr/bin/gpioget -c 1 -b pull-up 196
-ExecStartPre=/usr/local/bin/set-ar100-clock.py
-ExecStartPre=/usr/local/bin/flash-ar100.py /opt/firmware/ar100.bin
+ExecStartPre=/usr/bin/set-ar100-clock.py
+ExecStartPre=/usr/bin/flash-ar100.py /opt/firmware/ar100.bin
 ExecStart=${PYTHONDIR}/bin/python ${SRCDIR}/klippy/klippy.py ${KLIPPER_CONFIG} -l ${KLIPPER_LOG} -a ${KLIPPER_SOCKET}
 EOF
 # Use systemctl to enable the klipper systemd service script
     sudo systemctl enable klipper.service
     
     # Install AR100 toolchain
-    wget http://feeds.iagent.no/toolchains/or1k-elf-15.1.0-20260131.tar.xz -P /opt
+    # GCC 16.1.0 with the 2026-06 OpenRISC codegen fixes (64- and 16-bit
+    # shifts, branch placement), built from stffrdhrn/or1k-toolchain-build
+    # for aarch64, C only, stripped: 93 MB installed.
+    OR1K_TOOLCHAIN=or1k-elf-16.1.0-20260930.tar.xz
+    wget http://feeds.iagent.no/toolchains/${OR1K_TOOLCHAIN} -P /opt
     cd /opt
-    tar -xf /opt/or1k-elf-15.1.0-20260131.tar.xz
-    rm /opt/or1k-elf-15.1.0-20260131.tar.xz
+    tar -xf /opt/${OR1K_TOOLCHAIN}
+    rm /opt/${OR1K_TOOLCHAIN}
     export PATH=$PATH:/opt/or1k-elf/bin
     echo "export PATH=\$PATH:$PATH:/opt/or1k-elf/bin" >> ${HOMEDIR}/.bashrc
     echo "export PATH=\$PATH:$PATH:/opt/or1k-elf/bin" >> /home/debian/.bashrc
     
     # Compile AR100
-    cp /tmp/overlay/klipper/ar100.config ${HOMEDIR}/klipper/.config
     cd ${HOMEDIR}/klipper/
-    sed -i 's/CFLAGS.*+= -O3//' src/ar100/Makefile
-
-    sed -i 's|ASSERT(. <= (SRAM_A2_SIZE), "Klipper image is too large")|ASSERT(. <= (ORIGIN(SRAM_A2) + LENGTH(SRAM_A2)), "Klipper image is too large")|' src/ar100/ar100.ld
-
+    # The Klipper changes still waiting upstream - see the README there. For
+    # all four firmware builds; the git reset --hard after them takes them
+    # out of the checkout again.
+    git apply /usr/share/rebuild/klipper-patches/*.patch
+    cp /usr/share/rebuild/firmware/ar100.config ${HOMEDIR}/klipper/.config
     make olddefconfig
     make -j
     cp ${HOMEDIR}/klipper/out/ar100.bin /opt/firmware
+    # Each binary is kept with the exact .config it was built from - after
+    # olddefconfig, so Klipper's defaults for this version are filled in. It
+    # records how the shipped firmware was made, and it is what a rebuild after
+    # a Klipper update (#106) starts from.
+    cp ${HOMEDIR}/klipper/.config /opt/firmware/ar100.config
     # flash-ar100.py mmaps /opt/firmware/ar100.bin's target region as
     # Device memory (it's not in /proc/iomem), which requires aligned
     # accesses. Pad to a 16-byte boundary so the bulk write never ends
@@ -125,18 +126,20 @@ EOF
     truncate -s %16 /opt/firmware/ar100.bin
 
     # Compile STM32
-    cp /tmp/overlay/klipper/stm32f031-serial.config ${HOMEDIR}/klipper/.config
+    cp /usr/share/rebuild/firmware/stm32f031-serial.config ${HOMEDIR}/klipper/.config
     make clean
     make olddefconfig
     make -j
     cp ${HOMEDIR}/klipper/out/klipper.bin /opt/firmware/stm32.bin
+    cp ${HOMEDIR}/klipper/.config /opt/firmware/stm32.config
 
     # Compile STM32-32KB
-    cp /tmp/overlay/klipper/stm32f031-32KB-serial.config ${HOMEDIR}/klipper/.config
+    cp /usr/share/rebuild/firmware/stm32f031-32KB-serial.config ${HOMEDIR}/klipper/.config
     make clean
     make olddefconfig
     make -j
     cp ${HOMEDIR}/klipper/out/klipper.bin /opt/firmware/stm32-32KB.bin
+    cp ${HOMEDIR}/klipper/.config /opt/firmware/stm32-32KB.config
 
     # Compile RP2040 - ReTool A2, and Remote when it lands (#38).
     #
@@ -151,6 +154,10 @@ EOF
     make olddefconfig
     make -j
     cp ${HOMEDIR}/klipper/out/klipper.uf2 /opt/firmware/rp2040.uf2
+    cp ${HOMEDIR}/klipper/.config /opt/firmware/rp2040.config
+    # The Klipper revision all four were built from, so it can be told when
+    # the checkout has moved on and the binaries are stale (#106).
+    git -C ${HOMEDIR}/klipper describe --always --tags --long > /opt/firmware/klipper-version
 
     # ...and the flashing tool, which the firmware target does not build. It
     # talks PICOBOOT over libusb (libusb-1.0-0-dev is already in PKGLIST above),
