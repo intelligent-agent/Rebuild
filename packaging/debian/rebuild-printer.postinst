@@ -55,6 +55,18 @@ if [ "$1" = configure ] && [ -z "$2" ]; then
     fi
 fi
 
+# dpkg.cfg.d/rebuild-arm-toolchain keeps dpkg from writing these again;
+# clear what is already there, on boards that got the toolchain first.
+if [ "$1" = configure ]; then
+    for d in /usr/lib/gcc/arm-none-eabi/*/ /usr/lib/arm-none-eabi/newlib/; do
+        [ -d "$d" ] || continue
+        rm -rf "$d/arm"
+        for v in v7 v7+fp v7-a v7-a+fp v7-a+simd v7ve+simd v7-r+fp.sp v8-a v8-a+simd; do
+            rm -rf "$d/thumb/$v"
+        done
+    done
+fi
+
 if [ "$1" = configure ] && [ -d /run/systemd/system ]; then
     systemctl daemon-reload || true
     udevadm control --reload || true

@@ -48,6 +48,12 @@ if [ "$1" = configure ] && [ -z "$2" ]; then
     set_aside /etc/NetworkManager/dispatcher.d/90-wifi-source-routing
 fi
 
+# dpkg.cfg.d/rebuild-firmware keeps dpkg from writing these again; clear
+# what is already there. armbian-firmware is installed before this package.
+if [ "$1" = configure ]; then
+    rm -rf /lib/firmware/qcom /usr/lib/firmware/qcom
+fi
+
 if [ "$1" = configure ] && [ -d /run/systemd/system ]; then
     systemctl daemon-reload || true
     udevadm control --reload || true
