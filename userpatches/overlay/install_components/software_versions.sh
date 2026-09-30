@@ -11,7 +11,9 @@
 
 # Klipper is pinned to a master commit: v0.13.0, the latest tag, cannot build
 # its host dependencies on Trixie's Python 3.13.
-KLIPPER_VERSION="3a1f884dc83c44714bfc93238525cb57f4474588"
+# v0.13.0-777-g7bc4d094: the base the AR100 patches in rebuild-printer's
+# /usr/share/rebuild/klipper-patches are generated against.
+KLIPPER_VERSION="7bc4d09465d31cd30fc0822e8d0abe02cc8c547f"
 MOONRAKER_VERSION="v0.11.0"
 KLIPPERSCREEN_VERSION="v0.4.7"
 FLUIDD_VERSION="v1.37.4"

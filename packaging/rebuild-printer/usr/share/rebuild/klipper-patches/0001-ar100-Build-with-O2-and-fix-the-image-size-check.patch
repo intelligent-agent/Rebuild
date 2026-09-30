@@ -1,0 +1,49 @@
+From a2cd35ab9c19d384d9ce46305560f1bc7796877d Mon Sep 17 00:00:00 2001
+From: Elias Bakken <elias@iagent.no>
+Date: Sat, 26 Sep 2026 13:25:05 +0200
+Subject: [PATCH 1/6] ar100: Build with -O2 and fix the image size check
+
+Klipper on ar100 is currently built with -O3 optimizations.
+-O2 is a reasonable compromise between size and speed. -O3 does
+not give any meaningful improvements.
+
+Regarding the size difference, Allwinner A64 has 64 KB of SRAM A2,
+and we can use all of it for Klipper. The previous size check
+capped the size at 48 KB instead of the 64 KB that is available.
+
+Signed-off-by: Elias Bakken <elias@iagent.no>
+(cherry picked from commit 80f1c5bf07368909a09d91a9894b3a65abfbe31e)
+---
+ src/ar100/Makefile | 2 +-
+ src/ar100/ar100.ld | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/ar100/Makefile b/src/ar100/Makefile
+index 275944d4c..166e88c99 100644
+--- a/src/ar100/Makefile
++++ b/src/ar100/Makefile
+@@ -1,7 +1,7 @@
+ CROSS_PREFIX=or1k-elf-
+ dirs-y += src/generic src/ar100 lib/ar100
+ 
+-CFLAGS		+= -O3
++CFLAGS		+= -O2
+ CFLAGS		+= -fno-builtin
+ CFLAGS		+= -fno-pie
+ CFLAGS		+= -ffreestanding
+diff --git a/src/ar100/ar100.ld b/src/ar100/ar100.ld
+index 903620b55..b5aca06f1 100644
+--- a/src/ar100/ar100.ld
++++ b/src/ar100/ar100.ld
+@@ -45,7 +45,7 @@ SECTIONS
+       __stack_end = .;
+   } >SRAM_A2
+ 
+-  ASSERT(. <= (SRAM_A2_SIZE), "Klipper image is too large")
++  ASSERT(. <= (ORIGIN(SRAM_A2) + LENGTH(SRAM_A2)), "Klipper image is too large")
+ 
+   /DISCARD/ : {
+     *(.comment*)
+-- 
+2.47.3
+

@@ -92,21 +92,25 @@ EOF
     sudo systemctl enable klipper.service
     
     # Install AR100 toolchain
-    wget http://feeds.iagent.no/toolchains/or1k-elf-15.1.0-20260131.tar.xz -P /opt
+    # GCC 16.1.0 with the 2026-06 OpenRISC codegen fixes (64- and 16-bit
+    # shifts, branch placement), built from stffrdhrn/or1k-toolchain-build
+    # for aarch64, C only, stripped: 93 MB installed.
+    OR1K_TOOLCHAIN=or1k-elf-16.1.0-20260930.tar.xz
+    wget http://feeds.iagent.no/toolchains/${OR1K_TOOLCHAIN} -P /opt
     cd /opt
-    tar -xf /opt/or1k-elf-15.1.0-20260131.tar.xz
-    rm /opt/or1k-elf-15.1.0-20260131.tar.xz
+    tar -xf /opt/${OR1K_TOOLCHAIN}
+    rm /opt/${OR1K_TOOLCHAIN}
     export PATH=$PATH:/opt/or1k-elf/bin
     echo "export PATH=\$PATH:$PATH:/opt/or1k-elf/bin" >> ${HOMEDIR}/.bashrc
     echo "export PATH=\$PATH:$PATH:/opt/or1k-elf/bin" >> /home/debian/.bashrc
     
     # Compile AR100
-    cp /usr/share/rebuild/firmware/ar100.config ${HOMEDIR}/klipper/.config
     cd ${HOMEDIR}/klipper/
-    sed -i 's/CFLAGS.*+= -O3//' src/ar100/Makefile
-
-    sed -i 's|ASSERT(. <= (SRAM_A2_SIZE), "Klipper image is too large")|ASSERT(. <= (ORIGIN(SRAM_A2) + LENGTH(SRAM_A2)), "Klipper image is too large")|' src/ar100/ar100.ld
-
+    # The Klipper changes still waiting upstream - see the README there. For
+    # all four firmware builds; the git reset --hard after them takes them
+    # out of the checkout again.
+    git apply /usr/share/rebuild/klipper-patches/*.patch
+    cp /usr/share/rebuild/firmware/ar100.config ${HOMEDIR}/klipper/.config
     make olddefconfig
     make -j
     cp ${HOMEDIR}/klipper/out/ar100.bin /opt/firmware
