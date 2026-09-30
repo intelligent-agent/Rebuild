@@ -110,6 +110,11 @@ EOF
     make olddefconfig
     make -j
     cp ${HOMEDIR}/klipper/out/ar100.bin /opt/firmware
+    # Each binary is kept with the exact .config it was built from - after
+    # olddefconfig, so Klipper's defaults for this version are filled in. It
+    # records how the shipped firmware was made, and it is what a rebuild after
+    # a Klipper update (#106) starts from.
+    cp ${HOMEDIR}/klipper/.config /opt/firmware/ar100.config
     # flash-ar100.py mmaps /opt/firmware/ar100.bin's target region as
     # Device memory (it's not in /proc/iomem), which requires aligned
     # accesses. Pad to a 16-byte boundary so the bulk write never ends
@@ -122,6 +127,7 @@ EOF
     make olddefconfig
     make -j
     cp ${HOMEDIR}/klipper/out/klipper.bin /opt/firmware/stm32.bin
+    cp ${HOMEDIR}/klipper/.config /opt/firmware/stm32.config
 
     # Compile STM32-32KB
     cp /usr/share/rebuild/firmware/stm32f031-32KB-serial.config ${HOMEDIR}/klipper/.config
@@ -129,6 +135,7 @@ EOF
     make olddefconfig
     make -j
     cp ${HOMEDIR}/klipper/out/klipper.bin /opt/firmware/stm32-32KB.bin
+    cp ${HOMEDIR}/klipper/.config /opt/firmware/stm32-32KB.config
 
     # Compile RP2040 - ReTool A2, and Remote when it lands (#38).
     #
@@ -143,6 +150,10 @@ EOF
     make olddefconfig
     make -j
     cp ${HOMEDIR}/klipper/out/klipper.uf2 /opt/firmware/rp2040.uf2
+    cp ${HOMEDIR}/klipper/.config /opt/firmware/rp2040.config
+    # The Klipper revision all four were built from, so it can be told when
+    # the checkout has moved on and the binaries are stale (#106).
+    git -C ${HOMEDIR}/klipper describe --always --tags --long > /opt/firmware/klipper-version
 
     # ...and the flashing tool, which the firmware target does not build. It
     # talks PICOBOOT over libusb (libusb-1.0-0-dev is already in PKGLIST above),
