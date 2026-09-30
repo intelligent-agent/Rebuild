@@ -6,7 +6,7 @@ Wants=NetworkManager.service
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-ExecStart=/usr/local/bin/autohotspot
+ExecStart=/usr/bin/autohotspot
 
 [Install]
 WantedBy=multi-user.target

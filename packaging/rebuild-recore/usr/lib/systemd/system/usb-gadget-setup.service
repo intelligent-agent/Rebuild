@@ -1,0 +1,10 @@
+[Unit]
+Description=USB ConfigFS Gadget Manager
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/usb-gadget-init start
+ExecStop=/usr/bin/usb-gadget-init stop
+RemainAfterExit=yes
+
+[Install]

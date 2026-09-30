@@ -38,7 +38,7 @@ echo "--Beginning of first run script--" > /var/log.hdd/rebuild-first-run.log
 # out-of-tree modules merely being present, which leaves every non-A5 board
 # looking misconfigured. Do this only after a positive revision read: retaining
 # the files is safer than breaking an A5 if its EEPROM cannot be read.
-revision="$(/usr/local/bin/get-recore-revision 2>/dev/null || true)"
+revision="$(/usr/bin/get-recore-revision 2>/dev/null || true)"
 if [ -n "$revision" ] && [ "${revision,,}" != "a5" ]; then
     log "Removing A5-only Klipper files for ${revision}"
     rm -f \
@@ -56,7 +56,7 @@ log "Running flash-stm32 script"
 # actually failed in #92, yet its output went only to the journal - so the
 # persistent log ended at "Running flash-stm32 script" and the reason was gone
 # by the time anyone looked. Safe to pipe now that pipefail is set above.
-/usr/local/bin/flash-stm32 2>&1 | tee -a /var/log.hdd/rebuild-first-run.log
+/usr/bin/flash-stm32 2>&1 | tee -a /var/log.hdd/rebuild-first-run.log
 
 # Any attached RP2040 (ReTool A2, Remote). Exits 0 when none is present, so a
 # board without one is not a failed first boot - unlike flash-stm32, the target
@@ -71,7 +71,7 @@ log "Running flash-rp2040 script"
 # propagate, set -e would abort, and Restart=on-failure would retry to the burst
 # limit - failing a perfectly good board over a peripheral. Keep the status
 # visible in the log, but do not let it end the run.
-/usr/local/bin/flash-rp2040 2>&1 | tee -a /var/log.hdd/rebuild-first-run.log \
+/usr/bin/flash-rp2040 2>&1 | tee -a /var/log.hdd/rebuild-first-run.log \
     || log "flash-rp2040 exited non-zero (optional hardware) - continuing"
 
 log "Disabling rebuild-first-run.service"

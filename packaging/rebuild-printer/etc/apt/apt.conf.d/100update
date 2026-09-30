@@ -1,0 +1,4 @@
+// /boot is mounted read-only; remount it rw around dpkg runs so kernel,
+// initramfs and U-Boot updates can write to it.
+DPkg::Pre-Invoke {"mount -o remount,rw /boot 2>/dev/null || true";};
+DPkg::Post-Invoke {"mount -o remount,ro /boot 2>/dev/null || true";};

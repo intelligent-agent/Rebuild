@@ -1,0 +1,65 @@
+#!/bin/sh
+set -e
+
+# See rebuild-recore.postinst: files the image build used to copy in by hand
+# would override the packaged ones, so the first install moves them aside.
+LEGACY=/var/backups/rebuild-legacy
+
+set_aside() {
+    [ -e "$1" ] && [ ! -L "$1" ] || return 0
+    mkdir -p "$LEGACY$(dirname "$1")"
+    mv "$1" "$LEGACY$1"
+}
+
+link_old_path() {
+    set_aside "/usr/local/bin/$1"
+    [ -e "/usr/local/bin/$1" ] || ln -s "/usr/bin/$1" "/usr/local/bin/$1"
+}
+
+drop_dangling_links() {
+    for l in /etc/systemd/system/*.wants/"$1" /etc/systemd/system/*.requires/"$1"; do
+        [ -L "$l" ] && [ ! -e "$l" ] && rm -f "$l"
+    done
+    return 0
+}
+
+if [ "$1" = configure ] && [ -z "$2" ]; then
+    # klipper.service, written by the image build, runs these by their old path.
+    for t in auto-disable-ssh is-ssh-enabled set-ssh-access rebuild-first-run \
+             flash-stm32 flash-rp2040 flash-ar100.py set-ar100-clock.py; do
+        link_old_path "$t"
+    done
+
+    for u in auto-disable-ssh.service auto-disable-ssh.timer rebuild-first-run.service; do
+        set_aside "/etc/systemd/system/$u"
+        drop_dangling_links "$u"
+    done
+    set_aside /etc/systemd/system/armbian-firstrun.service.d/oneshot.conf
+    rmdir /etc/systemd/system/armbian-firstrun.service.d 2>/dev/null || true
+    set_aside /etc/systemd/system/plymouth-quit.service.d/retain-splash.conf
+    rmdir /etc/systemd/system/plymouth-quit.service.d 2>/dev/null || true
+    set_aside /etc/udev/rules.d/55-rp2040-bootloader.rules
+    set_aside /etc/systemd/system.conf.d/10-watchdog.conf
+    set_aside /etc/systemd/resolved.conf.d/no-dnssec.conf
+
+    # Settings that set-ssh-access rewrites: state, not a conffile, so it is
+    # created once and never touched by an upgrade.
+    if [ ! -e /etc/rebuild-settings ]; then
+        install -m 600 /usr/share/rebuild/rebuild-settings.default /etc/rebuild-settings
+    fi
+
+    # Only on the first install, so an upgrade never undoes a user's choice
+    # of theme. The initramfs is rebuilt by the update-initramfs trigger.
+    if command -v plymouth-set-default-theme >/dev/null; then
+        plymouth-set-default-theme recore
+    fi
+fi
+
+if [ "$1" = configure ] && [ -d /run/systemd/system ]; then
+    systemctl daemon-reload || true
+    udevadm control --reload || true
+fi
+
+#DEBHELPER#
+
+exit 0

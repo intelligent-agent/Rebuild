@@ -1,0 +1,14 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@
+
+# Enable at install, but never start, stop or restart a unit from a
+# maintainer script: an upgrade run from Fluidd over Wi-Fi must not restart
+# autohotspot under its own connection. New code takes effect on the next
+# boot. rebuild-first-run is left out on purpose: enabling it on a board
+# that already ran it would reflash the STM32 and RP2040 on the next boot,
+# so the image build enables it instead.
+override_dh_installsystemd:
+	dh_installsystemd -prebuild-recore --no-start --no-stop-on-upgrade autohotspot.service
+	dh_installsystemd -prebuild-printer --no-start --no-stop-on-upgrade auto-disable-ssh.timer

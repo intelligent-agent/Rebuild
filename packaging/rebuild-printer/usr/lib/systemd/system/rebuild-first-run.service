@@ -19,7 +19,7 @@ StartLimitBurst=6
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-ExecStart=/usr/local/bin/rebuild-first-run
+ExecStart=/usr/bin/rebuild-first-run
 Restart=on-failure
 RestartSec=10s
 

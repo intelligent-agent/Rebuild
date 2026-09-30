@@ -81,6 +81,9 @@ mkdir -p "${BUILD_DIR}"/userpatches/overlay/rebuild/
 echo "${NAME}" >"${BUILD_DIR}"/userpatches/overlay/rebuild/rebuild-version
 echo "${TAG}" >"${BUILD_DIR}"/userpatches/overlay/rebuild/rebuild-tag
 
+# Rebuild's own files, as the packages customize-image.sh installs.
+packaging/build-debs "${BUILD_DIR}"/userpatches/overlay/debs "${TAG}"
+
 cd "$BUILD_DIR"
 
 # If you change the Plymouth theme (or anything else the initramfs carries but
