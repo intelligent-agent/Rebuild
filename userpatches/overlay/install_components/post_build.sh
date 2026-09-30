@@ -3,6 +3,9 @@
 post_build() {
     echo "🍰 Post build"
 
+    # Added by prepare_build for the build container's hostname.
+    sed -i '/# rebuild-build-only$/d' /etc/hosts
+
     apt-get update
     apt-get install -y "$ADD_PACKAGE_LIST" --no-install-suggests --no-install-recommends
 
