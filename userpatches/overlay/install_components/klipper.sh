@@ -49,8 +49,12 @@ install_klipper(){
     # succeeds and the image build does not.
     PKGLIST="${PKGLIST} libncurses-dev libusb-1.0-0-dev stm32flash pkg-config"
     PKGLIST="${PKGLIST} gcc-arm-none-eabi binutils-arm-none-eabi libnewlib-arm-none-eabi"
-    # In Trixie, use the system numpy for speed
-    PKGLIST="${PKGLIST} python3-matplotlib"
+    # No python3-matplotlib. Klipper never imports it: SHAPER_CALIBRATE needs
+    # only numpy, which is pip-installed into klippy-env below. matplotlib is
+    # for the optional graph scripts (scripts/calibrate_shaper.py and co.),
+    # and with the scipy/sympy it drags in it was 33 packages and 242 MB for
+    # an occasional chart. Graphs are drawn on a PC, or after
+    # `apt install python3-matplotlib` on the printer - see the release notes.
 
     # Install desired packages
     apt-get install --yes ${PKGLIST} --no-install-suggests 
