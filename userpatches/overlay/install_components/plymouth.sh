@@ -2,7 +2,7 @@
 
 install_plymouth() {
     echo "🍰 install Plymouth"
-    apt install -y plymouth plymouth-themes
+    apt-get install -y plymouth plymouth-themes
 
     # Recore's own theme, on the "script" plugin.
     #

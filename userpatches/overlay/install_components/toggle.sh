@@ -4,7 +4,7 @@ install_weston(){
 	echo "🍰 installing Weston"
 	cd ${HOMEDIR}
 	# This pulls in a lot of packages, should be optimized
-	apt install -y weston librsvg2-common libgl1-mesa-dri
+	apt-get install -y weston librsvg2-common libgl1-mesa-dri
 
 	mkdir -p /etc/xdg/weston/
 	cat > /etc/xdg/weston/weston.ini <<EOF
@@ -46,7 +46,7 @@ EOF
 
 install_toggle(){
     echo "🍰 installing Toggle"
-    apt install -y gir1.2-clutter-1.0 python3-gi-cairo
+    apt-get install -y gir1.2-clutter-1.0 python3-gi-cairo
     wget http://feeds.iagent.no/debian/pool/main/libmx-2.0-0_2.0-1_arm64.deb
     wget http://feeds.iagent.no/debian/pool/main/libmash-0.3-0_0.3.0-1_arm64.deb
     wget http://feeds.iagent.no/debian/pool/main/gir1.2-mash-0.3-0_0.3.0-1_arm64.deb

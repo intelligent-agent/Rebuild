@@ -51,8 +51,8 @@ install_serial_tool() {
 post_build() {
     
     cp /tmp/overlay/rebuild/rebuild-version /etc/
-    apt update
-    apt install -y "$ADD_PACKAGE_LIST"
+    apt-get update
+    apt-get install -y "$ADD_PACKAGE_LIST"
 
     TAG=$(cat /tmp/overlay/rebuild/rebuild-tag)
     sed -i "s/PRETTY_NAME=\"/PRETTY_NAME=\"Rebuild ${TAG}\//" /etc/os-release
@@ -177,7 +177,7 @@ prep_install() {
     # install_autohotspot apt-installs dnsmasq-base, and barebone has no
     # prepare_build to have refreshed the lists first - post_build's apt update
     # runs after it, too late.
-    apt update
+    apt-get update
 
     echo root:temppwd | chpasswd
 }

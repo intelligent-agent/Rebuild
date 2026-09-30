@@ -63,7 +63,7 @@ jobs:
     # fallback emitted a bare commit hash. That is why images arrive as
     # "rebuild-fluidd-343e3e8" rather than carrying the release they came from,
     # and why the CI and the board can only report a hash. Same fix as Reflash.
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v5
       with:
         fetch-depth: 0
 
@@ -112,7 +112,7 @@ jobs:
     # fallback emitted a bare commit hash. That is why images arrive as
     # "rebuild-fluidd-343e3e8" rather than carrying the release they came from,
     # and why the CI and the board can only report a hash. Same fix as Reflash.
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v5
       with:
         fetch-depth: 0
 
@@ -161,7 +161,7 @@ jobs:
     # fallback emitted a bare commit hash. That is why images arrive as
     # "rebuild-fluidd-343e3e8" rather than carrying the release they came from,
     # and why the CI and the board can only report a hash. Same fix as Reflash.
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v5
       with:
         fetch-depth: 0
     - name: Remove old images
@@ -208,7 +208,7 @@ jobs:
     # fallback emitted a bare commit hash. That is why images arrive as
     # "rebuild-fluidd-343e3e8" rather than carrying the release they came from,
     # and why the CI and the board can only report a hash. Same fix as Reflash.
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v5
       with:
         fetch-depth: 0
 

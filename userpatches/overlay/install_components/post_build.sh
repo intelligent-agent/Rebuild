@@ -3,8 +3,8 @@
 post_build() {
     echo "🍰 Post build"
 
-    apt update
-    apt install -y "$ADD_PACKAGE_LIST" --no-install-suggests --no-install-recommends
+    apt-get update
+    apt-get install -y "$ADD_PACKAGE_LIST" --no-install-suggests --no-install-recommends
 
     # Disable socket activation of ssh
     systemctl disable ssh.socket
@@ -33,7 +33,11 @@ EOF
     mkdir -p /etc/ssh/sshd_config.d
     cat <<'EOF' > /etc/ssh/sshd_config.d/10-recore-rootlogin.conf
 PermitRootLogin prohibit-password
+DenyUsers printer
 EOF
+    # printer is a service account; useradd leaves it without a password, and
+    # this keeps it that way even if something set one during the build.
+    passwd -l printer
 
     strip_machine_identity
 
@@ -218,4 +222,11 @@ EOF
 [Manager]
 RebootWatchdogSec=15s
 EOF
+
+    # Last, so nothing after it runs apt. Otherwise the image ships the
+    # package indexes and .deb cache from build day (#100): tens of MB, and
+    # an `apt install` on the board before any `apt update` would resolve
+    # against stale lists. apt rebuilds pkgcache.bin on its next run.
+    apt-get clean
+    rm -rf /var/lib/apt/lists/*
 }

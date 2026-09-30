@@ -3,7 +3,7 @@
 install_ustreamer() {
     echo "🍰 install Ustreamer"
     cd ${HOMEDIR}
-    apt install -y build-essential libevent-dev libjpeg-dev libbsd-dev
+    apt-get install -y build-essential libevent-dev libjpeg-dev libbsd-dev
     git clone https://github.com/pikvm/ustreamer
     git -C ustreamer reset --hard "${USTREAMER_VERSION}"
     cd ustreamer
