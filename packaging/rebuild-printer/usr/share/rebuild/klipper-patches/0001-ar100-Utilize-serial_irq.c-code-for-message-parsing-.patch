@@ -1,7 +1,7 @@
-From 6fd02d169f3720543c56007b33d5be8e9955105b Mon Sep 17 00:00:00 2001
+From 23db373c78074315a082590879bd79006ce45232 Mon Sep 17 00:00:00 2001
 From: Kevin O'Connor <kevin@koconnor.net>
 Date: Mon, 28 Sep 2026 22:06:15 -0400
-Subject: [PATCH 3/5] ar100: Utilize serial_irq.c code for message parsing and
+Subject: [PATCH 1/2] ar100: Utilize serial_irq.c code for message parsing and
  generation
 
 Utilize the generic code.  The previous code could possibly busy wait
@@ -9,12 +9,13 @@ for a long time during console_sendf().
 
 Signed-off-by: Kevin O'Connor <kevin@koconnor.net>
 (cherry picked from commit 7675eeca128c46448c9eea480b804ebcfa670a13)
+(cherry picked from commit 6fd02d169f3720543c56007b33d5be8e9955105b)
 ---
  src/ar100/Makefile |  2 +-
- src/ar100/main.c   | 74 +++++++++++++++++-----------------------------
- src/ar100/serial.c | 12 +++-----
+ src/ar100/main.c   | 66 ++++++++++++++--------------------------------
+ src/ar100/serial.c | 12 +++------
  src/ar100/serial.h |  4 +--
- 4 files changed, 33 insertions(+), 59 deletions(-)
+ 4 files changed, 26 insertions(+), 58 deletions(-)
 
 diff --git a/src/ar100/Makefile b/src/ar100/Makefile
 index 166e88c99..2024ab0b8 100644
@@ -30,7 +31,7 @@ index 166e88c99..2024ab0b8 100644
  OBJS_klipper.elf += $(OUT)lib/ar100/start.o
  OBJS_klipper.elf += $(OUT)lib/ar100/runtime.o
 diff --git a/src/ar100/main.c b/src/ar100/main.c
-index aa391e1f9..0e2693acc 100644
+index d4ca8aca8..0e2693acc 100644
 --- a/src/ar100/main.c
 +++ b/src/ar100/main.c
 @@ -9,6 +9,7 @@
@@ -41,15 +42,17 @@ index aa391e1f9..0e2693acc 100644
  #include "generic/timer_irq.h"  // timer_dispatch_many
  #include "sched.h"      // sched_main
  
-@@ -39,6 +40,30 @@ dynmem_end(void)
+@@ -39,11 +40,28 @@ dynmem_end(void)
      return &dynmem_pool[sizeof(dynmem_pool)];
  }
  
 +static int need_serial_tx;
 +
-+static void
-+check_serial_pending(void)
-+{
+ static void
+ check_serial_pending(void)
+ {
+-    if(r_uart_fifo_rcv())
+-        sched_wake_task(&console_wake);
 +    while (r_uart_fifo_rcv())
 +        serial_rx_byte(r_uart_getc());
 +    while (need_serial_tx && r_uart_fifo_cantx()) {
@@ -67,35 +70,13 @@ index aa391e1f9..0e2693acc 100644
 +{
 +    need_serial_tx = 1;
 +    check_serial_pending();
-+}
-+
- void
- irq_disable(void)
- {
-@@ -64,7 +89,6 @@ void
- irq_wait(void)
- {
-     irq_poll();
--    timer_dispatch_task_poll();
  }
  
  void
-@@ -75,8 +99,7 @@ timer_dispatch_irq_poll(void)
- void
- timer_dispatch_task_poll(void)
- {
--    if(r_uart_fifo_rcv())
--        sched_wake_task(&console_wake);
-+    check_serial_pending();
+@@ -95,50 +113,6 @@ irq_poll(void)
+     check_serial_pending();
  }
  
- void
-@@ -87,50 +110,7 @@ irq_poll(void)
-         uint32_t next = timer_dispatch_many_polling();
-         timer_set(next);
-     }
--}
--
 -/****************************************************************
 -* Console IO
 -****************************************************************/
@@ -138,10 +119,11 @@ index aa391e1f9..0e2693acc 100644
 -    for(int i=0; i<msglen; i++) {
 -        r_uart_putc(buf[i]);
 -    }
-+    check_serial_pending();
- }
- 
+-}
+-
  void restore_data(void)
+ {
+     extern char __data_start, __data_end, __copy_start;
 diff --git a/src/ar100/serial.c b/src/ar100/serial.c
 index 6fcafdbd8..2c2d89311 100644
 --- a/src/ar100/serial.c

@@ -1,7 +1,7 @@
-From 1358e6a26ed86995ceebf75e92f2829e6ab92e8f Mon Sep 17 00:00:00 2001
+From fe380cb46374cbfa2b6cbcc6fb86b15434355d60 Mon Sep 17 00:00:00 2001
 From: Elias Bakken <elias@iagent.no>
 Date: Wed, 30 Sep 2026 16:44:47 +0200
-Subject: [PATCH 5/5] ar100: Select SERIAL and default SERIAL_BAUD to 1500000
+Subject: [PATCH 2/2] ar100: Select SERIAL and default SERIAL_BAUD to 1500000
 
 With serial_irq.c doing the message handling, the ar100 needs CONFIG_SERIAL
 for the generic serial code, and a SERIAL_BAUD for the host to compute its
@@ -9,6 +9,7 @@ receive timing. Without them the baud rate is 0, the host's receive_time is
 -inf and clock synchronisation fails with NaN.
 
 Signed-off-by: Elias Bakken <elias@iagent.no>
+(cherry picked from commit 1358e6a26ed86995ceebf75e92f2829e6ab92e8f)
 ---
  src/ar100/Kconfig | 5 +++++
  1 file changed, 5 insertions(+)
