@@ -25,6 +25,24 @@ WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 cp -a "$SRC" "$WORK/rebuild"
 rm -f "$WORK/rebuild/build-debs"
+# Where boards get Rebuild's packages from (#108): a release installs from
+# trixie, everything else - RCs, builds from main or a branch - from trixie-dev,
+# so test builds never reach boards on a release.
+case $debver in
+    *[+~]*) suite=trixie-dev;;
+    *)      suite=trixie;;
+esac
+mkdir -p "$WORK/rebuild/rebuild-recore/etc/apt/sources.list.d"
+cat > "$WORK/rebuild/rebuild-recore/etc/apt/sources.list.d/rebuild.sources" <<SRC
+# Rebuild's own packages (rebuild-recore, rebuild-printer), signed with the
+# iagent feeds key. Written by Rebuild's build for this image's channel.
+Types: deb
+URIs: http://feeds.iagent.no/debian
+Suites: $suite
+Components: main
+Signed-By: /usr/share/keyrings/rebuild-archive-keyring.gpg
+SRC
+
 cat > "$WORK/rebuild/debian/changelog" <<CL
 rebuild ($debver) trixie; urgency=medium
 
