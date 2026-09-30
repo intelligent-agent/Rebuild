@@ -39,7 +39,6 @@ install_klipper(){
     mkdir -p /var/log/klipper_logs
     chown ${USER}:${USER} /var/log/klipper_logs
     mkdir -p /opt/firmware/
-    cp /tmp/overlay/klipper/bl31.bin /opt/firmware/
     chown -R ${USER}:${USER} klipper
     
     KLIPPER_USER=printer

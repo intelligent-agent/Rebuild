@@ -25,7 +25,6 @@ parser = argparse.ArgumentParser(description='Flash and reset SRAM A2 of A64')
 parser.add_argument('filename', nargs='?', help='binary file to write')
 parser.add_argument('--reset', action='store_true', help='reset the AR100')
 parser.add_argument('--halt', action='store_true', help='Halt the AR100')
-parser.add_argument('--bl31', action='store_true', help='write bl31')
 
 args = parser.parse_args()
 
@@ -86,15 +85,10 @@ if args.reset:
     sys.exit(0)
 
 if args.filename:
-    if args.bl31:
-        print("writing bl31")
-        assert_deassert_reset(1)
-        write_file(args.filename)
-    else:
-        assert_deassert_reset(1)
-        write_exception_vectors()
-        write_file(args.filename)
-        assert_deassert_reset(0)
+    assert_deassert_reset(1)
+    write_exception_vectors()
+    write_file(args.filename)
+    assert_deassert_reset(0)
 
 if args.halt:
     print("Halting AR100")
