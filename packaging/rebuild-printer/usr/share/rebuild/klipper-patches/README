@@ -4,11 +4,11 @@ for the firmware builds and reverted afterwards, so Klipper itself stays a
 clean upstream checkout that Moonraker can update. They touch only MCU code
 (src/), so the host side needs none of them.
 
-  0001            ar100: Utilize serial_irq.c code for message parsing and
+  0001            (#7399) ar100: Utilize serial_irq.c code for message parsing and
                   generation - Kevin's, from KevinOConnor/klipper-dev
                   work-ar100-20260928; he left it out when committing the rest
                   and asked for it to be submitted with the Kconfig changes
-  0002            ar100: select SERIAL and default SERIAL_BAUD to 1500000;
+  0002            (#7399) ar100: select SERIAL and default SERIAL_BAUD to 1500000;
                   without it the serial_irq.c code has a baud rate of 0 and
                   clock sync fails with NaN
 

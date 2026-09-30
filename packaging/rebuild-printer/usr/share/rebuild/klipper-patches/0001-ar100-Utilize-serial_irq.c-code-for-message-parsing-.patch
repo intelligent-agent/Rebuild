@@ -1,4 +1,4 @@
-From 23db373c78074315a082590879bd79006ce45232 Mon Sep 17 00:00:00 2001
+From 7e0c0a33e5b2ef449fabe1e71e6b784c97120e6a Mon Sep 17 00:00:00 2001
 From: Kevin O'Connor <kevin@koconnor.net>
 Date: Mon, 28 Sep 2026 22:06:15 -0400
 Subject: [PATCH 1/2] ar100: Utilize serial_irq.c code for message parsing and
@@ -8,8 +8,8 @@ Utilize the generic code.  The previous code could possibly busy wait
 for a long time during console_sendf().
 
 Signed-off-by: Kevin O'Connor <kevin@koconnor.net>
-(cherry picked from commit 7675eeca128c46448c9eea480b804ebcfa670a13)
-(cherry picked from commit 6fd02d169f3720543c56007b33d5be8e9955105b)
+[rebased onto the committed timer_dispatch_many_polling() code]
+Signed-off-by: Elias Bakken <elias@iagent.no>
 ---
  src/ar100/Makefile |  2 +-
  src/ar100/main.c   | 66 ++++++++++++++--------------------------------
