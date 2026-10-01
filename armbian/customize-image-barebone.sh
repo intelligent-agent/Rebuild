@@ -25,6 +25,7 @@ ADD_PACKAGE_LIST="avahi-daemon"
 USER=printer
 HOMEDIR="/home/${USER}"
 
+source /tmp/overlay/install_components/armbian_pins.sh
 source /tmp/overlay/install_components/trim_image.sh
 source /tmp/overlay/install_components/rebuild_packages.sh
 source /tmp/overlay/install_components/add_overlays.sh
@@ -62,6 +63,7 @@ echo "🍰 Rebuild starting..."
 
 set -e
 
+pin_armbian_packages
 trim_image
 prep_install
 # rebuild-recore, not rebuild-printer: the gadget console, autohotspot, and

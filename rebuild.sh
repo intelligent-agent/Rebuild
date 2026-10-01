@@ -83,6 +83,15 @@ cp armbian/customize-image-"${VERSION}".sh "${BUILD_DIR}"/userpatches/customize-
 # Patches are applied in alphabetical order by filename, so "allwinner-*" lands
 # before "u-boot-sunxi64-legacy-*" and ours can build on top of it.
 
+# Version Armbian's packages after this build, not just Armbian's own VERSION:
+# every build labelled its kernel, device trees and U-Boot 26.11.0-trunk
+# whatever they contained, so apt could not tell two builds apart, and the
+# pins in rebuild-armbian-tested (#114) name exact versions. A `+` suffix keeps
+# them sorting above Armbian's own 26.11.0-trunk. Debian versions allow no
+# hyphen after the first one, hence the dots.
+echo "$(cat "${BUILD_DIR}"/VERSION)+rebuild.$(echo "${TAG#v}" | tr -- '-' '.')" \
+    >"${BUILD_DIR}"/userpatches/VERSION
+
 mkdir -p "${BUILD_DIR}"/userpatches/overlay/rebuild/
 echo "${NAME}" >"${BUILD_DIR}"/userpatches/overlay/rebuild/rebuild-version
 echo "${TAG}" >"${BUILD_DIR}"/userpatches/overlay/rebuild/rebuild-tag

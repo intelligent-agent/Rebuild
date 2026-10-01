@@ -33,6 +33,7 @@ source /tmp/overlay/install_components/toggle.sh
 source /tmp/overlay/install_components/plymouth.sh
 source /tmp/overlay/install_components/rebuild_first_run.sh
 source /tmp/overlay/install_components/ustreamer.sh
+source /tmp/overlay/install_components/armbian_pins.sh
 source /tmp/overlay/install_components/trim_image.sh
 source /tmp/overlay/install_components/prep_install.sh
 source /tmp/overlay/install_components/add_overlays.sh
@@ -44,6 +45,7 @@ set -e
 
 echo "🍰 Rebuild starting..."
 
+pin_armbian_packages
 trim_image
 prepare_build
 install_rebuild_packages rebuild-recore rebuild-printer

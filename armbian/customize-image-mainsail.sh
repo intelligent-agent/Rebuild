@@ -27,6 +27,7 @@ HOMEDIR="/home/${USER}"
 
 source /tmp/overlay/install_components/software_versions.sh
 source /tmp/overlay/install_components/rebuild_packages.sh
+source /tmp/overlay/install_components/armbian_pins.sh
 source /tmp/overlay/install_components/trim_image.sh
 source /tmp/overlay/install_components/prep_install.sh
 source /tmp/overlay/install_components/klipper.sh
@@ -45,6 +46,7 @@ source /tmp/overlay/install_components/uboot_splash.sh
 
 set -e
 echo "🍰 Rebuild starting..."
+pin_armbian_packages
 trim_image
 prepare_build
 install_rebuild_packages rebuild-recore rebuild-printer
