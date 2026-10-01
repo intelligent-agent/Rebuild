@@ -106,10 +106,6 @@ EOF
     
     # Compile AR100
     cd ${HOMEDIR}/klipper/
-    # The Klipper changes still waiting upstream - see the README there. For
-    # all four firmware builds; the git reset --hard after them takes them
-    # out of the checkout again.
-    git apply /usr/share/rebuild/klipper-patches/*.patch
     cp /usr/share/rebuild/firmware/ar100.config ${HOMEDIR}/klipper/.config
     make olddefconfig
     make -j
@@ -168,9 +164,6 @@ EOF
     cp ${HOMEDIR}/klipper/lib/rp2040_flash/rp2040_flash /usr/local/bin/
     chmod +x /usr/local/bin/rp2040_flash
     
-    # Revert the patch to get rid of the warning
-    git reset --hard
-
     chown -R ${USER}:${USER} ${HOMEDIR}/klipper
     chown -R ${USER}:${USER} ${PYTHONDIR}
 
