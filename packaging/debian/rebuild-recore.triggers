@@ -1,0 +1,3 @@
+# Any package installing under /boot - a linux-dtb upgrade above all - runs
+# the device tree migration in the postinst (#114).
+interest-noawait /boot

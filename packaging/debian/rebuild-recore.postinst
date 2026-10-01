@@ -59,7 +59,15 @@ fi
 # while the symlink still names the revision; if an upgrade already replaced
 # it, ask the eMMC. Only on a running board - not in the image build chroot;
 # Reflash writes the line when it flashes an image.
-if [ "$1" = configure ] && [ -d /run/systemd/system ] && [ -f /boot/armbianEnv.txt ] &&
+#
+# Also on the /boot trigger (rebuild-recore.triggers), because installing
+# this package is not enough: an image flashed by a Reflash older than the
+# fdtfile= change gets neither the line nor a postinst run on the board, and
+# its first DTB upgrade then boots the generic Recore-all tree - seen on an A8
+# taking a pin release. The trigger runs in the same transaction as the DTB
+# upgrade, before any reboot.
+if { [ "$1" = configure ] || [ "$1" = triggered ]; } &&
+   [ -d /run/systemd/system ] && [ -f /boot/armbianEnv.txt ] &&
    ! grep -q '^fdtfile=' /boot/armbianEnv.txt; then
     rev=$(readlink /boot/dtb/allwinner/sun50i-a64-recore.dtb 2>/dev/null |
           sed -n 's/^sun50i-a64-recore-\(a[0-9]\)\.dtb$/\1/p')
