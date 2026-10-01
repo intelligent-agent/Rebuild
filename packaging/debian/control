@@ -17,8 +17,8 @@ Description: Recore board support for Rebuild images
 
 Package: rebuild-printer
 Architecture: all
-Depends: ${misc:Depends}, rebuild-recore (= ${binary:Version}), gpiod,
- plymouth, python3, stm32flash, usbutils
+Depends: ${misc:Depends}, rebuild-recore (= ${binary:Version}), curl, gpiod,
+ libmpc3, make, plymouth, python3, stm32flash, usbutils
 Description: Printer layer for Rebuild images
  Tools that flash the Recore's AR100, STM32 and RP2040 firmware, the
  build configurations for that firmware, the first-boot service, SSH

@@ -1,0 +1,4 @@
+# Moonraker starts and stops services with sudo systemctl, as printer. This
+# lets the services menu in Fluidd and Mainsail run rebuild-firmware (#106),
+# like ssh in /etc/sudoers.d/printer - and nothing else.
+%printer ALL=(root) NOPASSWD: /bin/systemctl start rebuild-firmware, /bin/systemctl stop rebuild-firmware, /bin/systemctl restart rebuild-firmware

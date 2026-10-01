@@ -1,0 +1,19 @@
+# Started from the services menu in Fluidd and Mainsail (it is listed in
+# printer_data/moonraker.asvc), like ssh. Builds the firmware for the installed
+# Klipper with the user's changes and flashes what changed; see
+# rebuild-firmware. Runs once per start and is not enabled at boot.
+[Unit]
+Description=Rebuild and flash the MCU firmware for the installed Klipper
+After=moonraker.service
+
+[Service]
+# simple, not oneshot: systemctl start would wait out the whole build, and
+# Moonraker gives up on the command long before that. This way the menu shows
+# it running while it builds, then stopped - or failed, if a build failed or
+# did not fit.
+Type=simple
+ExecStart=/usr/bin/rebuild-firmware build
+# A full-load build can overheat a board without a fan into a power-off
+# (#111): rebuild-firmware builds -j2, and this keeps it out of Klipper's way.
+Nice=10
+IOSchedulingClass=idle

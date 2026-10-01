@@ -74,5 +74,12 @@ log "Running flash-rp2040 script"
 /usr/bin/flash-rp2040 2>&1 | tee -a /var/log.hdd/rebuild-first-run.log \
     || log "flash-rp2040 exited non-zero (optional hardware) - continuing"
 
+# printer_data/config/firmware: the README and, for this board's MCUs, the
+# options a user can change and rebuild with (#106). The image cannot write
+# these - it does not know which STM32 the board has. Nothing depends on it.
+log "Writing the firmware option references"
+/usr/bin/rebuild-firmware reference 2>&1 | tee -a /var/log.hdd/rebuild-first-run.log \
+    || log "rebuild-firmware reference failed - continuing"
+
 log "Disabling rebuild-first-run.service"
 systemctl disable rebuild-first-run.service

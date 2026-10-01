@@ -1,0 +1,305 @@
+#!/bin/bash
+# Build the Recore's MCU firmware from the installed Klipper, with the user's
+# own changes to Rebuild's stock configs (#106).
+#
+#   rebuild-firmware build [--force] [--no-flash] [--all-variants] [ROLE...]
+#   rebuild-firmware reference [ROLE...]
+#   rebuild-firmware menuconfig ROLE
+#
+# ROLE is ar100, stm32 or rp2040; none means all of them. A board builds only
+# its own STM32 variant; --all-variants builds every one (the image build,
+# which has no board to ask).
+#
+# Configs:
+#   /usr/share/rebuild/firmware/<variant>.config   Rebuild's stock config
+#   printer_data/config/firmware/<role>.config     the user's changes, added
+#                                                  on top of the stock config
+#   printer_data/config/firmware/<role>.reference  generated: every option
+#                                                  there is, and its value
+#   /opt/firmware/<variant>.{bin,uf2,config}       what was built, from what
+#
+# A variant is rebuilt only when the Klipper checkout or its effective config
+# changed since the installed binary was built (--force: always). A build that
+# fails or does not fit leaves the installed firmware as it was. Flashing is
+# refused while the printer prints.
+#
+# Started from Fluidd and Mainsail as the rebuild-firmware service; the log is
+# printer_data/logs/rebuild-firmware.log.
+set -euo pipefail
+
+KLIPPER=${KLIPPER:-/home/printer/klipper}
+DATA=${PRINTER_DATA:-/home/printer/printer_data}
+STOCK=/usr/share/rebuild/firmware
+USERDIR=$DATA/config/firmware
+FIRMWARE=/opt/firmware
+WORK=/var/lib/rebuild/firmware
+HELPER=/usr/lib/rebuild/firmware-kconfig.py
+LOG=$DATA/logs/rebuild-firmware.log
+OWNER=printer
+export PATH="$PATH:/opt/or1k-elf/bin"
+
+say() { echo "$*"; }
+die() { echo "rebuild-firmware: $*" >&2; exit 1; }
+
+# The role a user edits, and the stock variant a board builds for it. One
+# STM32 per board, so the user's file is just stm32.config; which build it
+# lands on is the board's revision. A3-A6 have the smaller part.
+variant_of() {
+    case $1 in
+        ar100)  echo ar100 ;;
+        rp2040) echo rp2040 ;;
+        stm32)
+            case $(get-recore-revision 2>/dev/null || true) in
+                a7|a8) echo stm32f031-32k ;;
+                a3|a4|a5|a6) echo stm32f031-16k ;;
+                *) die "cannot tell this board's revision, so not which STM32 build it needs" ;;
+            esac ;;
+        *) die "no such firmware: $1 (ar100, stm32 or rp2040)" ;;
+    esac
+}
+role_of() { case $1 in stm32*) echo stm32 ;; *) echo "$1" ;; esac; }
+# What the build produces, and what it is installed as.
+artifact() { case $1 in ar100) echo ar100.bin ;; rp2040) echo klipper.uf2 ;; *) echo klipper.bin ;; esac; }
+installed() { case $1 in rp2040) echo rp2040.uf2 ;; *) echo "$1.bin" ;; esac; }
+# Room for the image. Klipper's FLASH_SIZE is 32 KB for every STM32F031 and
+# cannot be set from a config, so its link check does not catch the 16 KB
+# part. The AR100 is checked by its own linker script; the RP2040 has room.
+limit() { case $1 in stm32f031-16k) echo 16384 ;; stm32f031-32k) echo 32768 ;; ar100) echo 65536 ;; *) echo 0 ;; esac; }
+
+# make, run from inside the build tree. Not make -C: Klipper's AR100 rules name
+# their sources as $(PWD)/lib/ar100/..., and PWD is the caller's directory.
+kmake() { (cd "$TREE" && make "$@"); }
+
+klipper_version() {
+    git -c safe.directory='*' -C "$KLIPPER" describe --always --tags --long --dirty 2>/dev/null || echo unknown
+}
+
+printing() {
+    curl -s -m 5 "http://localhost:7125/printer/objects/query?print_stats" 2>/dev/null |
+        python3 -c 'import json,sys; s=json.load(sys.stdin)["result"]["status"]["print_stats"]["state"]; sys.exit(0 if s in ("printing","paused") else 1)' 2>/dev/null
+}
+
+user_folder() {
+    install -d -o "$OWNER" -g "$OWNER" "$USERDIR"
+    [ -f "$USERDIR/README" ] && return
+    cat >"$USERDIR/README" <<'EOF'
+Firmware for the Recore's MCUs, built on the printer by rebuild-firmware.
+
+  <role>.config      your changes, added on top of Rebuild's stock config.
+                     Only the lines you want different, e.g.
+                         CONFIG_WANT_BUTTONS=n
+  <role>.reference   every option you can set, with its current value.
+                     Regenerated on every build - copy lines from it.
+
+Roles: ar100, stm32 (whichever STM32 this board has), rp2040 (toolhead).
+A missing <role>.config means Rebuild's stock config.
+
+To build and flash: start the rebuild-firmware service from the services
+menu in Fluidd or Mainsail. The log is logs/rebuild-firmware.log. A build
+that fails or does not fit leaves the installed firmware as it was, and
+nothing is flashed while the printer prints.
+EOF
+    chown "$OWNER:$OWNER" "$USERDIR/README"
+}
+
+# A copy of the Klipper checkout to build in, so the user's checkout stays as
+# Moonraker needs it - an unmodified repository it can update. Includes any
+# local changes the user made to it; the version file tells Klipper's build
+# which version this is, since the copy has no git.
+prepare_tree() {
+    local src=$WORK/klipper
+    rm -rf "$src"
+    mkdir -p "$src"
+    tar -C "$KLIPPER" --exclude=./.git --exclude=./out --exclude=./.config -c . | tar -C "$src" -x
+    klipper_version >"$src/klippy/.version"
+    # The STM32F031 has hardware I2C in Klipper only with this; the 16 KB part
+    # needs it to fit the software I2C its config leaves out.
+    sed -i 's/select HAVE_GPIO_I2C if !MACH_STM32F031/select HAVE_GPIO_I2C/' "$src/src/stm32/Kconfig"
+    TREE=$src
+}
+
+# config_for VARIANT -> $WORK/<variant>/{stock,effective}.config
+config_for() {
+    local v=$1 dir=$WORK/$1 user
+    user=$USERDIR/$(role_of "$v").config
+    mkdir -p "$dir"
+    cp "$STOCK/$v.config" "$dir/stock.config"
+    kmake -s KCONFIG_CONFIG="$dir/stock.config" olddefconfig >/dev/null
+    if [ -f "$user" ]; then
+        # The echo: a file without a final newline would glue its last line
+        # to the user's first, and that line would be silently lost.
+        { cat "$STOCK/$v.config"; echo; cat "$user"; } >"$dir/effective.config"
+    else
+        cp "$STOCK/$v.config" "$dir/effective.config"
+    fi
+    kmake -s KCONFIG_CONFIG="$dir/effective.config" olddefconfig >/dev/null 2>&1
+    if [ -f "$user" ]; then
+        python3 "$HELPER" check "$TREE" "$dir/effective.config" "$user" | sed "s/^/  warning: $(role_of "$v").config: /"
+    fi
+}
+
+write_reference() {
+    local v=$1 role used revision title
+    role=$(role_of "$v")
+    revision=$(get-recore-revision 2>/dev/null || echo "?")
+    used=$(cat "$FIRMWARE/$v.size" 2>/dev/null || true)
+    title="$v for this Recore ${revision^^}, Klipper $(klipper_version)"
+    if [ -n "$used" ] && [ "$(limit "$v")" -gt 0 ]; then
+        title+="\\nFlash: $used of $(limit "$v") bytes used by the installed build."
+    elif [ -n "$used" ]; then
+        title+="\\nSize of the installed build: $used bytes."
+    fi
+    python3 "$HELPER" reference "$TREE" "$WORK/$v/stock.config" "$WORK/$v/effective.config" \
+        "$USERDIR/$role.config" "$title" >"$USERDIR/$role.reference"
+    chown "$OWNER:$OWNER" "$USERDIR/$role.reference"
+}
+
+# build VARIANT: 0 built and installed, 1 failed, 2 already current
+build() {
+    local v=$1 dir=$WORK/$1 out=$WORK/$1/out version size max
+    version=$(klipper_version)
+    if [ -z "$FORCE" ] && [ -f "$FIRMWARE/$(installed "$v")" ] &&
+       cmp -s "$dir/effective.config" "$FIRMWARE/$v.config" &&
+       [ "$(cat "$FIRMWARE/$v.klipper-version" 2>/dev/null)" = "$version" ]; then
+        say "$v: current (Klipper $version, same config)"
+        return 2
+    fi
+    say "$v: building with Klipper $version"
+    rm -rf "$out"
+    if ! (cd "$TREE" && nice -n 10 make KCONFIG_CONFIG="$dir/effective.config" OUT="$out/" -j2) >"$dir/build.log" 2>&1; then
+        tail -20 "$dir/build.log" | sed 's/^/  /'
+        say "$v: build FAILED - the installed firmware is unchanged"
+        return 1
+    fi
+    size=$(stat -c %s "$out/$(artifact "$v")")
+    max=$(limit "$v")
+    if [ "$max" -gt 0 ] && [ "$size" -gt "$max" ]; then
+        say "$v: $size bytes does not fit in $max - switch something off in $(role_of "$v").config"
+        say "$v: the installed firmware is unchanged"
+        return 1
+    fi
+    mkdir -p "$FIRMWARE/previous"
+    for f in "$(installed "$v")" "$v.config" "$v.klipper-version" "$v.size"; do
+        [ -f "$FIRMWARE/$f" ] && cp -a "$FIRMWARE/$f" "$FIRMWARE/previous/"
+    done
+    cp "$out/$(artifact "$v")" "$FIRMWARE/$(installed "$v")"
+    # flash-ar100.py writes the image to device memory, which needs aligned
+    # stores: pad to 16 bytes, or the tail store faults with SIGBUS.
+    [ "$v" = ar100 ] && truncate -s %16 "$FIRMWARE/ar100.bin"
+    cp "$dir/effective.config" "$FIRMWARE/$v.config"
+    echo "$version" >"$FIRMWARE/$v.klipper-version"
+    echo "$size" >"$FIRMWARE/$v.size"
+    if [ "$max" -gt 0 ]; then
+        say "$v: built - $size of $max bytes ($((max - size)) free)"
+    else
+        say "$v: built - $size bytes"
+    fi
+    return 0
+}
+
+cmd_build() {
+    local roles=() variants=() v rc changed=() failed=0
+    FORCE="" NOFLASH="" ALL=""
+    while [ $# -gt 0 ]; do
+        case $1 in
+            --force) FORCE=1 ;;
+            --no-flash) NOFLASH=1 ;;
+            --all-variants) ALL=1; NOFLASH=1 ;;
+            -*) die "unknown option $1" ;;
+            *) roles+=("$1") ;;
+        esac
+        shift
+    done
+    [ ${#roles[@]} -gt 0 ] || roles=(ar100 stm32 rp2040)
+    for r in "${roles[@]}"; do
+        if [ -n "$ALL" ] && [ "$r" = stm32 ]; then
+            variants+=(stm32f031-16k stm32f031-32k)
+        else
+            variants+=("$(variant_of "$r")")
+        fi
+    done
+    if [ -z "$NOFLASH" ] && printing; then
+        die "the printer is printing - not building or flashing now"
+    fi
+    say "== $(date '+%F %T') rebuild-firmware: ${variants[*]}"
+    prepare_tree
+    [ -n "$ALL" ] || user_folder
+    for v in "${variants[@]}"; do
+        config_for "$v"
+        rc=0; build "$v" || rc=$?
+        case $rc in 0) changed+=("$v") ;; 1) failed=1 ;; esac
+        [ -n "$ALL" ] || write_reference "$v"
+    done
+    [ -n "$NOFLASH" ] && { say "not flashing (--no-flash)"; exit $failed; }
+    [ ${#changed[@]} -gt 0 ] || { say "nothing to flash"; exit $failed; }
+    if printing; then
+        say "the printer started printing - built, but not flashed; run again when it is idle"
+        exit 1
+    fi
+    # flash-stm32 restarts Klipper, which loads the AR100 image; otherwise a
+    # changed AR100 alone needs that restart.
+    local restart=""
+    for v in "${changed[@]}"; do
+        case $v in
+            stm32*) say "flashing the STM32"; flash-stm32 ;;
+            rp2040) say "flashing the RP2040"; flash-rp2040 || say "flash-rp2040 failed" ;;
+            ar100) restart=1 ;;
+        esac
+    done
+    if [ -n "$restart" ] && [[ " ${changed[*]} " != *" stm32"* ]]; then
+        say "restarting Klipper to load the AR100 firmware"
+        systemctl restart klipper
+    fi
+    say "done"
+    exit $failed
+}
+
+cmd_reference() {
+    local roles=("$@") r v
+    [ ${#roles[@]} -gt 0 ] || roles=(ar100 stm32 rp2040)
+    prepare_tree
+    user_folder
+    for r in "${roles[@]}"; do
+        v=$(variant_of "$r")
+        config_for "$v"
+        write_reference "$v"
+        say "wrote $USERDIR/$r.reference"
+    done
+}
+
+cmd_menuconfig() {
+    local r=${1:?usage: rebuild-firmware menuconfig ar100|stm32|rp2040} v new
+    v=$(variant_of "$r")
+    [ -t 0 ] || die "menuconfig needs a terminal - log in over ssh"
+    prepare_tree
+    user_folder
+    config_for "$v"
+    new=$WORK/$v/menuconfig.config
+    cp "$WORK/$v/effective.config" "$new"
+    kmake KCONFIG_CONFIG="$new" menuconfig
+    {
+        echo "# Changes to Rebuild's stock $v config, from rebuild-firmware menuconfig."
+        python3 "$HELPER" diff "$TREE" "$WORK/$v/stock.config" "$new"
+    } >"$USERDIR/$r.config"
+    chown "$OWNER:$OWNER" "$USERDIR/$r.config"
+    say "saved your changes to $USERDIR/$r.config:"
+    grep -v '^#' "$USERDIR/$r.config" | sed 's/^/  /' || say "  (none - stock config)"
+    say "start the rebuild-firmware service, or run: sudo rebuild-firmware build $r"
+}
+
+[ "$(id -u)" = 0 ] || die "run it as root (sudo)"
+mkdir -p "$WORK"
+cmd=${1:-}; shift || true
+case $cmd in
+    build)
+        # Into the log Fluidd and Mainsail can show, and to the journal.
+        if [ -d "$DATA/logs" ]; then
+            touch "$LOG"; chown "$OWNER:$OWNER" "$LOG"
+            cmd_build "$@" > >(tee -a "$LOG") 2>&1
+        else
+            cmd_build "$@"
+        fi ;;
+    reference) cmd_reference "$@" ;;
+    menuconfig) cmd_menuconfig "$@" ;;
+    *) sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+esac

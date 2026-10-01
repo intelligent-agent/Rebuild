@@ -10,8 +10,6 @@ install_klipper(){
     git clone --filter=blob:none https://github.com/Klipper3d/klipper
     git -C klipper reset --hard "${KLIPPER_VERSION}"
 
-    sed -i 's/select HAVE_GPIO_I2C if !MACH_STM32F031/select HAVE_GPIO_I2C/' klipper/src/stm32/Kconfig
-
     # We create an empty file here to give the right permissions
     touch ${HOMEDIR}/printer_data/config/printer.cfg
     chown ${USER}:${USER} ${HOMEDIR}/printer_data/config/printer.cfg
@@ -104,56 +102,12 @@ EOF
     echo "export PATH=\$PATH:$PATH:/opt/or1k-elf/bin" >> ${HOMEDIR}/.bashrc
     echo "export PATH=\$PATH:$PATH:/opt/or1k-elf/bin" >> /home/debian/.bashrc
     
-    # Compile AR100
-    cd ${HOMEDIR}/klipper/
-    cp /usr/share/rebuild/firmware/ar100.config ${HOMEDIR}/klipper/.config
-    make olddefconfig
-    make -j
-    cp ${HOMEDIR}/klipper/out/ar100.bin /opt/firmware
-    # Each binary is kept with the exact .config it was built from - after
-    # olddefconfig, so Klipper's defaults for this version are filled in. It
-    # records how the shipped firmware was made, and it is what a rebuild after
-    # a Klipper update (#106) starts from.
-    cp ${HOMEDIR}/klipper/.config /opt/firmware/ar100.config
-    # flash-ar100.py mmaps /opt/firmware/ar100.bin's target region as
-    # Device memory (it's not in /proc/iomem), which requires aligned
-    # accesses. Pad to a 16-byte boundary so the bulk write never ends
-    # on a misaligned tail store, which would fault with SIGBUS.
-    truncate -s %16 /opt/firmware/ar100.bin
-
-    # Compile STM32
-    cp /usr/share/rebuild/firmware/stm32f031-serial.config ${HOMEDIR}/klipper/.config
-    make clean
-    make olddefconfig
-    make -j
-    cp ${HOMEDIR}/klipper/out/klipper.bin /opt/firmware/stm32.bin
-    cp ${HOMEDIR}/klipper/.config /opt/firmware/stm32.config
-
-    # Compile STM32-32KB
-    cp /usr/share/rebuild/firmware/stm32f031-32KB-serial.config ${HOMEDIR}/klipper/.config
-    make clean
-    make olddefconfig
-    make -j
-    cp ${HOMEDIR}/klipper/out/klipper.bin /opt/firmware/stm32-32KB.bin
-    cp ${HOMEDIR}/klipper/.config /opt/firmware/stm32-32KB.config
-
-    # Compile RP2040 - ReTool A2, and Remote when it lands (#38).
-    #
-    # Upstream's own config rather than one of ours: it is two lines
-    # (MACH_RPXXXX + MACH_RP2040) and olddefconfig's defaults are already what
-    # this board needs - USB rather than UART, and VID:PID 1d50:614e, which is
-    # how a flashed board identifies itself.
-    #
-    # Note the artefact is klipper.uf2, not klipper.bin like the STM32 builds.
-    cp ${HOMEDIR}/klipper/test/configs/rp2040.config ${HOMEDIR}/klipper/.config
-    make clean
-    make olddefconfig
-    make -j
-    cp ${HOMEDIR}/klipper/out/klipper.uf2 /opt/firmware/rp2040.uf2
-    cp ${HOMEDIR}/klipper/.config /opt/firmware/rp2040.config
-    # The Klipper revision all four were built from, so it can be told when
-    # the checkout has moved on and the binaries are stale (#106).
-    git -C ${HOMEDIR}/klipper describe --always --tags --long > /opt/firmware/klipper-version
+    # The firmware, with the same tool and stock configs a board rebuilds it
+    # with after a Klipper update (#106): every STM32 variant, since there is
+    # no board here to ask which one it has. It builds in its own copy of the
+    # checkout, so the checkout stays unmodified for Moonraker.
+    rebuild-firmware build --all-variants
+    rm -rf /var/lib/rebuild/firmware
 
     # ...and the flashing tool, which the firmware target does not build. It
     # talks PICOBOOT over libusb (libusb-1.0-0-dev is already in PKGLIST above),
@@ -164,11 +118,6 @@ EOF
     cp ${HOMEDIR}/klipper/lib/rp2040_flash/rp2040_flash /usr/local/bin/
     chmod +x /usr/local/bin/rp2040_flash
     
-    # Undo the Kconfig sed at the top, which is for the firmware builds only.
-    # A modified checkout is one Moonraker calls an invalid repository and
-    # will not update.
-    git reset --hard
-
     chown -R ${USER}:${USER} ${HOMEDIR}/klipper
     chown -R ${USER}:${USER} ${PYTHONDIR}
 
