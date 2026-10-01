@@ -58,3 +58,16 @@ function custom_kernel_config__rebuild_simpledrm_and_fbcon_rotation() {
         kernel_config_modifying_hashes+=("CONFIG_DRM_SIMPLEDRM=y" "CONFIG_FRAMEBUFFER_CONSOLE_ROTATION=y")
     fi
 }
+
+# Take armbian-config back out, with the apt source it brings. Armbian main
+# always enables its armbian-config extension, which installs the package in
+# this hook - after customize-image, so the purge in post_build (written when
+# Armbian installed it earlier) found nothing to remove and every image
+# shipped it, upgrading from github.armbian.com/configng. Rebuild does not
+# support what it is for: changing the kernel or bootloader by hand, past
+# the pins in rebuild-armbian-tested (#114). Armbian's install sorts as 500.
+function post_armbian_repo_customize_image__999_rebuild_no_armbian_config() {
+	display_alert "Removing armbian-config" "Rebuild releases the kernel and U-Boot itself" "info"
+	chroot_sdcard_apt_get remove --purge armbian-config
+	run_host_command_logged rm -f "${SDCARD}"/etc/apt/sources.list.d/armbian-config.sources
+}
