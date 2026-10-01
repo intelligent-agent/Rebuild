@@ -117,7 +117,14 @@ prepare_tree() {
     local src=$WORK/klipper
     rm -rf "$src"
     mkdir -p "$src"
-    tar -C "$KLIPPER" --exclude=./.git --exclude=./out --exclude=./.config -c . | tar -C "$src" -x
+    # Klipper may be running and writing its Python caches meanwhile - at
+    # first boot it always is - so leave those out, and take tar's status 1,
+    # "a file changed as we read it", as the complete copy it still is.
+    tar -C "$KLIPPER" --exclude=./.git --exclude=./out --exclude=./.config \
+        --exclude=__pycache__ --exclude='*.pyc' --warning=no-file-changed \
+        -cf "$WORK/klipper.tar" . || [ $? -eq 1 ]
+    tar -C "$src" -xf "$WORK/klipper.tar"
+    rm -f "$WORK/klipper.tar"
     klipper_version >"$src/klippy/.version"
     # The STM32F031 has hardware I2C in Klipper only with this; the 16 KB part
     # needs it to fit the software I2C its config leaves out.
