@@ -1,0 +1,42 @@
+name: Packages
+# Rebuild's own packages (rebuild-recore, rebuild-printer), published to the
+# apt repository on feeds.iagent.no whenever they change, and for every tag.
+# GitHub does not apply path filters to tags.
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+    paths:
+      - 'packaging/**'
+      - '.github/workflows/packages.yml'
+
+jobs:
+  # Built and published without an image: a fix in packaging/ reaches boards
+  # on development images as a System update in about a minute. To trixie-dev,
+  # tags too - a release reaches
+  # trixie, the suite released images use, only when a person promotes it on
+  # feeds (rebuild-apt-promote): CI cannot publish there, so a compromised
+  # runner cannot reach users' boards. rebuild-publish lives on the runner,
+  # outside this public repository, with a key that can only run the publish
+  # script on feeds. Without it the job warns and stops (#108).
+  packages:
+    runs-on: [self-hosted, rebuild]
+    steps:
+    - uses: actions/checkout@v5
+      with:
+        fetch-depth: 0    # build-debs versions from `git describe --tags`
+
+    - name: Build packages
+      run: packaging/build-debs "$RUNNER_TEMP/debs"
+
+    - name: Publish packages
+      run: |
+        if [ ! -x "$HOME/bin/rebuild-publish" ]; then
+          echo "::warning::no rebuild-publish on this runner - packages not published"
+          exit 0
+        fi
+        "$HOME/bin/rebuild-publish" trixie-dev "$RUNNER_TEMP/debs"
+        rm -rf "$RUNNER_TEMP/debs"
+
