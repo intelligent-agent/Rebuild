@@ -74,27 +74,21 @@ jobs:
       run: ./rebuild.sh barebone
 
     # Rebuild's own packages go to the apt repository on feeds.iagent.no
-    # (#108): a vX.Y.Z tag to trixie, main and RC tags to trixie-dev. Once per
-    # build, from this job, since the four variants build identical packages.
-    # The key only allows a tunnel through the Linode and running the publish
-    # script on feeds; without it the step warns and the build carries on.
+    # (#108), to trixie-dev - tags too. Once per build, from this job, since
+    # the four variants build identical packages. A release reaches trixie, the
+    # suite released images use, only when a person promotes it on feeds: CI
+    # cannot publish there, so a compromised runner cannot reach users' boards.
+    # rebuild-publish lives on the runner, outside this public repository, with
+    # a key that can only run the publish script on feeds. Without it the step
+    # warns and the build carries on.
     - name: Publish packages
       if: github.event_name == 'push'
       run: |
-        case "$GITHUB_REF" in
-          refs/tags/v*-*) suite=trixie-dev ;;
-          refs/tags/v*)   suite=trixie ;;
-          *)              suite=trixie-dev ;;
-        esac
-        key=$HOME/.ssh/rebuild-apt_ed25519
-        if [ ! -f "$key" ]; then
-          echo "::warning::no publish key on this runner - packages not published to $suite"
+        if [ ! -x "$HOME/bin/rebuild-publish" ]; then
+          echo "::warning::no rebuild-publish on this runner - packages not published"
           exit 0
         fi
-        tar -C ../build-barebone/userpatches/overlay/debs -c . |
-          ssh -i "$key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new \
-              -o ProxyCommand="ssh -i $key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -W %h:%p elias@178.79.188.199" \
-              rebuild-ci@192.168.1.4 "$suite"
+        "$HOME/bin/rebuild-publish" trixie-dev ../build-barebone/userpatches/overlay/debs
 
     - name: Stage image for Recore CI
       run: |

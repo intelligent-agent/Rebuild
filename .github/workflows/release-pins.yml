@@ -1,0 +1,52 @@
+name: Release Armbian packages
+# Releases the kernel, device trees, U-Boot, BSP, firmware and base-files of one
+# Rebuild build to boards (#114), by publishing them together with a newer
+# rebuild-armbian-tested that pins exactly those versions. Boards on that suite
+# then see it as a System update in Fluidd or Mainsail.
+#
+# Run by hand, and only for a build Recore-CI has passed: this is the step that
+# says a kernel is tested. To roll back, release the previous build again.
+#
+# On the self-hosted runner, because the packages are only there: in the
+# Armbian trees the image builds leave behind (build-<variant>/output/debs).
+run-name: Release ${{ inputs.rebuild_version }} to ${{ inputs.suite }}
+on:
+  workflow_dispatch:
+    inputs:
+      rebuild_version:
+        description: 'Rebuild build whose packages to release, as in the image name (v1.1.0-27-g5ba99d0)'
+        type: string
+        required: true
+      # Not trixie: CI cannot publish there. Promote a release on feeds.
+      suite:
+        description: 'Suite to release to'
+        type: choice
+        default: trixie-dev
+        options:
+          - trixie-dev
+          - trixie-test
+
+jobs:
+  release:
+    runs-on: self-hosted
+    # Through the environment, not interpolated into the scripts.
+    env:
+      REBUILD_VERSION: ${{ inputs.rebuild_version }}
+      SUITE: ${{ inputs.suite }}
+    steps:
+    - uses: actions/checkout@v5
+
+    - name: Collect the packages and the pins
+      run: |
+        rm -rf release-out
+        packaging/release-armbian-pins release-out "$REBUILD_VERSION" \
+            "$HOME"/actions-runner-rebuild*/_work/Rebuild/build-*/output/debs
+
+    # Through rebuild-publish on the runner, as in build.yml.
+    - name: Publish
+      run: |
+        if [ ! -x "$HOME/bin/rebuild-publish" ]; then
+          echo "::error::no rebuild-publish on this runner"
+          exit 1
+        fi
+        "$HOME/bin/rebuild-publish" "$SUITE" release-out

@@ -1,0 +1,87 @@
+#!/bin/bash
+# Release the Armbian packages of one Rebuild build to boards (#114).
+#
+#   packaging/release-armbian-pins OUTDIR REBUILD_VERSION DEBS_DIR...
+#   packaging/release-armbian-pins out v1.1.0-27-g5ba99d0 ../build-*/output/debs
+#
+# Collects the six packages the images pin (kernel, device trees, U-Boot, BSP,
+# firmware, base-files) as built for REBUILD_VERSION, and a newer
+# rebuild-armbian-tested whose apt preferences pin exactly those versions.
+# Publishing OUTDIR to a suite releases them: boards take the new pins as a
+# System update, then the packages on the next round. Run it only for a build
+# Recore-CI has passed.
+#
+# A rollback is the same command with an older REBUILD_VERSION: the new
+# rebuild-armbian-tested is still newer than every earlier one, and a
+# Pin-Priority above 1000 lets apt go back down to the pinned versions.
+#
+# All six come from one build tree. The trees of the four variants each build
+# their own copy, with the same versions but not the same bytes.
+set -euo pipefail
+
+OUT=${1:?usage: release-armbian-pins OUTDIR REBUILD_VERSION DEBS_DIR...}
+TAG=${2:?usage: release-armbian-pins OUTDIR REBUILD_VERSION DEBS_DIR...}
+shift 2
+[ $# -gt 0 ] || { echo "name at least one Armbian output/debs directory" >&2; exit 2; }
+
+# The suffix rebuild.sh gives Armbian's REVISION for this build.
+SUFFIX="+rebuild.$(echo "${TAG#v}" | tr -- '-' '.')"
+PACKAGES="linux-image-current-sunxi64 linux-dtb-current-sunxi64 linux-u-boot-recore-current
+          armbian-bsp-cli-recore-current armbian-firmware base-files"
+
+find_set() {
+    local dir=$1 pkg f
+    for pkg in $PACKAGES; do
+        # base-files appends Debian's own version after the revision.
+        f=$(find "$dir" -name "${pkg}_*${SUFFIX}[_-]*.deb" 2>/dev/null | sort | tail -1)
+        [ -n "$f" ] || return 1
+        echo "$f"
+    done
+}
+
+SET=""
+for dir in "$@"; do
+    if SET=$(find_set "$dir"); then
+        echo "using $dir" >&2
+        break
+    fi
+    SET=""
+done
+[ -n "$SET" ] || { echo "no build tree has all six packages for $TAG ($SUFFIX)" >&2; exit 1; }
+
+mkdir -p "$OUT"
+PINS=$(mktemp)
+trap 'rm -rf "$PINS" "${PKG:-}"' EXIT
+for f in $SET; do
+    name=$(dpkg-deb -f "$f" Package)
+    version=$(dpkg-deb -f "$f" Version)
+    arch=$(dpkg-deb -f "$f" Architecture)
+    cp "$f" "$OUT/${name}_${version}_${arch}.deb"
+    printf 'Package: %s\nPin: version %s\nPin-Priority: 1001\n\n' "$name" "$version" >>"$PINS"
+done
+
+# Same format and version scheme as the pins an image is built with
+# (userpatches/overlay/install_components/armbian_pins.sh): a timestamp, so
+# this sorts above every image built before it and every earlier release.
+PKG=$(mktemp -d)
+VERSION=$(date -u +%Y%m%d.%H%M%S)
+chmod 755 "$PKG"
+mkdir -p "$PKG/DEBIAN" "$PKG/etc/apt/preferences.d"
+install -m 644 "$PINS" "$PKG/etc/apt/preferences.d/rebuild-armbian-tested"
+cat >"$PKG/DEBIAN/control" <<EOF
+Package: rebuild-armbian-tested
+Version: ${VERSION}
+Architecture: all
+Maintainer: Elias Bakken <elias@iagent.no>
+Section: admin
+Priority: optional
+Description: Armbian package versions tested on Recore
+ Pins Armbian's kernel, device trees, U-Boot, board support package,
+ firmware and base-files to the versions Recore-CI has tested. A newer
+ version of this package releases newer ones.
+ .
+ This release: Rebuild ${TAG}.
+EOF
+dpkg-deb --build --root-owner-group "$PKG" "$OUT/rebuild-armbian-tested_${VERSION}_all.deb" >/dev/null
+echo "rebuild-armbian-tested ${VERSION} pins:" >&2
+sed -n 's/^Package: //p;s/^Pin: version /    /p' "$PINS" | paste - - >&2
