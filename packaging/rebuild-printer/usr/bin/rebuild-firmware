@@ -43,16 +43,23 @@ die() { echo "rebuild-firmware: $*" >&2; exit 1; }
 
 # The role a user edits, and the stock variant a board builds for it. One
 # STM32 per board, so the user's file is just stm32.config; which build it
-# lands on is the board's revision. A3-A6 have the smaller part.
+# lands on is the chip's flash size, which flash-stm32 reads from the chip
+# and records. Before the chip has been read, the revision: A3-A6 have the
+# 16 KB part, A7/A8 the 32 KB one.
 variant_of() {
     case $1 in
         ar100)  echo ar100 ;;
         rp2040) echo rp2040 ;;
         stm32)
-            case $(get-recore-revision 2>/dev/null || true) in
-                a7|a8) echo stm32f031-32k ;;
-                a3|a4|a5|a6) echo stm32f031-16k ;;
-                *) die "cannot tell this board's revision, so not which STM32 build it needs" ;;
+            case $(cat "$FIRMWARE/stm32.flash-size" 2>/dev/null) in
+                16) echo stm32f031-16k ;;
+                32) echo stm32f031-32k ;;
+                *)
+                    case $(get-recore-revision 2>/dev/null || true) in
+                        a7|a8) echo stm32f031-32k ;;
+                        a3|a4|a5|a6) echo stm32f031-16k ;;
+                        *) die "cannot tell which STM32 this board has" ;;
+                    esac ;;
             esac ;;
         *) die "no such firmware: $1 (ar100, stm32 or rp2040)" ;;
     esac
@@ -189,6 +196,9 @@ build() {
     cp "$dir/effective.config" "$FIRMWARE/$v.config"
     echo "$version" >"$FIRMWARE/$v.klipper-version"
     echo "$size" >"$FIRMWARE/$v.size"
+    # One record per firmware now; the single file from before #106 would
+    # only go stale.
+    rm -f "$FIRMWARE/klipper-version"
     if [ "$max" -gt 0 ]; then
         say "$v: built - $size of $max bytes ($((max - size)) free)"
     else

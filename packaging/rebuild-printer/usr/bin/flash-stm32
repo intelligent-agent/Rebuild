@@ -3,15 +3,8 @@
 set -e
 
 
-REVISION=$(get-recore-revision)
-
 FLASH_DEVICE=/dev/ttyS2
-
-# Named for the build, as rebuild-firmware installs it (#106).
-STM32_BINARY=/opt/firmware/stm32f031-16k.bin
-if [ "$REVISION" == "a7" ] || [ "$REVISION" == "a8" ]; then
-    STM32_BINARY=/opt/firmware/stm32f031-32k.bin
-fi
+FIRMWARE=/opt/firmware
 
 systemctl stop klipper
 
@@ -50,7 +43,48 @@ trap release_boot_pin EXIT
 gpioset -z -C "boot-pin" -c 1 197=1
 # Set reset-pin 196 low, then high after 10 ms
 gpioset -t 10ms,0 -c 1 196=0
+# Which STM32F031 this is, from the chip itself: its flash size register
+# (0x1FFFF7CC, in KB) says 16 on the x4 part (Recore A3-A6) and 32 on the x6
+# (A7/A8). The device ID cannot tell them apart. The image carries a build for
+# each (#106); flash the one made for this chip and keep only that.
+FLASH_KB=$(stm32flash -r /tmp/stm32-flash-size -S 0x1FFFF7CC:2 ${FLASH_DEVICE} >/dev/null 2>&1 &&
+           od -An -tu2 /tmp/stm32-flash-size | tr -d ' ' || true)
+rm -f /tmp/stm32-flash-size
+case "$FLASH_KB" in
+    16|32) ;;
+    *)
+        # Unreadable: fall back on the revision, which matches every board
+        # measured so far.
+        case $(get-recore-revision 2>/dev/null) in a7|a8) FLASH_KB=32 ;; *) FLASH_KB=16 ;; esac
+        echo "flash-stm32: could not read the flash size; assuming ${FLASH_KB} KB from the revision" ;;
+esac
+VARIANT=stm32f031-${FLASH_KB}k
+STM32_BINARY=$FIRMWARE/$VARIANT.bin
+echo "flash-stm32: ${FLASH_KB} KB part - $VARIANT"
+echo "$FLASH_KB" > $FIRMWARE/stm32.flash-size
+
+leave_bootloader() {
+    drop_boot_pin
+    gpioset -t 10ms,0 -c 1 196=0
+    gpioget -c 1 -b pull-up 196
+    systemctl restart klipper
+}
+if [ ! -f "$STM32_BINARY" ]; then
+    echo "flash-stm32: no $STM32_BINARY - not flashing" >&2
+    leave_bootloader; exit 1
+fi
+if [ "$(stat -c %s "$STM32_BINARY")" -gt $((FLASH_KB * 1024)) ]; then
+    echo "flash-stm32: $STM32_BINARY is larger than the chip's ${FLASH_KB} KB - not flashing" >&2
+    leave_bootloader; exit 1
+fi
+
 stm32flash -w ${STM32_BINARY} -v -g 0 ${FLASH_DEVICE}
+
+# The other chip's build, and the names from before #106, are not for this
+# board.
+OTHER=stm32f031-$([ "$FLASH_KB" = 16 ] && echo 32 || echo 16)k
+rm -f $FIRMWARE/$OTHER.bin $FIRMWARE/$OTHER.config $FIRMWARE/$OTHER.klipper-version $FIRMWARE/$OTHER.size \
+      $FIRMWARE/stm32.bin $FIRMWARE/stm32.config $FIRMWARE/stm32-32KB.bin $FIRMWARE/stm32-32KB.config
 # Set boot-pin low
 drop_boot_pin
 # 196 needs to be pull-up so the STM32 can use reset
