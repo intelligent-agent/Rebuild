@@ -164,6 +164,11 @@ EOF
     cp ${HOMEDIR}/klipper/lib/rp2040_flash/rp2040_flash /usr/local/bin/
     chmod +x /usr/local/bin/rp2040_flash
     
+    # Undo the Kconfig sed at the top, which is for the firmware builds only.
+    # A modified checkout is one Moonraker calls an invalid repository and
+    # will not update.
+    git reset --hard
+
     chown -R ${USER}:${USER} ${HOMEDIR}/klipper
     chown -R ${USER}:${USER} ${PYTHONDIR}
 
