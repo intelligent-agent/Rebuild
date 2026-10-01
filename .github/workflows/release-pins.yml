@@ -28,7 +28,7 @@ on:
 
 jobs:
   release:
-    runs-on: self-hosted
+    runs-on: [self-hosted, rebuild]
     # Through the environment, not interpolated into the scripts.
     env:
       REBUILD_VERSION: ${{ inputs.rebuild_version }}

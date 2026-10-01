@@ -49,6 +49,34 @@ env:
   ENABLE_EXTENSIONS: rebuild-cgroup
 
 jobs:
+  # Rebuild's own packages, built and published on every push, without an
+  # image: a fix in packaging/ reaches boards on development images as a System
+  # update in about a minute. To trixie-dev, tags too - a release reaches
+  # trixie, the suite released images use, only when a person promotes it on
+  # feeds (rebuild-apt-promote): CI cannot publish there, so a compromised
+  # runner cannot reach users' boards. rebuild-publish lives on the runner,
+  # outside this public repository, with a key that can only run the publish
+  # script on feeds. Without it the job warns and stops (#108).
+  packages:
+    if: github.event_name == 'push'
+    runs-on: [self-hosted, rebuild]
+    steps:
+    - uses: actions/checkout@v5
+      with:
+        fetch-depth: 0    # build-debs versions from `git describe --tags`
+
+    - name: Build packages
+      run: packaging/build-debs "$RUNNER_TEMP/debs"
+
+    - name: Publish packages
+      run: |
+        if [ ! -x "$HOME/bin/rebuild-publish" ]; then
+          echo "::warning::no rebuild-publish on this runner - packages not published"
+          exit 0
+        fi
+        "$HOME/bin/rebuild-publish" trixie-dev "$RUNNER_TEMP/debs"
+        rm -rf "$RUNNER_TEMP/debs"
+
   build-barebone:
     # Unchanged for push and tag; on a manual run, only when asked for.
     if: >-
@@ -72,23 +100,6 @@ jobs:
 
     - name: Run build
       run: ./rebuild.sh barebone
-
-    # Rebuild's own packages go to the apt repository on feeds.iagent.no
-    # (#108), to trixie-dev - tags too. Once per build, from this job, since
-    # the four variants build identical packages. A release reaches trixie, the
-    # suite released images use, only when a person promotes it on feeds: CI
-    # cannot publish there, so a compromised runner cannot reach users' boards.
-    # rebuild-publish lives on the runner, outside this public repository, with
-    # a key that can only run the publish script on feeds. Without it the step
-    # warns and the build carries on.
-    - name: Publish packages
-      if: github.event_name == 'push'
-      run: |
-        if [ ! -x "$HOME/bin/rebuild-publish" ]; then
-          echo "::warning::no rebuild-publish on this runner - packages not published"
-          exit 0
-        fi
-        "$HOME/bin/rebuild-publish" trixie-dev ../build-barebone/userpatches/overlay/debs
 
     - name: Stage image for Recore CI
       run: |
