@@ -45,9 +45,10 @@ post_build() {
     # be left looking like a hardware fault after nothing more exotic than a
     # menu selection.
     #
-    # On Armbian main armbian-config is installed after this script, so the
-    # purge below finds nothing: the rebuild-recore extension removes it
-    # (post_armbian_repo_customize_image__999_rebuild_no_armbian_config).
+    # On Armbian main armbian-config is not installed at all: Armbian enables
+    # its armbian-config extension unconditionally, and
+    # userpatches/extensions/armbian-config.sh replaces it with an empty one.
+    # The purge stays for a build without that override.
     #
     # armbian-config purges cleanly - nothing depends on it. armbian-install
     # cannot be purged: it is owned by armbian-bsp-cli-recore-current, the held
