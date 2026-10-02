@@ -21,4 +21,4 @@ override_dh_auto_clean:
 # so the image build enables it instead.
 override_dh_installsystemd:
 	dh_installsystemd -prebuild-recore --no-start --no-stop-on-upgrade autohotspot.service
-	dh_installsystemd -prebuild-printer --no-start --no-stop-on-upgrade auto-disable-ssh.timer
+	dh_installsystemd -prebuild-printer --no-start --no-stop-on-upgrade auto-disable-ssh.timer rebuild-trim-logs.timer

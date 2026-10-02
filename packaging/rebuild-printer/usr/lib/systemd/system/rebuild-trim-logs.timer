@@ -1,0 +1,10 @@
+[Unit]
+Description=Keep the /var/log RAM disk from filling up
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=1min
+AccuracySec=15s
+
+[Install]
+WantedBy=timers.target

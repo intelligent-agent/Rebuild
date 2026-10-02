@@ -1,0 +1,44 @@
+#!/bin/bash
+# Keep /var/log, a small RAM disk (armbian-ramlog), from filling up (#102).
+#
+# Armbian truncates it every 15 minutes once it is 75% full, but never deletes
+# the dated files Klipper and Moonraker rotate to at midnight
+# (klippy.log.2026-10-01) - Klipper alone keeps five days of them - so on a
+# printer that has been printing for a few days they hold the space and the
+# disk fills anyway. A full /var/log leaves rsyslog failing every write.
+#
+# Run every minute (rebuild-trim-logs.timer):
+#   - from SOFT% full, delete those dated files, oldest first, until below it;
+#   - from HARD% full, still, empty the live logs with Armbian's truncation.
+# Today's logs stay as long as possible: they are what a bug report needs.
+LOG=/var/log
+SOFT=${SOFT:-70}
+HARD=${HARD:-85}
+
+usage() { df --output=pcent "$LOG" | tail -1 | tr -dc '0-9'; }
+
+# Only the RAM disk: with ramlog off, /var/log is the eMMC's root filesystem.
+mountpoint -q "$LOG" || exit 0
+[ "$(usage)" -ge "$SOFT" ] || exit 0
+
+start=$(usage)
+removed=0
+while [ "$(usage)" -ge "$SOFT" ]; do
+    oldest=$(find "$LOG" -type f -regextype posix-extended \
+                  -regex '.*\.log\.[0-9]{4}-[0-9]{2}-[0-9]{2}[0-9_-]*' \
+                  -printf '%T@ %p\n' | sort -n | head -1 | cut -d' ' -f2-)
+    [ -n "$oldest" ] || break
+    rm -f "$oldest"
+    removed=$((removed + 1))
+done
+
+truncated=""
+if [ "$(usage)" -ge "$HARD" ] && [ -x /usr/lib/armbian/armbian-truncate-logs ]; then
+    # Saves to /var/log.hdd first, then empties every *.log and syslog.
+    # Klipper and Moonraker append, so emptying their open logs is safe.
+    /usr/lib/armbian/armbian-truncate-logs
+    truncated=", then truncated the logs"
+fi
+
+logger -t rebuild-trim-logs \
+    "/var/log was ${start}% full: deleted $removed old rotated logs${truncated}; now $(usage)%"

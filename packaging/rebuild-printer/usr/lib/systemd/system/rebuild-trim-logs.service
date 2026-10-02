@@ -1,0 +1,7 @@
+[Unit]
+Description=Delete old rotated logs when the /var/log RAM disk fills up
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/rebuild/trim-logs
+Nice=10
