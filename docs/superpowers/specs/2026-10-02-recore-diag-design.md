@@ -96,3 +96,33 @@ Every load runs under `timeout` and is also killed by a trap, so a broken script
 - The Reflash browser view (later; it reuses the script and its output format).
 - Any upload.
 - A Recore-CI hwtest wrapper (can follow once the output format has settled).
+- Board quirks (next section).
+
+## Future improvement: per-board quirks for marginal boards
+
+A board that fails Extended could be made usable by running it more slowly, while good boards keep full speed: a permanent "quirk" for that one board, found and checked with `recore-diag` itself.
+
+### What could be lowered, and where each is set
+
+| Knob | Set by | Per-board mechanism |
+|---|---|---|
+| DRAM clock (648 MHz now; 624 was 11× fewer failures on the Kossel) | U-Boot SPL, at build time (`CONFIG_DRAM_CLK`) | A second U-Boot build, written to that board's boot area. The hardest one. |
+| DRAM drive and termination (ODT 60 Ω: 3× fewer) | U-Boot SPL, at build time | The same as the DRAM clock |
+| DRAM voltage (#112) | the kernel regulator; ideally SPL | Device tree overlay; but SPL trains DRAM before the kernel changes it |
+| GPU clock, or GPU off on boards without a display | device tree (`assigned-clock-rates`, `status`) | Device tree overlay, the same way as #111's thermal overlay |
+| CPU top speed | cpufreq | Overlay dropping the high OPPs, or a cpufreq cap |
+
+### Shape
+
+- `recore-diag --quirk <name>` applies a named quirk, and `--quirk none` removes it.
+- Then it suggests rerunning Extended. A quirk counts only if the same test that failed now passes.
+- The report always lists the quirks in force, so a shared report never hides that a board runs slowed down.
+- **Where it lives.** It has to survive both Rebuild updates and a reflash.
+  - The eMMC boot partition (`mmcblk2boot0`) already holds the board's revision, which `get-recore-revision` reads, and a reflash does not touch it. Storing quirks next to the revision would keep them with the board.
+  - `rebuild-recore` and Reflash would then apply them at install and boot.
+
+### Caveat from the Kossel
+
+On the Kossel, both levers made the fault rarer in proportion to the margin they bought, and neither removed it. That is the signature of a marginal connection. A quirk can turn a board that fails in minutes into one that fails in weeks, and that board then passes a 45-minute test.
+
+So for DRAM, a quirk should be recorded as "mitigated, not fixed", and the report should say so. The GPU-off quirk is different: it removes the load that exposes the fault. It is the one most likely to make a marginal A6 dependable for printing.
