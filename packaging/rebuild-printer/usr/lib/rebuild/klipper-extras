@@ -11,11 +11,31 @@
 # [tmc2209_a5 stepper_x] - and what those import, so boards that do not use them (everything but
 # the A5) see nothing extra in Klipper. A real file of the same name is the
 # user's and is left alone.
-EXTRAS=/usr/share/rebuild/klipper/extras
+EXTRAS=${KLIPPER_EXTRAS_SRC:-/usr/share/rebuild/klipper/extras}
 TARGET=${KLIPPER:-/home/printer/klipper}/klippy/extras
 CONFIG=${PRINTER_DATA:-/home/printer/printer_data}/config
 
 [ -d "$TARGET" ] || exit 0
+
+# Moonraker's update page lists untracked source files in Klipper's checkout
+# ("Repo has untracked source files"), and our links are not the user's
+# changes. So each one is listed in the checkout's own ignore file, which is
+# not part of the repository and survives updates; Moonraker's
+# `git status --porcelain` then leaves it out. (Klipper still calls itself
+# -dirty: its own check counts ignored files too - see rebuild_firmware.py.)
+# Rewritten in place, never replaced, so the file keeps its owner.
+EXCLUDE=${KLIPPER:-/home/printer/klipper}/.git/info/exclude
+exclude() {    # NAME add|remove
+    local line="/klippy/extras/$1.py" rest
+    [ -d "$(dirname "$(dirname "$EXCLUDE")")" ] || return 0
+    if [ "$2" = add ]; then
+        mkdir -p "$(dirname "$EXCLUDE")"
+        grep -qxF "$line" "$EXCLUDE" 2>/dev/null || echo "$line" >>"$EXCLUDE"
+    elif grep -qxF "$line" "$EXCLUDE" 2>/dev/null; then
+        rest=$(grep -vxF "$line" "$EXCLUDE")
+        printf '%s\n' "$rest" >"$EXCLUDE"
+    fi
+}
 
 # What the config names, plus whatever of ours those import: tmc2209_a5 does
 # `from . import tmc2130_a5`, and without the link Klipper stops with
@@ -43,9 +63,11 @@ for src in "$EXTRAS"/*.py; do
     if [ -n "${want[$name]:-}" ]; then
         if [ -L "$dst" ] || [ ! -e "$dst" ]; then
             ln -sfn "$src" "$dst"
+            exclude "$name" add
         fi
     elif [ "$(readlink "$dst" 2>/dev/null)" = "$src" ]; then
         rm -f "$dst"
+        exclude "$name" remove
     fi
 done
 exit 0
