@@ -1,0 +1,30 @@
+#!/bin/bash
+# Link Rebuild's own Klipper modules into Klipper's tree when the printer's
+# config uses them (#116). Run before every Klipper start (klipper.service.d).
+#
+# Klipper only loads modules from klippy/extras, inside its own checkout. The
+# modules live in rebuild-printer instead, so a package can fix them, and a
+# Klipper update or reinstall cannot lose them: this puts a link back each
+# time. Untracked links leave the checkout as Moonraker needs it.
+#
+# Only modules a config section names are linked - [recore_thermistor ...],
+# [tmc2209_a5 stepper_x] - so boards that do not use them (everything but
+# the A5) see nothing extra in Klipper. A real file of the same name is the
+# user's and is left alone.
+EXTRAS=/usr/share/rebuild/klipper/extras
+TARGET=${KLIPPER:-/home/printer/klipper}/klippy/extras
+CONFIG=${PRINTER_DATA:-/home/printer/printer_data}/config
+
+[ -d "$TARGET" ] || exit 0
+for src in "$EXTRAS"/*.py; do
+    name=$(basename "$src" .py)
+    dst=$TARGET/$name.py
+    if grep -rqsE "^\[$name[] ]" "$CONFIG" --include='*.cfg'; then
+        if [ -L "$dst" ] || [ ! -e "$dst" ]; then
+            ln -sfn "$src" "$dst"
+        fi
+    elif [ "$(readlink "$dst" 2>/dev/null)" = "$src" ]; then
+        rm -f "$dst"
+    fi
+done
+exit 0

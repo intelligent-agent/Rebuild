@@ -14,15 +14,10 @@ install_klipper(){
     touch ${HOMEDIR}/printer_data/config/printer.cfg
     chown ${USER}:${USER} ${HOMEDIR}/printer_data/config/printer.cfg
     
-    cp /tmp/overlay/klipper/generic-recore-a6.cfg ${HOMEDIR}/klipper/config/
-    cp /tmp/overlay/klipper/generic-recore-a7.cfg ${HOMEDIR}/klipper/config/
-    cp /tmp/overlay/klipper/generic-recore-a8.cfg ${HOMEDIR}/klipper/config/
-    # Add compatibility with A5. 
-    cp /tmp/overlay/klipper/generic-recore-a5.cfg ${HOMEDIR}/klipper/config/
-    cp /tmp/overlay/klipper/recore_adc_temperature.py ${HOMEDIR}/klipper/klippy/extras/
-    cp /tmp/overlay/klipper/recore_thermistor.py ${HOMEDIR}/klipper/klippy/extras/
-    cp /tmp/overlay/klipper/tmc2209_a5.py ${HOMEDIR}/klipper/klippy/extras/
-    cp /tmp/overlay/klipper/tmc2130_a5.py ${HOMEDIR}/klipper/klippy/extras/
+    # Nothing of Rebuild's goes into the checkout (#116): the example configs
+    # are in rebuild-printer's /usr/share/rebuild/klipper/config, where
+    # Reflash installs printer.cfg from, and the A5's modules are linked into
+    # klippy/extras before each Klipper start, when the config uses them.
     mkdir -p /var/log/klipper_logs
     chown ${USER}:${USER} /var/log/klipper_logs
     mkdir -p /opt/firmware/
@@ -121,10 +116,4 @@ EOF
     chown -R ${USER}:${USER} ${HOMEDIR}/klipper
     chown -R ${USER}:${USER} ${PYTHONDIR}
 
-    if [ "${UI}" != "" ]; then
-        sed -i 's:\(\# See docs.*\):\1\n\n\[include '${UI}'.cfg\]:' ${HOMEDIR}/klipper/config/generic-recore-a5.cfg
-        sed -i 's:\(\# See docs.*\):\1\n\n\[include '${UI}'.cfg\]:' ${HOMEDIR}/klipper/config/generic-recore-a6.cfg
-        sed -i 's:\(\# See docs.*\):\1\n\n\[include '${UI}'.cfg\]:' ${HOMEDIR}/klipper/config/generic-recore-a7.cfg
-        sed -i 's:\(\# See docs.*\):\1\n\n\[include '${UI}'.cfg\]:' ${HOMEDIR}/klipper/config/generic-recore-a8.cfg
-    fi
 }
