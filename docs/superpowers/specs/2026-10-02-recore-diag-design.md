@@ -121,6 +121,28 @@ A board that fails Extended could be made usable by running it more slowly, whil
   - The eMMC boot partition (`mmcblk2boot0`) already holds the board's revision, which `get-recore-revision` reads, and a reflash does not touch it. Storing quirks next to the revision would keep them with the board.
   - `rebuild-recore` and Reflash would then apply them at install and boot.
 
+### Finding a board's limit, then tuning it down
+
+The goal is to find where a user's board stops being stable and settle it on a setting with margin, rather than picking a quirk by hand. Linux-sunxi's documented method for DRAM is the shape to follow: step the clock down 24 MHz at a time until it runs indefinitely, then keep a step of margin.
+
+- **Search downward from stock, never above it.**
+  - Each DRAM step means a different U-Boot SPL and a reboot. A setting that does not train leaves the board unable to boot from the eMMC.
+  - Going down from a stock that already boots keeps every step bootable. Pre-built SPLs (stock, -24, -48, -72 MHz), shipped in a package, avoid building anything on the board.
+- **Cheapest knob first:**
+  1. GPU off or slower. Overlay only; no reboot risk.
+  2. CPU cap.
+  3. DRAM voltage.
+  4. DRAM drive and termination.
+  5. DRAM clock.
+
+  Stop at the first setting that passes.
+- **Measure a rate, not a single pass.**
+  - On the Kossel, 624 MHz gave 1 failure in about 700 loop-MB, where stock gave 8 in 500. A 45-minute run can easily pass a setting that still fails.
+  - Each step needs a long soak (`recore-diag --soak <hours>`, the Extended load for that long), counting miscompares per hour.
+  - A setting is accepted when the soak finds zero, and the report states how long that soak was. Zero in N hours is a bound, not a proof.
+- **Keep one step of margin**: settle one step below the first setting that passed the soak, not on it.
+- **Unattended but recoverable.** The search reboots between steps. It records each step's result in the same crash-safe state file and resumes after each boot. If the board does not come back on a step, the next boot falls back to the last good setting. The SPL write and its fallback are the part to design most carefully.
+
 ### Caveat from the Kossel
 
 On the Kossel, both levers made the fault rarer in proportion to the margin they bought, and neither removed it. That is the signature of a marginal connection. A quirk can turn a board that fails in minutes into one that fails in weeks, and that board then passes a 45-minute test.
