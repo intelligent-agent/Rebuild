@@ -8,7 +8,7 @@
 # time. Untracked links leave the checkout as Moonraker needs it.
 #
 # Only modules a config section names are linked - [recore_thermistor ...],
-# [tmc2209_a5 stepper_x] - so boards that do not use them (everything but
+# [tmc2209_a5 stepper_x] - and what those import, so boards that do not use them (everything but
 # the A5) see nothing extra in Klipper. A real file of the same name is the
 # user's and is left alone.
 EXTRAS=/usr/share/rebuild/klipper/extras
@@ -16,10 +16,31 @@ TARGET=${KLIPPER:-/home/printer/klipper}/klippy/extras
 CONFIG=${PRINTER_DATA:-/home/printer/printer_data}/config
 
 [ -d "$TARGET" ] || exit 0
+
+# What the config names, plus whatever of ours those import: tmc2209_a5 does
+# `from . import tmc2130_a5`, and without the link Klipper stops with
+# "cannot import name". Repeat until nothing is added.
+declare -A want=()
+for src in "$EXTRAS"/*.py; do
+    name=$(basename "$src" .py)
+    grep -rqsE "^\[$name[] ]" "$CONFIG" --include='*.cfg' && want[$name]=1
+done
+added=1
+while [ -n "$added" ]; do
+    added=""
+    for name in "${!want[@]}"; do
+        for dep in $(sed -n 's/^from \. import //p' "$EXTRAS/$name.py" | tr ',' ' '); do
+            if [ -f "$EXTRAS/$dep.py" ] && [ -z "${want[$dep]:-}" ]; then
+                want[$dep]=1; added=1
+            fi
+        done
+    done
+done
+
 for src in "$EXTRAS"/*.py; do
     name=$(basename "$src" .py)
     dst=$TARGET/$name.py
-    if grep -rqsE "^\[$name[] ]" "$CONFIG" --include='*.cfg'; then
+    if [ -n "${want[$name]:-}" ]; then
         if [ -L "$dst" ] || [ ! -e "$dst" ]; then
             ln -sfn "$src" "$dst"
         fi
