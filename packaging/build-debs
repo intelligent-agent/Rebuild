@@ -52,14 +52,14 @@ rebuild ($debver) trixie; urgency=medium
 CL
 
 # -d: dpkg-buildpackage insists on build-essential, which an arch-all package
-# of scripts does not need; debhelper, the one real build dependency, is
-# installed just before.
+# of scripts does not need; debhelper and device-tree-compiler, the real build
+# dependencies, are installed just before.
 build='cd /work/rebuild && dpkg-buildpackage -b -d -us -uc -tc >/work/build.log 2>&1 || { tail -40 /work/build.log; exit 1; }'
 if command -v dh >/dev/null; then
     (cd "$WORK/rebuild" && dpkg-buildpackage -b -us -uc -tc >"$WORK/build.log" 2>&1) || { tail -40 "$WORK/build.log"; exit 1; }
 else
     docker run --rm -v "$WORK:/work" debian:trixie sh -c "
-        export DEBIAN_FRONTEND=noninteractive && apt-get update -qq >/dev/null && apt-get install -y -qq --no-install-recommends debhelper >/dev/null &&
+        export DEBIAN_FRONTEND=noninteractive && apt-get update -qq >/dev/null && apt-get install -y -qq --no-install-recommends debhelper device-tree-compiler >/dev/null &&
         $build && chown -R $(id -u):$(id -g) /work"
 fi
 cp "$WORK"/*.deb "$OUT"/

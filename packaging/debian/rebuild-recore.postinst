@@ -79,6 +79,13 @@ if { [ "$1" = configure ] || [ "$1" = triggered ]; } &&
     fi
 fi
 
+# Device tree overlays (#111), on every configure so an upgrade brings the
+# new ones. In the image build too: that /boot is the image's. They take
+# effect on the next boot.
+if [ "$1" = configure ]; then
+    /usr/lib/rebuild/boot-overlays install || true
+fi
+
 if [ "$1" = configure ] && [ -d /run/systemd/system ]; then
     systemctl daemon-reload || true
     udevadm control --reload || true

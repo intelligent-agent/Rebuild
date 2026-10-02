@@ -1,0 +1,45 @@
+#!/bin/bash
+# Install or remove rebuild-recore's device tree overlays in /boot, and list
+# them in armbianEnv.txt's user_overlays, which the boot script applies over
+# the board's tree. If one fails to apply, the boot script falls back to the
+# tree without overlays, so a bad one cannot stop the board booting.
+#
+#   boot-overlays install|remove
+set -e
+
+SRC=/usr/lib/rebuild/overlays
+DST=/boot/overlay-user
+ENV=/boot/armbianEnv.txt
+OVERLAYS="recore-thermal"
+
+[ -f "$ENV" ] || exit 0
+
+remounted=
+if findmnt -n -o OPTIONS /boot 2>/dev/null | grep -qE '(^|,)ro(,|$)'; then
+    mount -o remount,rw /boot
+    remounted=1
+fi
+trap '[ -z "$remounted" ] || mount -o remount,ro /boot' EXIT
+
+listed=$(sed -n 's/^user_overlays=//p' "$ENV")
+for o in $OVERLAYS; do
+    listed=$(tr ' ' '\n' <<<"$listed" | grep -vx "$o" | xargs)
+    case "$1" in
+        install)
+            mkdir -p "$DST"
+            install -m 644 "$SRC/$o.dtbo" "$DST/$o.dtbo"
+            listed="$listed $o"
+            ;;
+        remove)
+            rm -f "$DST/$o.dtbo"
+            ;;
+        *)
+            echo "usage: $0 install|remove" >&2
+            exit 1
+            ;;
+    esac
+done
+listed=$(xargs <<<"$listed")
+
+sed -i '/^user_overlays=/d' "$ENV"
+[ -z "$listed" ] || echo "user_overlays=$listed" >> "$ENV"

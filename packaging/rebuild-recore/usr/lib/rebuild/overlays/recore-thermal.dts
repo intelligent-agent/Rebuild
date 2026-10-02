@@ -1,0 +1,42 @@
+/*
+ * Throttle harder instead of powering off early (#111).
+ *
+ * Armbian's sun50i-a64.dtsi patch powers the board off at 90 C. Mainline and
+ * Allwinner's BSP use 110 C, and the A64 datasheet allows a junction
+ * temperature up to 125 C. A fanless A5 at full load reached 90 C within a
+ * minute and switched itself off until power-cycled; with these settings it
+ * holds about 76 C at 648-816 MHz.
+ *
+ * Same values as Rebuild's sun50i-a64-recore.dtsi. Compiled when the package
+ * is built and copied to /boot/overlay-user by boot-overlays, so boards get it
+ * without a kernel upgrade.
+ */
+/dts-v1/;
+/plugin/;
+
+&cpu_alert0 {
+	temperature = <75000>;
+};
+
+/* passive, not hot: step_wise skips hot trips, so their maps never act */
+&cpu_alert1 {
+	temperature = <85000>;
+	type = "passive";
+};
+
+&cpu_crit {
+	temperature = <105000>;
+};
+
+&{/thermal-zones/cpu0-thermal} {
+	/* Mainline's 0 left step_wise too slow to hold the board */
+	polling-delay-passive = <250>;
+
+	cooling-maps {
+		map1 {
+			/* straight to the lowest OPP, 648 MHz */
+			cooling-device = <&cpu0 7 7>, <&cpu1 7 7>,
+					 <&cpu2 7 7>, <&cpu3 7 7>;
+		};
+	};
+};

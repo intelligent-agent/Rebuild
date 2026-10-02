@@ -3,6 +3,16 @@
 %:
 	dh $@
 
+OVERLAYS := $(wildcard rebuild-recore/usr/lib/rebuild/overlays/*.dts)
+
+# Device tree overlays for /boot (boot-overlays), compiled with symbols so
+# they resolve against the board's tree.
+override_dh_auto_build:
+	for f in $(OVERLAYS); do dtc -@ -q -I dts -O dtb -o $${f%.dts}.dtbo $$f || exit 1; done
+
+override_dh_auto_clean:
+	rm -f $(OVERLAYS:.dts=.dtbo)
+
 # Enable at install, but never start, stop or restart a unit from a
 # maintainer script: an upgrade run from Fluidd over Wi-Fi must not restart
 # autohotspot under its own connection. New code takes effect on the next

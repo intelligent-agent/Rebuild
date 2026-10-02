@@ -1,0 +1,12 @@
+#!/bin/sh
+set -e
+
+# Take the device tree overlays out of armbianEnv.txt while boot-overlays is
+# still installed. Not on upgrade: the new version's postinst installs its own.
+if [ "$1" = remove ]; then
+    /usr/lib/rebuild/boot-overlays remove || true
+fi
+
+#DEBHELPER#
+
+exit 0
