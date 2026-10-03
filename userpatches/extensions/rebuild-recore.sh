@@ -43,19 +43,18 @@ function post_family_config__900_rebuild_bl31_in_dram() {
     declare -g ATF_TARGET_MAP="PLAT=$ATF_PLAT DEBUG=0 SUNXI_PSCI_USE_SCPI=0 SUNXI_BL31_IN_DRAM=1 SEPARATE_NOBITS_REGION=0 bl31;;build/$ATF_PLAT/release/bl31.bin"
 }
 
-# Until the sunxi64 kernel configs enable them upstream. simpledrm has to be
-# built in: as a module it loads after the kernel turns off unused clocks, and
-# the panel loses U-Boot's framebuffer for about 0.6 s.
+# Test variant: build simpledrm as a module and place it in the initramfs.
+# This tests whether loading it from initramfs avoids the display handoff loss.
 #
 # The hook can be called more than once and not always with a .config in place;
 # either way it has to contribute to the config hash, or the kernel cache key
 # stops matching the config actually built.
 function custom_kernel_config__rebuild_simpledrm_and_fbcon_rotation() {
     if [[ -f .config ]]; then
-        kernel_config_set_y "CONFIG_DRM_SIMPLEDRM"
+        kernel_config_set_m "CONFIG_DRM_SIMPLEDRM"
         kernel_config_set_y "CONFIG_FRAMEBUFFER_CONSOLE_ROTATION"
     else
-        kernel_config_modifying_hashes+=("CONFIG_DRM_SIMPLEDRM=y" "CONFIG_FRAMEBUFFER_CONSOLE_ROTATION=y")
+        kernel_config_modifying_hashes+=("CONFIG_DRM_SIMPLEDRM=m" "CONFIG_FRAMEBUFFER_CONSOLE_ROTATION=y")
     fi
 }
 

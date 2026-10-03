@@ -1,0 +1,3 @@
+# Load SimpleDRM from the initramfs so it can claim U-Boot's framebuffer before
+# the normal root filesystem is mounted.
+simpledrm
