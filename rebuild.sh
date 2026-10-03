@@ -71,6 +71,13 @@ git checkout "$ARMBIAN_REF"
 # would otherwise be applied twice.
 git clean -fdq -- patch/
 cp -r "${ROOT_DIR}/armbian/patch/." patch/
+# Armbian copies these DTS files into Linux after kernel patching. Patch the
+# supplied sources first; their changed contents also enter the kernel hash.
+for kernel_line in sunxi-6.18 sunxi-7.2; do
+    patch --batch --forward --fuzz=0 -p6 \
+        -d "patch/kernel/archive/${kernel_line}/dt_64" \
+        < "${ROOT_DIR}/armbian/dts-patches/${kernel_line}/0001-recore-a5-a6-lock-gpu-at-240mhz.patch"
+done
 rm -rf "userpatches"
 
 cd "$ROOT_DIR"
