@@ -58,3 +58,23 @@ function custom_kernel_config__rebuild_simpledrm_and_fbcon_rotation() {
         kernel_config_modifying_hashes+=("CONFIG_DRM_SIMPLEDRM=y" "CONFIG_FRAMEBUFFER_CONSOLE_ROTATION=y")
     fi
 }
+
+# Keep the kernel's last messages across a crash, and catch lockups (#107).
+# rebuild-recore reboots the board 10 s after a panic and makes soft and hard
+# lockups panic; without these the panic log is gone after the reboot
+# (ramoops writes it to the region the Recore device tree reserves at
+# 0x6ff00000, read back from /sys/fs/pstore) and a stuck CPU is never noticed.
+# The hard lockup detector is the buddy kind: arm64 has no NMI watchdog here.
+function custom_kernel_config__rebuild_crash_log_and_lockups() {
+    local opt opts=(PSTORE PSTORE_RAM PSTORE_CONSOLE SOFTLOCKUP_DETECTOR
+                    HARDLOCKUP_DETECTOR HARDLOCKUP_DETECTOR_BUDDY)
+    if [[ -f .config ]]; then
+        for opt in "${opts[@]}"; do
+            kernel_config_set_y "CONFIG_$opt"
+        done
+    else
+        for opt in "${opts[@]}"; do
+            kernel_config_modifying_hashes+=("CONFIG_$opt=y")
+        done
+    fi
+}
