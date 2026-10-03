@@ -4,6 +4,9 @@ install_plymouth() {
     echo "🍰 install Plymouth"
     apt-get install -y plymouth plymouth-themes
 
+    # Test variant: force SimpleDRM inclusion and loading in the initramfs.
+    install -m 0644 /tmp/overlay/etc/initramfs-tools/modules /etc/initramfs-tools/modules
+
     # Recore's own theme, on the "script" plugin. The files ship in
     # rebuild-printer (packaging/), installed before this runs.
     #
@@ -49,6 +52,10 @@ install_plymouth() {
         exit 1
     fi
     echo "🍰 recore theme resolved by initramfs-tools"
+    if ! lsinitramfs "$IRD" | grep -q '/simpledrm\.ko'; then
+        echo "FATAL: SimpleDRM module is missing from the test initramfs" >&2
+        exit 1
+    fi
 
     # The splash is held across the handover to KlipperScreen by the
     # plymouth-quit --retain-splash drop-in in rebuild-printer...

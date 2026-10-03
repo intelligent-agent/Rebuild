@@ -16,8 +16,7 @@ Signed-off-by: Elias Bakken <elias@iagent.no>
 diff --git a/arch/arm64/boot/dts/allwinner/sun50i-a64-recore-a5.dts b/arch/arm64/boot/dts/allwinner/sun50i-a64-recore-a5.dts
 --- a/arch/arm64/boot/dts/allwinner/sun50i-a64-recore-a5.dts
 +++ b/arch/arm64/boot/dts/allwinner/sun50i-a64-recore-a5.dts
-@@ -70,6 +70,7 @@
- };
+@@ -67,7 +67,8 @@
  
  &mali {
  	/delete-property/ operating-points-v2;
@@ -25,11 +24,12 @@ diff --git a/arch/arm64/boot/dts/allwinner/sun50i-a64-recore-a5.dts b/arch/arm64
 +	assigned-clocks = <&ccu CLK_GPU>;
 +	assigned-clock-rates = <240000000>;
  };
+ 
+ &mbus {
 diff --git a/arch/arm64/boot/dts/allwinner/sun50i-a64-recore-a6.dts b/arch/arm64/boot/dts/allwinner/sun50i-a64-recore-a6.dts
 --- a/arch/arm64/boot/dts/allwinner/sun50i-a64-recore-a6.dts
 +++ b/arch/arm64/boot/dts/allwinner/sun50i-a64-recore-a6.dts
-@@ -27,6 +27,7 @@
- };
+@@ -28,7 +28,8 @@
  
  &mali {
  	/delete-property/ operating-points-v2;
@@ -37,3 +37,5 @@ diff --git a/arch/arm64/boot/dts/allwinner/sun50i-a64-recore-a6.dts b/arch/arm64
 +	assigned-clocks = <&ccu CLK_GPU>;
 +	assigned-clock-rates = <240000000>;
  };
+ 
+ &mbus {
