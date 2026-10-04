@@ -7,7 +7,16 @@ install_klipperscreen() {
     git clone https://github.com/jordanruthe/KlipperScreen.git
     git -C KlipperScreen reset --hard "${KLIPPERSCREEN_VERSION}"
     chown -R ${USER}:${USER} KlipperScreen
-    su -c "SERVICE=y BACKEND=x NETWORK=n ${HOMEDIR}/KlipperScreen/scripts/KlipperScreen-install.sh" ${USER}
+    # Use upstream's native Wayland/Weston installation and launcher. No
+    # installer rewrite, tracked source patch or separate compositor service.
+    su -c "SERVICE=y BACKEND=W COMPOSITOR=weston NETWORK=n START=0 ${HOMEDIR}/KlipperScreen/scripts/KlipperScreen-install.sh" ${USER}
+
+    # Use the standard path already understood by Reflash's WESTON rotation
+    # step. Prefer the attached panel's mode; never hard-code Voron's resolution
+    # or rotation into an image shared by different rigs. Reflash integration
+    # for Fluidd is deliberately deferred; adjust transform manually for tests.
+    install -Dm644 /tmp/overlay/install_components/klipperscreen-weston.ini \
+        /etc/xdg/weston/weston.ini
 
     # The installer adds Korean and Japanese fonts (~61 MB) for KlipperScreen's
     # CJK translations; Rebuild ships English only, and DejaVu stays for the UI.
@@ -42,5 +51,13 @@ TTYPath=
 TTYReset=no
 TTYVHangup=no
 TTYVTDisallocate=no
+EOF
+
+    # GTK must use native Wayland rather than silently falling back to X11.
+    # seatd's video-group socket is accessible to the existing printer user.
+    cat <<'EOF' > /etc/systemd/system/KlipperScreen.service.d/wayland.conf
+[Service]
+Environment=GDK_BACKEND=wayland
+Environment=LIBSEAT_BACKEND=seatd
 EOF
 }

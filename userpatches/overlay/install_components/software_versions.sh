@@ -15,7 +15,8 @@
 # so the firmware builds from upstream with no patches.
 KLIPPER_VERSION="461c4e3722c3a897fba1c6b3f0780a5315043842"
 MOONRAKER_VERSION="v0.11.0"
-KLIPPERSCREEN_VERSION="v0.4.7"
+# v0.4.7-196-gf2eb6919: native Weston installer/launcher support, tested on Voron.
+KLIPPERSCREEN_VERSION="f2eb6919c0fcbcd4bab91ba59a5708415963d2ac"
 FLUIDD_VERSION="v1.37.4"
 MAINSAIL_VERSION="v2.19.0"
 OCTOPRINT_VERSION="1.11.8"
