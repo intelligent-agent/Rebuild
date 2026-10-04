@@ -76,7 +76,7 @@ cp -r "${ROOT_DIR}/armbian/patch/." patch/
 for kernel_line in sunxi-6.18 sunxi-7.2; do
     patch --batch --forward --fuzz=0 -p6 \
         -d "patch/kernel/archive/${kernel_line}/dt_64" \
-        < "${ROOT_DIR}/armbian/dts-patches/${kernel_line}/0001-recore-a5-a6-lock-gpu-at-180mhz.patch"
+        < "${ROOT_DIR}/armbian/dts-patches/${kernel_line}/0001-recore-a5-a6-lock-gpu-at-240mhz.patch"
 done
 rm -rf "userpatches"
 
