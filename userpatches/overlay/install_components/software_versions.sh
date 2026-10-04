@@ -14,7 +14,10 @@
 # v0.13.0-786-g461c4e372: the AR100 serial_irq conversion (#7399) is merged,
 # so the firmware builds from upstream with no patches.
 KLIPPER_VERSION="461c4e3722c3a897fba1c6b3f0780a5315043842"
-MOONRAKER_VERSION="v0.11.0"
+# #115 prototype: native Klipper-backed Moonraker sensors, not a copied plugin.
+MOONRAKER_REPOSITORY="https://github.com/intelligent-agent/moonraker.git"
+MOONRAKER_BRANCH="feature/klipper-sensors"
+MOONRAKER_VERSION="ce61013679c8126ae3910dc14963562271353443"
 # v0.4.7-195-g973c95dd: supports Weston; one commit behind the tested f2eb6919
 # so the full CI software-upgrade step exercises a real KlipperScreen update.
 KLIPPERSCREEN_VERSION="973c95dd4d8a5c98b77cd94c48dde667048d43e9"
