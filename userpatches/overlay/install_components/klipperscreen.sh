@@ -7,9 +7,25 @@ install_klipperscreen() {
     git clone https://github.com/jordanruthe/KlipperScreen.git
     git -C KlipperScreen reset --hard "${KLIPPERSCREEN_VERSION}"
     chown -R ${USER}:${USER} KlipperScreen
-    # Use upstream's native Wayland/Weston installation and launcher. No
-    # installer rewrite, tracked source patch or separate compositor service.
-    su -c "SERVICE=y BACKEND=W COMPOSITOR=weston NETWORK=n START=0 ${HOMEDIR}/KlipperScreen/scripts/KlipperScreen-install.sh" ${USER}
+    # Keep upstream's native Weston flow; adapt only the optional mpv package
+    # in a temporary adjacent installer so relative paths still work (#110).
+    local upstream="${HOMEDIR}/KlipperScreen/scripts/KlipperScreen-install.sh"
+    grep -qx 'OPTIONAL="fonts-nanum fonts-ipafont libmpv-dev"' "$upstream" || {
+        echo "KlipperScreen OPTIONAL list changed; review runtime dependency adapter" >&2
+        return 1
+    }
+    local installer status=0
+    installer=$(mktemp "${HOMEDIR}/KlipperScreen/scripts/.rebuild-runtime-install.XXXXXX") || return 1
+    sed 's/^OPTIONAL="fonts-nanum fonts-ipafont libmpv-dev"$/OPTIONAL="fonts-nanum fonts-ipafont libmpv2"/' \
+        "$upstream" > "$installer" || { rm -f "$installer"; return 1; }
+    chmod 755 "$installer" || { rm -f "$installer"; return 1; }
+    su -c "SERVICE=y BACKEND=W COMPOSITOR=weston NETWORK=n START=0 $installer" "${USER}" || status=$?
+    rm -f "$installer"
+    [ "$status" -eq 0 ] || return "$status"
+
+    # Fail the image build if the pinned camera no longer matches the tested
+    # override. At runtime a later upstream change falls back to stock safely.
+    echo "6e6484906315e877600c81375fd2a665cbf5e8946a5651bc66b9b556fccbeea2  ${HOMEDIR}/KlipperScreen/panels/camera.py" | sha256sum -c - || return 1
 
     # Use the standard path already understood by Reflash's WESTON rotation
     # step. Prefer the attached panel's mode; never hard-code Voron's resolution
@@ -59,5 +75,6 @@ EOF
 [Service]
 Environment=GDK_BACKEND=wayland
 Environment=LIBSEAT_BACKEND=seatd
+Environment="KS_XCLIENT=/home/printer/.KlipperScreen-env/bin/python /usr/lib/rebuild/weston-camera-launch.py"
 EOF
 }

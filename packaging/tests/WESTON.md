@@ -2,8 +2,9 @@
 
 Branch `test/klipperscreen-weston` starts from main and changes only the
 KlipperScreen revision, graphical backend and compositor configuration.
-It retains main's kernel, SimpleDRM, GPU clock and stock camera implementation.
-No Reflash changes, mpv dependency pruning or camera fps/cache patches are included.
+It retains main's kernel, SimpleDRM and GPU clock. It now combines native Weston
+with the tested live-camera fix and runtime-only mpv dependencies (#110).
+No Reflash changes are included.
 
 KlipperScreen is pinned to `f2eb6919c0fcbcd4bab91ba59a5708415963d2ac`
 (`v0.4.7-196-gf2eb6919`), the clean checkout tested on Voron. Unlike v0.4.7,
@@ -30,10 +31,28 @@ Klipper and Moonraker stayed active; no Xorg or Xwayland process remained.
 Bounded fullscreen stock-style mpv playback improved from approximately 8 fps
 under rotated X11 to approximately 21 fps under Weston, still below the 24 fps
 MJPEG source. The packet backlog and default rewind cache therefore still grow.
-This branch does not claim to fix the camera bug. Separate diagnostic 15 fps
-caps with caching disabled kept memory and queues stable while retaining the
-general rotate filter, including a genuine 37-degree angle. These settings have
-not been installed into the camera panel and are intentionally absent here.
+The fresh Weston image was subsequently tested on Voron. Its stock camera still
+played in slow motion. A live panel change capped frames at 15 fps before
+rotation, disabled cache and rewind history, and used transpose/flips for exact
+quarter turns while retaining general rotate for arbitrary angles. The user
+reported snappy playback. During the first 50 seconds, forward/history buffers
+were zero and RSS increased only about 0.6 MiB; longer stability is not proven.
+
+This branch now includes those settings in a packaged camera override, selected
+through upstream's KS_XCLIENT hook. The checkout remains unchanged. A checksum
+guard rejects mismatched source during image construction; if a later upstream
+update changes the camera panel, the launcher warns and falls back to stock.
+Review/remove the override when an upstream camera fix becomes available.
+Temporary on-board telemetry threads are not shipped.
+
+The upstream installer runs from a temporary adjacent copy with only libmpv-dev
+replaced by libmpv2. CJK fonts are still removed as before. The original installer
+is unchanged, and the temporary copy is deleted. Re-test image size and runtime
+loading; earlier pruning measurements are not a controlled Weston comparison.
+
+During the live test a KlipperScreen restart left an orphaned Weston compositor
+holding the seat. Recovery required stopping that process and restarting seatd.
+Restart lifecycle remains an open test item; this camera change does not fix it.
 
 ## Fresh-image checks still required
 
