@@ -30,9 +30,24 @@ class WestonImageTest(unittest.TestCase):
 
     def test_tested_revision_and_device_permissions(self):
         versions = (COMPONENTS / 'software_versions.sh').read_text()
-        self.assertIn('f2eb6919c0fcbcd4bab91ba59a5708415963d2ac', versions)
+        self.assertIn('KLIPPERSCREEN_VERSION="973c95dd4d8a5c98b77cd94c48dde667048d43e9"', versions)
         self.assertIn('-G tty,dialout,render,video printer',
                       (COMPONENTS / 'prep_install.sh').read_text())
+
+    def test_service_containment_and_runtime_lifetime(self):
+        helper = (ROOT / 'packaging/rebuild-printer/usr/lib/rebuild/configure-weston-session').read_text()
+        self.assertIn('printer_uid=$(id -u printer)', helper)
+        self.assertIn('PAMName=', helper)
+        self.assertIn('KillMode=control-group', helper)
+        self.assertIn('Requires=user-runtime-dir@${printer_uid}.service', helper)
+        self.assertIn('/var/lib/systemd/linger/printer', helper)
+        self.assertIn('loginctl enable-linger printer', helper)
+        self.assertNotIn('pkill', helper)
+        self.assertNotIn('systemctl restart', helper)
+        self.assertIn('sh /usr/lib/rebuild/configure-weston-session',
+                      (COMPONENTS / 'klipperscreen.sh').read_text())
+        postinst = (ROOT / 'packaging/debian/rebuild-printer.postinst').read_text()
+        self.assertIn('sh /usr/lib/rebuild/configure-weston-session', postinst)
 
     @unittest.skipUnless(UPSTREAM, 'pipe pinned installer to exercise its backend selection')
     def test_upstream_selects_weston_without_prompt_or_cage(self):

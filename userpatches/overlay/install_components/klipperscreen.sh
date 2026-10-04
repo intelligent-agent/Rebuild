@@ -77,4 +77,6 @@ Environment=GDK_BACKEND=wayland
 Environment=LIBSEAT_BACKEND=seatd
 Environment="KS_XCLIENT=/home/printer/.KlipperScreen-env/bin/python /usr/lib/rebuild/weston-camera-launch.py"
 EOF
+    # Also used by rebuild-printer upgrades of existing Weston installations.
+    sh /usr/lib/rebuild/configure-weston-session
 }

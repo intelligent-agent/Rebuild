@@ -6,8 +6,10 @@ It retains main's kernel, SimpleDRM and GPU clock. It now combines native Weston
 with the tested live-camera fix and runtime-only mpv dependencies (#110).
 No Reflash changes are included.
 
-KlipperScreen is pinned to `f2eb6919c0fcbcd4bab91ba59a5708415963d2ac`
-(`v0.4.7-196-gf2eb6919`), the clean checkout tested on Voron. Unlike v0.4.7,
+KlipperScreen is pinned to `973c95dd4d8a5c98b77cd94c48dde667048d43e9`
+(`v0.4.7-195-g973c95dd`), the immediate parent of tested `f2eb6919`. This
+deliberately lets the full CI software-upgrade step perform a real Git update
+to `f2eb6919`, not just report an already-current checkout. Unlike v0.4.7,
 this revision supports Weston through the upstream installer with `BACKEND=W
 COMPOSITOR=weston` and the unmodified upstream launcher. `START=0` avoids starting
 the graphical session while constructing the image; the installed service is
@@ -50,9 +52,28 @@ replaced by libmpv2. CJK fonts are still removed as before. The original install
 is unchanged, and the temporary copy is deleted. Re-test image size and runtime
 loading; earlier pruning measurements are not a controlled Weston comparison.
 
-During the live test a KlipperScreen restart left an orphaned Weston compositor
-holding the seat. Recovery required stopping that process and restarting seatd.
-Restart lifecycle remains an open test item; this camera change does not fix it.
+The initial image failed both real-upgrade and dependency-refresh restart tests:
+PAM moved Weston into a separate session scope, outside the service cgroup.
+The stock launcher execs the application and loses its EXIT cleanup trap.
+
+Rebuild now clears PAMName and explicitly retains KillMode=control-group in a
+generated drop-in. It derives printer's UID for the standard user-runtime-dir
+unit and enables printer lingering, so logind does not remove that directory
+when the last login session ends. The drop-in alone was insufficient: without
+linger the runtime directory stopped and pulled down the display service.
+No upstream launcher or service source is modified.
+
+On Voron the combined fix passed five normal service restarts, the actual
+973c95dd-to-f2eb6919 Moonraker upgrade, and recovery with update_deps=true.
+Every previous Weston PID disappeared; one replacement remained in
+/system.slice/KlipperScreen.service, and the camera launcher reinitialized.
+libmpv2 remained installed, libmpv-dev remained absent, and native mpv loaded.
+The user confirmed the screen/camera looked good. Klipper stayed running.
+Fresh-image boot and CI validation of this packaged setup are still pending.
+
+The session configurator ships in rebuild-printer and is called by the image
+installer and by package configuration on existing native-Weston installations.
+It does not restart the screen from a maintainer script or convert X11 systems.
 
 ## Fresh-image checks still required
 
