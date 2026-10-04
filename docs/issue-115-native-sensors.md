@@ -6,19 +6,26 @@ The proposed upstream change extends Moonraker's existing `sensor` component
 with `type: klipper`; there is no extra component copied into its source tree.
 No kernel, GPU, display, or Klipper firmware changes are included.
 
-Before Moonraker starts, `rebuild-klipper-sensors` reads `printer.cfg` and its
-includes and generates `rebuild-sensors.conf`. Voltage/current/fan/toolhead
-sensors are included only when configured. Both ordinary and underscore-prefixed
-sensor names work. Existing ADC conversion, min/max limits and shutdown safety
-remain entirely in Klipper and are not modified by this helper.
+Voltage/current sensor sections are written directly in the Fluidd and Mainsail
+Moonraker config files. Their objects match the `_voltage` and `_current` names
+in the shipped Recore A5-A8 Klipper config files. A7/A8 also rename the existing
+fan reading to `_fan_current`. Only those Klipper section headings change;
+ADC conversions, gcode IDs, min/max limits and shutdown alarms are unchanged.
+The leading underscore hides the legacy temperature entries in Fluidd.
 
-Fluidd displays these measurements in its Sensors card with V/A units. Existing
-unprefixed Klipper names also remain visible as legacy temperature readings.
-To hide those duplicates, rename the corresponding Klipper section to e.g.
-`[temperature_sensor _voltage]`, updating any references to that object, then
-restart Klipper and Moonraker. This is intentionally not an automatic migration
-of user-owned printer configuration. Voron's recovered demo already uses hidden
-names. Mainsail and KlipperScreen rendering remain to be verified separately.
+Commented Moonraker sections show how to enable fan/toolhead current when those
+objects exist. Rename a toolhead's current sensor to `_remote_current` directly
+in its own Klipper config if using that example. Toolhead hardware configs are
+not shipped by Rebuild. No generator, generated include or startup hook exists.
+
+Existing user-owned configs are not rewritten by an upgrade. To test this image
+with a restored printer config (including Recore-CI provisioning), change the
+electrical sensor headings directly to the matching underscore names and check
+any macros referencing them. Voron's recovered demo already uses those names.
+Fresh-image testing must verify this explicitly; provisioning that restores old
+names will leave the new Moonraker sensors unavailable. Mainsail and KlipperScreen
+rendering, and the shared config templates' OctoPrint behavior, remain to be
+verified separately before any merge.
 
 The prototype stays on an attached Git branch tracking the fork. Moonraker's
 supported `pinned_commit` update-manager option keeps the prototype at its tested
