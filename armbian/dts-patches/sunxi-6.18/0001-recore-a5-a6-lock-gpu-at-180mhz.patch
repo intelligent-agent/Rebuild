@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Elias Bakken <elias@iagent.no>
 Date: Sat, 3 Oct 2026 00:00:00 +0200
-Subject: [PATCH] arm64: dts: recore A5/A6 lock GPU at 240 MHz
+Subject: [PATCH] arm64: dts: recore A5/A6 lock GPU at 180 MHz
 
 The A5/A6 board DTS files are supplied by the kernel source. Remove the
 Mali OPP link and assign the GPU core clock explicitly; assigned-clock-rates
@@ -22,7 +22,7 @@ diff --git a/arch/arm64/boot/dts/allwinner/sun50i-a64-recore-a5.dts b/arch/arm64
  	/delete-property/ operating-points-v2;
 -	assigned-clock-rates = <120000000>;
 +	assigned-clocks = <&ccu CLK_GPU>;
-+	assigned-clock-rates = <240000000>;
++	assigned-clock-rates = <180000000>;
  };
  
  &mbus {
@@ -35,7 +35,7 @@ diff --git a/arch/arm64/boot/dts/allwinner/sun50i-a64-recore-a6.dts b/arch/arm64
  	/delete-property/ operating-points-v2;
 -	assigned-clock-rates = <120000000>;
 +	assigned-clocks = <&ccu CLK_GPU>;
-+	assigned-clock-rates = <240000000>;
++	assigned-clock-rates = <180000000>;
  };
  
  &mbus {
