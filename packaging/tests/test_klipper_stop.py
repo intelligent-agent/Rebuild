@@ -84,6 +84,24 @@ class Tests(unittest.TestCase):
             stop.virtual_drivers({'stepper_x': {}, 'tmc9999 stepper_x': {}},
                                  ['stepper_x'])
 
+    def test_manual_stepper_uses_short_dump_name(self):
+        client = FakeClient([0])
+        original_query = client.query
+
+        def query(objects):
+            state = original_query(objects)
+            state['configfile']['settings'] = {
+                'manual_stepper motor1': {},
+                'tmc2209 manual_stepper motor1': {}}
+            state['stepper_enable']['steppers'] = {'manual_stepper motor1': False}
+            return state
+
+        client.query = query
+        with patch.object(stop, 'log'):
+            stop.cleanup(client)
+        self.assertEqual(client.commands[1],
+                         'DUMP_TMC STEPPER="motor1" REGISTER=CHOPCONF')
+
     def test_missing_socket_fails_promptly(self):
         with tempfile.TemporaryDirectory() as directory:
             result = subprocess.run(['python3', str(HELPER), '--socket',

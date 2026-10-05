@@ -122,7 +122,10 @@ def cleanup(client, run_macro=True):
             raise RuntimeError('Klipper entered shutdown during cleanup')
         for stepper in list(pending):
             client.output.clear()
-            client.script('DUMP_TMC STEPPER="%s" REGISTER=CHOPCONF' % stepper)
+            # TMC's command mux uses the last component (motor1) even when
+            # the stepper-enable object is named "manual_stepper motor1".
+            command_name = stepper.rsplit(' ', 1)[-1]
+            client.script('DUMP_TMC STEPPER="%s" REGISTER=CHOPCONF' % command_name)
             matches = re.findall(r'CHOPCONF:\s*([0-9a-fA-F]{8})',
                                  '\n'.join(client.output))
             if not matches:
