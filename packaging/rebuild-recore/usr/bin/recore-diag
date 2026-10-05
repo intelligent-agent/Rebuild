@@ -1,0 +1,3 @@
+#!/bin/sh
+# The workload and formatter are shared snapshots of Recore-CI's tested code.
+exec /usr/bin/python3 -u /usr/lib/rebuild/diag/recore_diag.py "$@"
