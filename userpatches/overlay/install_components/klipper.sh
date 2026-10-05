@@ -80,6 +80,8 @@ ExecStartPre=/usr/bin/gpioget -c 1 -b pull-up 196
 ExecStartPre=/usr/bin/set-ar100-clock.py
 ExecStartPre=/usr/bin/flash-ar100.py /opt/firmware/ar100.bin
 ExecStart=${PYTHONDIR}/bin/python ${SRCDIR}/klippy/klippy.py ${KLIPPER_CONFIG} -l ${KLIPPER_LOG} -a ${KLIPPER_SOCKET}
+ExecStop=/usr/bin/python3 /usr/lib/rebuild/klipper-stop --socket ${KLIPPER_SOCKET} --timeout 8
+TimeoutStopSec=12
 EOF
 # Use systemctl to enable the klipper systemd service script
     sudo systemctl enable klipper.service

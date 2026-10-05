@@ -48,6 +48,13 @@ jobs:
       with:
         fetch-depth: 0    # build-debs versions from `git describe --tags`
 
+    - name: Test packages
+      # bats in the same throwaway container build-debs uses: the runner has
+      # docker but not bats. git for the klipper-extras tests.
+      run: |
+        docker run --rm -v "$PWD:/w" -w /w debian:trixie sh -c \
+          'apt-get update -qq && apt-get install -y -qq --no-install-recommends bats git >/dev/null && bats packaging/tests'
+
     - name: Build packages
       run: packaging/build-debs "$RUNNER_TEMP/debs"
 

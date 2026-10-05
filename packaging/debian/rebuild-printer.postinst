@@ -67,6 +67,15 @@ if [ "$1" = configure ]; then
     done
 fi
 
+# Apply on package upgrades of an existing native-Weston image too. Do not
+# convert X11 installations or restart the display from a maintainer script.
+if [ "$1" = configure ] && [ -x /usr/bin/weston ] && \
+   [ -f /etc/systemd/system/KlipperScreen.service.d/wayland.conf ] && \
+   grep -q 'GDK_BACKEND=wayland' /etc/systemd/system/KlipperScreen.service.d/wayland.conf && \
+   id printer >/dev/null 2>&1; then
+    sh /usr/lib/rebuild/configure-weston-session
+fi
+
 if [ "$1" = configure ] && [ -d /run/systemd/system ]; then
     systemctl daemon-reload || true
     udevadm control --reload || true

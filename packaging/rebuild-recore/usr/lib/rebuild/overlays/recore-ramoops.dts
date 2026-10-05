@@ -1,0 +1,24 @@
+/*
+ * Keep the kernel's last messages across a reboot (#107): a panic, an oops or
+ * the console up to the moment the board was reset are in /sys/fs/pstore on
+ * the next boot. Needs a kernel with CONFIG_PSTORE_RAM; without it the region
+ * is only set aside.
+ *
+ * 1 MiB at 0x6ff00000: above where U-Boot puts the initrd and device tree
+ * (below 0x60000000, bootm_size), below the kernel's CMA pool (0x78c00000)
+ * and U-Boot's own relocated copy and framebuffer at the top of DRAM, so
+ * nothing writes it between the reset and the kernel reading it.
+ *
+ * Same node as Rebuild's sun50i-a64-recore.dtsi.
+ */
+/dts-v1/;
+/plugin/;
+
+&{/reserved-memory} {
+	ramoops@6ff00000 {
+		compatible = "ramoops";
+		reg = <0x6ff00000 0x100000>;
+		record-size = <0x20000>;
+		console-size = <0x20000>;
+	};
+};

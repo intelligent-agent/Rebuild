@@ -86,6 +86,12 @@ if [ "$1" = configure ]; then
     /usr/lib/rebuild/boot-overlays install || true
 fi
 
+# Panic, lockup and SysRq settings (#107) now, not at the next boot: a crash
+# before then should already reboot the board.
+if [ "$1" = configure ] && [ -d /run/systemd/system ]; then
+    /usr/lib/systemd/systemd-sysctl /usr/lib/sysctl.d/60-rebuild-recovery.conf || true
+fi
+
 if [ "$1" = configure ] && [ -d /run/systemd/system ]; then
     systemctl daemon-reload || true
     udevadm control --reload || true

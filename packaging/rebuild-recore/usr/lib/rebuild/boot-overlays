@@ -10,7 +10,7 @@ set -e
 SRC=/usr/lib/rebuild/overlays
 DST=/boot/overlay-user
 ENV=/boot/armbianEnv.txt
-OVERLAYS="recore-thermal"
+OVERLAYS="recore-thermal recore-ramoops"
 
 [ -f "$ENV" ] || exit 0
 
