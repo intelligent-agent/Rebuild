@@ -14,6 +14,10 @@ class DiagTests(unittest.TestCase):
         a = diag.options([])
         self.assertFalse(a.stress)
         self.assertFalse(a.cpu or a.gpu or a.memory)
+        self.assertFalse(a.verbose)
+
+    def test_verbose_is_opt_in(self):
+        self.assertTrue(diag.options(['--verbose']).verbose)
 
     def test_simple_flags_translate_to_worker(self):
         a = diag.options(['--stress', '--cpu', '--gpu', '--memory', '--minutes', '20', '--interval', '7'])

@@ -24,6 +24,8 @@ required at the terminal. Detailed worker output and readable reports are
 saved in root-only `/var/lib/recore-diag/<timestamp>/`, outside printer config.
 The compact status uses `time:elapsed/remaining`, `mem:completed-passes p/errors e`
 and `?` for unavailable readings; detailed unrounded values remain in raw.log.
+Compact periodic output is the default. Add `--verbose` for the original detailed
+status lines, including load states. This only changes presentation, not the test.
 Reports include board identity; review them before sharing. Nothing uploads.
 
 Stress runs refuse active/paused/unknown printer state, existing stress jobs,

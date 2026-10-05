@@ -45,6 +45,7 @@ def options(argv=None):
     p.add_argument('--stress', action='store_true', help='run selected loads; installs missing tools')
     p.add_argument('--minutes', type=float, default=20)
     p.add_argument('--interval', type=int, default=5, help='status interval in seconds (2..30)')
+    p.add_argument('--verbose', action='store_true', help='detailed periodic status, including load states')
     for name in ('cpu', 'gpu', 'memory', 'last'):
         p.add_argument('--' + name, action='store_true')
     p.add_argument('--memory-mb', type=int, default=128)
@@ -159,7 +160,7 @@ def main(argv=None):
                         os.fsync(raw.fileno())
                         kind, payload = line.split(' ', 1)
                         record = json.loads(payload)
-                        say(compact_sample(record) if kind == 'TELEMETRY' else format_record(kind, record))
+                        say(compact_sample(record) if kind == 'TELEMETRY' and not a.verbose else format_record(kind, record))
                         if kind == 'RESULT':
                             result = record
                     elif line.startswith(('SETUP ', 'WARNING ', 'ERROR ')):
