@@ -39,10 +39,10 @@ been updated manually for testing, with their original service retained as
 
 ## Verification (2026-10-05)
 
-- Eight Python tests passed: virtual-driver register retry, macro rejection,
+- Nine Python tests passed: virtual-driver register retry, macro rejection,
   dedicated-enable exclusion, unsupported-driver rejection, absent socket
   failure, service hook presence, optional-macro ordering and cleanup after
-  a macro command error.
+  a macro command error, and manual-stepper TMC command-name handling.
 - A8 bench (0482): three service stop/start cycles passed; cleanup 0.38–0.40 s.
 - Voron (0484): one service stop/start passed; cleanup 0.40 s. All six
   virtual-enable axis drivers read back TOFF=0; Klipper returned ready.
