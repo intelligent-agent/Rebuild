@@ -29,7 +29,8 @@ source /tmp/overlay/install_components/software_versions.sh
 source /tmp/overlay/install_components/rebuild_packages.sh
 source /tmp/overlay/install_components/klipper.sh
 source /tmp/overlay/install_components/octoprint.sh
-source /tmp/overlay/install_components/toggle.sh
+source /tmp/overlay/install_components/moonraker.sh
+source /tmp/overlay/install_components/klipperscreen.sh
 source /tmp/overlay/install_components/plymouth.sh
 source /tmp/overlay/install_components/rebuild_first_run.sh
 source /tmp/overlay/install_components/ustreamer.sh
@@ -52,13 +53,21 @@ install_rebuild_packages rebuild-recore rebuild-printer
 record_software_versions
 install_klipper
 install_octoprint
-install_weston
-install_toggle
+# Prototype #126: OctoPrint keeps its serial connection; Moonraker connects
+# to the existing Klipper API socket and supplies the touchscreen backend.
+install_moonraker "octoprint"
+install_klipperscreen
+install -m 644 /tmp/overlay/octoprint/octoprint-moonraker.cfg \
+    "${HOMEDIR}/printer_data/config/octoprint-moonraker.cfg"
+printf '\n[include octoprint-moonraker.cfg]\n' >> "${HOMEDIR}/printer_data/config/printer.cfg"
+chown "${USER}:${USER}" "${HOMEDIR}/printer_data/config/octoprint-moonraker.cfg"
 install_plymouth
 install_ustreamer
 install_rebuild_first_run
 add_overlays
 install_uboot_splash
 post_build
+
+systemctl disable getty@tty1.service
 
 echo "🍰 Rebuild finished"
