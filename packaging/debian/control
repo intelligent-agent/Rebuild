@@ -9,7 +9,7 @@ Homepage: https://github.com/intelligent-agent/Rebuild
 
 Package: rebuild-recore
 Architecture: all
-Depends: ${misc:Depends}, dnsmasq-base, network-manager, udev
+Depends: ${misc:Depends}, dnsmasq-base, network-manager, udev, python3, procps
 Description: Recore board support for Rebuild images
  Board identity tools (serial number, revision), the USB gadget serial
  console, and the Wi-Fi hotspot fallback. Installed on every Rebuild
