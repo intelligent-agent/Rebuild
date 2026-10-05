@@ -1,8 +1,9 @@
 #!/usr/bin/python3
 """Bounded, best-effort cleanup while the Klipper host is still running.
 
-No Moonraker dependency, motion, MCU reset, fan or LED commands. Runs on
-every service stop, including service restarts. Does not cover host crashes.
+No Moonraker dependency or built-in motion, MCU reset, fan or LED commands.
+An optional KLIPPER_SHUTDOWN macro provides explicitly configured cleanup.
+Runs on every service stop, including restarts. Does not cover host crashes.
 """
 import argparse
 import json
@@ -98,7 +99,7 @@ def virtual_drivers(settings, steppers):
     return drivers
 
 
-def cleanup(client):
+def cleanup(client, run_macro=True):
     initial = client.query({'webhooks': None, 'configfile': ['settings'],
                             'stepper_enable': ['steppers'], 'heaters': None})
     if initial['webhooks']['state'] != 'ready':
@@ -132,10 +133,21 @@ def cleanup(client):
         if (not pending and not any(state['stepper_enable']['steppers'].values())
                 and all(state[h]['target'] == 0 and state[h]['power'] == 0
                         for h in heaters)):
-            return
+            break
         if time.monotonic() >= client.deadline:
             raise TimeoutError('Motor/heater disable not confirmed')
         time.sleep(.05)
+    if run_macro and any(name.lower() == 'gcode_macro klipper_shutdown'
+                         for name in settings):
+        # Mandatory safety cleanup happens first, so a hung optional macro
+        # cannot prevent the initial heater/motor disable. Recheck afterward
+        # as well. The macro shares the same overall deadline.
+        log('Running optional KLIPPER_SHUTDOWN macro')
+        try:
+            client.script('KLIPPER_SHUTDOWN')
+        except RuntimeError as error:
+            log('WARNING: KLIPPER_SHUTDOWN failed: ' + str(error))
+        cleanup(client, run_macro=False)
 
 
 def alarm_handler(signum, frame):

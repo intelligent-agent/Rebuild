@@ -13,11 +13,24 @@ It refuses overridden cleanup commands rather than invoking arbitrary
 user macros. It covers service stops/restarts and orderly OS shutdown,
 not a crashed host, lost MCU connection or sudden power loss.
 
-Fans and LEDs are deliberately unchanged. NeoPixels need an explicit
+Fans and LEDs are unchanged by the mandatory cleanup. NeoPixels need an explicit
 all-black update while MCU communication remains available; their initial
 color is not a shutdown color. Power indicators may not be controllable.
 LED shutdown policy is separate work, particularly for active templates
 or third-party LED effects that can overwrite a manual color.
+
+An optional `[gcode_macro KLIPPER_SHUTDOWN]` supplies printer-specific
+cleanup. The helper disables heaters/motors and verifies them before calling
+it, then repeats mandatory cleanup afterward (also after a macro command
+error). No macro is required. The macro shares the eight-second deadline;
+a timeout or lost connection may prevent the final cleanup. Do not put
+motion, heating, waits, restart commands or asynchronous re-enable actions
+in it. It runs on service restarts as well as OS shutdown.
+
+No lighting command is added to the generic Recore configs. Recore-CI's
+Voron provisioning config defines this macro to clear the `relit_head` LED
+template and set its NeoPixels to black. Third-party LED-effect extensions
+may require their own stop commands; they are not handled generically.
 
 The service file is generated during image creation. This prototype does
 not migrate existing installations via package upgrade. A8 and Voron have
@@ -26,9 +39,10 @@ been updated manually for testing, with their original service retained as
 
 ## Verification (2026-10-05)
 
-- Six Python tests passed: virtual-driver register retry, macro rejection,
+- Eight Python tests passed: virtual-driver register retry, macro rejection,
   dedicated-enable exclusion, unsupported-driver rejection, absent socket
-  failure and service hook presence.
+  failure, service hook presence, optional-macro ordering and cleanup after
+  a macro command error.
 - A8 bench (0482): three service stop/start cycles passed; cleanup 0.38–0.40 s.
 - Voron (0484): one service stop/start passed; cleanup 0.40 s. All six
   virtual-enable axis drivers read back TOFF=0; Klipper returned ready.

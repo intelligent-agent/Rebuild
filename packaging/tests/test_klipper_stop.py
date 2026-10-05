@@ -15,16 +15,20 @@ loader.exec_module(stop)
 
 
 class FakeClient:
-    def __init__(self, registers):
+    def __init__(self, registers, macro=False, macro_error=False):
         self.deadline = time.monotonic() + 2
         self.output = []
         self.commands = []
         self.registers = iter(registers)
+        self.macro = macro
+        self.macro_error = macro_error
 
     def query(self, objects):
+        settings = {'stepper_x': {}, 'tmc2209 stepper_x': {}}
+        if self.macro:
+            settings['gcode_macro klipper_shutdown'] = {}
         return {'webhooks': {'state': 'ready'},
-                'configfile': {'settings': {
-                    'stepper_x': {}, 'tmc2209 stepper_x': {}}},
+                'configfile': {'settings': settings},
                 'stepper_enable': {'steppers': {'stepper_x': False}},
                 'heaters': {'available_heaters': ['heater_bed']},
                 'heater_bed': {'target': 0, 'power': 0}}
@@ -34,6 +38,8 @@ class FakeClient:
 
     def script(self, command):
         self.commands.append(command)
+        if command == 'KLIPPER_SHUTDOWN' and self.macro_error:
+            raise RuntimeError('deliberate macro error')
         if command.startswith('DUMP_TMC'):
             self.output.append('CHOPCONF: %08x' % next(self.registers))
 
@@ -50,6 +56,21 @@ class Tests(unittest.TestCase):
         for command in stop.COMMANDS:
             with self.assertRaises(RuntimeError):
                 stop.check_overrides({'gcode_macro ' + command.lower(): {}})
+
+    def test_optional_macro_between_mandatory_cleanup(self):
+        client = FakeClient([0, 0], macro=True)
+        with patch.object(stop, 'log'):
+            stop.cleanup(client)
+        self.assertEqual(client.commands[2], 'KLIPPER_SHUTDOWN')
+        self.assertEqual(client.commands[3], 'TURN_OFF_HEATERS\nM84\nM400')
+        self.assertEqual(client.commands.count('KLIPPER_SHUTDOWN'), 1)
+
+    def test_macro_error_still_runs_final_cleanup(self):
+        client = FakeClient([0, 0], macro=True, macro_error=True)
+        with patch.object(stop, 'log') as log:
+            stop.cleanup(client)
+        self.assertEqual(client.commands[3], 'TURN_OFF_HEATERS\nM84\nM400')
+        self.assertTrue(any('WARNING' in str(c) for c in log.call_args_list))
 
     def test_dedicated_pin_not_checked_via_toff(self):
         settings = {'stepper_x': {'enable_pin': '!PL12'},
