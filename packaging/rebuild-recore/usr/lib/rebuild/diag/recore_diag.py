@@ -18,6 +18,28 @@ REPORTS = Path('/var/lib/recore-diag')
 HERE = Path(__file__).resolve().parent
 
 
+def compact_sample(record):
+    def clock(seconds):
+        value = max(0, int(round(seconds or 0)))
+        return f'{value // 60}:{value % 60:02d}'
+    def mhz(value, scale):
+        return f'{float(value) / scale:g}' if value is not None else '?'
+    parts = ['time:' + clock(record.get('elapsed_seconds')) + '/' + clock(record.get('remaining_seconds'))]
+    for name, value in record.get('temperatures_c', {}).items():
+        label = name.lower().replace('-thermal', '')
+        parts.append(f'{label}:{value:.1f}C')
+    if not record.get('temperatures_c'):
+        parts.append('temp:?')
+    parts.extend(['cpu:' + mhz(record.get('cpu_khz'), 1000) + 'MHz',
+                  'gpu:' + mhz(record.get('gpu_hz'), 1000000) + 'MHz'])
+    fps = record.get('gpu_fps')
+    if record.get('config', {}).get('gpu') or 'gpu' in record.get('loads', {}):
+        parts.append('fps:' + (f'{fps:g}' if fps is not None else '?'))
+    if 'memory' in record.get('loads', {}):
+        parts.append(f"mem:{record.get('memory_loops_completed', 0)}p/{record.get('memory_failures', 0)}e")
+    return ' '.join(parts)
+
+
 def options(argv=None):
     p = argparse.ArgumentParser(description='Recore diagnostics; stress is opt-in. Review logs before sharing.')
     p.add_argument('--stress', action='store_true', help='run selected loads; installs missing tools')
@@ -137,7 +159,7 @@ def main(argv=None):
                         os.fsync(raw.fileno())
                         kind, payload = line.split(' ', 1)
                         record = json.loads(payload)
-                        say(format_record(kind, record))
+                        say(compact_sample(record) if kind == 'TELEMETRY' else format_record(kind, record))
                         if kind == 'RESULT':
                             result = record
                     elif line.startswith(('SETUP ', 'WARNING ', 'ERROR ')):

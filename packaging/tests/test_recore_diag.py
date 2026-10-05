@@ -38,6 +38,17 @@ class DiagTests(unittest.TestCase):
     def test_worker_snapshot_parses(self):
         compile((ROOT / 'stress-workload.py').read_text(), 'stress-workload.py', 'exec')
 
+    def test_compact_sample(self):
+        line = diag.compact_sample({'elapsed_seconds':382, 'remaining_seconds':818,
+            'temperatures_c':{'gpu0':80}, 'cpu_khz':'1008000', 'gpu_hz':180000000,
+            'gpu_fps':42, 'memory_loops_completed':3, 'memory_failures':0,
+            'loads':{'gpu':'running', 'memory':'running'}})
+        self.assertEqual(line, 'time:6:22/13:38 gpu0:80.0C cpu:1008MHz gpu:180MHz fps:42 mem:3p/0e')
+        self.assertNotIn('\n', line)
+
+    def test_compact_missing_readings(self):
+        self.assertIn('temp:? cpu:?MHz gpu:?MHz', diag.compact_sample({}))
+
 
 if __name__ == '__main__':
     unittest.main()

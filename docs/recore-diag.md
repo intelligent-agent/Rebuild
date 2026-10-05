@@ -22,6 +22,8 @@ Periodic status lines show elapsed/remaining time, named available thermal
 zones, CPU/GPU MHz, GPU FPS, memory passes/errors and load state. No JSON is
 required at the terminal. Detailed worker output and readable reports are
 saved in root-only `/var/lib/recore-diag/<timestamp>/`, outside printer config.
+The compact status uses `time:elapsed/remaining`, `mem:completed-passes p/errors e`
+and `?` for unavailable readings; detailed unrounded values remain in raw.log.
 Reports include board identity; review them before sharing. Nothing uploads.
 
 Stress runs refuse active/paused/unknown printer state, existing stress jobs,
