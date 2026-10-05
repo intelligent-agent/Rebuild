@@ -1,0 +1,171 @@
+#!/usr/bin/python3
+"""Bounded, best-effort cleanup while the Klipper host is still running.
+
+No Moonraker dependency, motion, MCU reset, fan or LED commands. Runs on
+every service stop, including service restarts. Does not cover host crashes.
+"""
+import argparse
+import json
+import re
+import signal
+import socket
+import sys
+import time
+
+
+def log(message):
+    print('klipper-stop: ' + message, flush=True)
+
+
+class Client:
+    def __init__(self, path, deadline):
+        self.deadline = deadline
+        self.sock = socket.socket(socket.AF_UNIX)
+        self.sock.settimeout(max(.001, deadline - time.monotonic()))
+        self.sock.connect(path)
+        self.buffer = b''
+        self.sequence = 0
+        self.output = []
+
+    def call(self, method, params=None):
+        self.sequence += 1
+        request = {'id': self.sequence, 'method': method, 'params': params or {}}
+        self.sock.settimeout(max(.001, self.deadline - time.monotonic()))
+        self.sock.sendall(json.dumps(request).encode() + b'\x03')
+        while True:
+            if b'\x03' not in self.buffer:
+                remaining = self.deadline - time.monotonic()
+                if remaining <= 0:
+                    raise TimeoutError('cleanup deadline exceeded')
+                self.sock.settimeout(remaining)
+                data = self.sock.recv(65536)
+                if not data:
+                    raise RuntimeError('Klipper disconnected')
+                self.buffer += data
+                if len(self.buffer) > 1024 * 1024:
+                    raise RuntimeError('Oversized Klipper response')
+                continue
+            raw, self.buffer = self.buffer.split(b'\x03', 1)
+            response = json.loads(raw)
+            if response.get('stop_output'):
+                self.output.append(response['params']['response'])
+            if response.get('id') != self.sequence:
+                continue
+            if 'error' in response:
+                raise RuntimeError(response['error'].get('message', str(response['error'])))
+            return response['result']
+
+    def query(self, objects):
+        return self.call('objects/query', {'objects': objects})['status']
+
+    def script(self, command):
+        return self.call('gcode/script', {'script': command})
+
+
+COMMANDS = {'TURN_OFF_HEATERS', 'M84', 'M400', 'DUMP_TMC'}
+
+
+def check_overrides(settings):
+    # Never blindly invoke a user macro that replaced a cleanup command.
+    for name, config in settings.items():
+        if not name.lower().startswith('gcode_macro '):
+            continue
+        command = name.split(' ', 1)[1].upper()
+        renamed = str(config.get('rename_existing', '')).upper()
+        if command in COMMANDS or renamed in COMMANDS:
+            raise RuntimeError('Cleanup command overridden by ' + name)
+
+
+def virtual_drivers(settings, steppers):
+    drivers = []
+    for name, config in settings.items():
+        family, separator, stepper = name.partition(' ')
+        if not separator or not family.startswith('tmc') or stepper not in steppers:
+            continue
+        # Also verify shared-enable configurations; do not demand TOFF=0
+        # for dedicated enables, whose drivers are disabled via the pin.
+        pin = settings.get(stepper, {}).get('enable_pin')
+        shared = pin and sum(c.get('enable_pin') == pin
+                             for c in settings.values()) > 1
+        if pin and not shared:
+            continue
+        if family not in {'tmc2208', 'tmc2209', 'tmc2130', 'tmc5160',
+                          'tmc2240', 'tmc2209_a5', 'tmc2130_a5'}:
+            raise RuntimeError('Unsupported virtual-enable driver: ' + name)
+        if not re.fullmatch(r'[A-Za-z0-9_]+(?: [A-Za-z0-9_]+)?', stepper):
+            raise RuntimeError('Unsafe stepper name: ' + stepper)
+        drivers.append(stepper)
+    return drivers
+
+
+def cleanup(client):
+    initial = client.query({'webhooks': None, 'configfile': ['settings'],
+                            'stepper_enable': ['steppers'], 'heaters': None})
+    if initial['webhooks']['state'] != 'ready':
+        raise RuntimeError('Klipper not ready; cleanup cannot be confirmed')
+    settings = initial['configfile']['settings']
+    check_overrides(settings)
+    drivers = virtual_drivers(settings, initial['stepper_enable']['steppers'])
+    heaters = initial['heaters']['available_heaters']
+    client.call('gcode/subscribe_output',
+                {'response_template': {'stop_output': True}})
+    log('Turning off heaters and disabling motors (fans and lights unchanged)')
+    # Heater-off first, before waiting for previously queued motion.
+    client.script('TURN_OFF_HEATERS\nM84\nM400')
+    objects = {'webhooks': None, 'stepper_enable': ['steppers']}
+    objects.update({heater: ['target', 'power'] for heater in heaters})
+    pending = set(drivers)
+    while True:
+        state = client.query(objects)
+        if state['webhooks']['state'] != 'ready':
+            raise RuntimeError('Klipper entered shutdown during cleanup')
+        for stepper in list(pending):
+            client.output.clear()
+            client.script('DUMP_TMC STEPPER="%s" REGISTER=CHOPCONF' % stepper)
+            matches = re.findall(r'CHOPCONF:\s*([0-9a-fA-F]{8})',
+                                 '\n'.join(client.output))
+            if not matches:
+                raise RuntimeError('No CHOPCONF readback for ' + stepper)
+            if int(matches[-1], 16) & 0xf == 0:
+                log(stepper + ': register disable confirmed, TOFF=0')
+                pending.remove(stepper)
+        if (not pending and not any(state['stepper_enable']['steppers'].values())
+                and all(state[h]['target'] == 0 and state[h]['power'] == 0
+                        for h in heaters)):
+            return
+        if time.monotonic() >= client.deadline:
+            raise TimeoutError('Motor/heater disable not confirmed')
+        time.sleep(.05)
+
+
+def alarm_handler(signum, frame):
+    raise TimeoutError('cleanup deadline exceeded')
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--socket', default='/tmp/klippy_uds')
+    parser.add_argument('--timeout', type=float, default=8)
+    args = parser.parse_args()
+    if not 0 < args.timeout <= 30:
+        parser.error('--timeout must be greater than zero and at most 30 seconds')
+    started = time.monotonic()
+    client = None
+    signal.signal(signal.SIGALRM, alarm_handler)
+    signal.setitimer(signal.ITIMER_REAL, args.timeout)
+    try:
+        client = Client(args.socket, started + args.timeout)
+        cleanup(client)
+        log('Cleanup completed in %.2f seconds' % (time.monotonic() - started))
+        return 0
+    except (OSError, RuntimeError, ValueError, KeyError) as error:
+        log('WARNING: cleanup not confirmed: ' + str(error))
+        return 1
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        if client is not None:
+            client.sock.close()
+
+
+if __name__ == '__main__':
+    sys.exit(main())
