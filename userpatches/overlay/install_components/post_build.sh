@@ -63,6 +63,8 @@ post_build() {
     TAG=$(cat /tmp/overlay/rebuild/rebuild-tag)
     sed -i "s/PRETTY_NAME=\"/PRETTY_NAME=\"Rebuild ${TAG}\//" /etc/os-release
 
+    strip_python_extensions
+
     # Last, so nothing after it runs apt. Otherwise the image ships the
     # package indexes and .deb cache from build day (#100): tens of MB, and
     # an `apt install` on the board before any `apt update` would resolve
@@ -70,3 +72,18 @@ post_build() {
     apt-get clean
     rm -rf /var/lib/apt/lists/*
 }
+
+# Many of the compiled Python extensions in the venvs still carry their debug
+# symbols: stripping them saved 52 of 131 MB under /home/printer on an
+# OctoPrint image (zeroconf alone 625 KB -> 136 KB). Nothing on a printer
+# debugs them. --strip-unneeded keeps what the dynamic loader and
+# Python's import need. Run as root, strip keeps each file's owner, so the
+# venvs stay the printer user's.
+strip_python_extensions() {
+    command -v strip >/dev/null || return 0
+    [ -d /home/printer ] || return 0
+    echo "🍰 Strip debug symbols from Python extensions"
+    find /home/printer -xdev -type f \( -name '*.so' -o -name '*.so.*' \) \
+        -exec strip --strip-unneeded {} + 2>/dev/null || true
+}
+
