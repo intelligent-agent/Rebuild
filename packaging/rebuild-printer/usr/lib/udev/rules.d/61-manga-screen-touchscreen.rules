@@ -1,0 +1,10 @@
+# The Manga Screen 2's touch reports BTN_TOOL_FINGER without INPUT_PROP_DIRECT,
+# so udev's input_id calls it a touchpad. libinput then drives a pointer
+# relatively, with acceleration and tap-to-click, and Weston offers clients no
+# touch at all. It is a touchscreen.
+#
+# Both nodes, the inputN parent as well as eventN: libinput reads these tags
+# from the parents too, and a touchpad tag left on inputN still wins. And "0",
+# not empty: libinput counts any other value as set.
+ACTION=="add|change", SUBSYSTEM=="input", ATTRS{idVendor}=="03eb", ATTRS{idProduct}=="572b", \
+  ENV{ID_INPUT_TOUCHPAD}="0", ENV{ID_INPUT_TOUCHSCREEN}="1"
