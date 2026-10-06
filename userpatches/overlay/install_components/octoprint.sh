@@ -28,24 +28,25 @@ install_octoprint(){
 	echo '%printer ALL=NOPASSWD: /usr/bin/systemctl restart octoprint.service' >> /etc/sudoers.d/printer
 	echo '%printer ALL=NOPASSWD: /usr/bin/systemctl restart toggle.service' >> /etc/sudoers.d/printer
 
-	# Install plugins
+	# Install plugins. Without build isolation: their setup.py imports
+	# OctoPrint's own setuptools helpers, which only this venv has.
 	cd ${HOMEDIR}
 	git clone https://github.com/thelastWallE/OctoprintKlipperPlugin.git
 	git -C OctoprintKlipperPlugin reset --hard "${OCTOPRINT_KLIPPER_PLUGIN_VERSION}"
 	chown -R ${USER}:${USER} OctoprintKlipperPlugin
-	${HOMEDIR}/OctoPrint/venv/bin/pip install ./OctoprintKlipperPlugin
+	${HOMEDIR}/OctoPrint/venv/bin/pip install --no-build-isolation ./OctoprintKlipperPlugin
 	
 	cd ${HOMEDIR}
 	git clone https://github.com/LazeMSS/OctoPrint-TopTemp.git
 	git -C OctoPrint-TopTemp reset --hard "${OCTOPRINT_TOPTEMP_VERSION}"
 	chown -R ${USER}:${USER} OctoPrint-TopTemp
-	${HOMEDIR}/OctoPrint/venv/bin/pip install ./OctoPrint-TopTemp
+	${HOMEDIR}/OctoPrint/venv/bin/pip install --no-build-isolation ./OctoPrint-TopTemp
 
 	cd ${HOMEDIR}
 	git clone https://github.com/intelligent-agent/octoprint_recore.git
 	git -C octoprint_recore reset --hard "${OCTOPRINT_RECORE_REVISION}"
 	chown -R ${USER}:${USER} octoprint_recore
-	${HOMEDIR}/OctoPrint/venv/bin/pip install ./octoprint_recore
+	${HOMEDIR}/OctoPrint/venv/bin/pip install --no-build-isolation ./octoprint_recore
 
 	# The plugins went in as root, after the chown above: hand the venv to the
 	# user OctoPrint runs as, or its own updates cannot remove the old version

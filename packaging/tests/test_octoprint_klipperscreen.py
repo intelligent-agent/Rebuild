@@ -71,7 +71,11 @@ class OctoprintPluginOwnershipTest(unittest.TestCase):
     def test_image_installs_plugins_with_pip_then_hands_venv_over(self):
         text = (OVERLAY / 'install_components/octoprint.sh').read_text()
         self.assertNotIn('setup.py install', text)
-        last_plugin = text.rindex('pip install ./octoprint_recore')
+        # OctoKlipper's setup.py imports OctoPrint's setuptools helpers: an
+        # isolated build cannot see them and fails.
+        for plugin in ('OctoprintKlipperPlugin', 'OctoPrint-TopTemp', 'octoprint_recore'):
+            self.assertIn('pip install --no-build-isolation ./' + plugin, text)
+        last_plugin = text.rindex('pip install --no-build-isolation ./octoprint_recore')
         handover = text.index('chown -R ${USER}:${USER} ${HOMEDIR}/OctoPrint ', last_plugin)
         self.assertGreater(handover, last_plugin)
 
