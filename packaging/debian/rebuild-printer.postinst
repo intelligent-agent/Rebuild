@@ -79,6 +79,9 @@ fi
 if [ "$1" = configure ] && [ -d /run/systemd/system ]; then
     systemctl daemon-reload || true
     udevadm control --reload || true
+    # Re-apply input rules (the Manga Screen's touchscreen tag) to devices
+    # already present; Weston sees it from its next start.
+    udevadm trigger --action=change --subsystem-match=input || true
 fi
 
 #DEBHELPER#
