@@ -1,5 +1,8 @@
 """Static integration checks; physical/job-control checks still need the image."""
 import configparser
+import os
+import subprocess
+import tempfile
 from pathlib import Path
 import unittest
 
@@ -59,3 +62,45 @@ class OctoprintKlipperScreenTest(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class OctoprintPluginOwnershipTest(unittest.TestCase):
+    """Plugins installed as root broke OctoPrint's own plugin updates (#126)."""
+    SCRIPT = ROOT / 'packaging/rebuild-printer/usr/lib/rebuild/octoprint-venv-owner'
+
+    def test_image_installs_plugins_with_pip_then_hands_venv_over(self):
+        text = (OVERLAY / 'install_components/octoprint.sh').read_text()
+        self.assertNotIn('setup.py install', text)
+        last_plugin = text.rindex('pip install ./octoprint_recore')
+        handover = text.index('chown -R ${USER}:${USER} ${HOMEDIR}/OctoPrint ', last_plugin)
+        self.assertGreater(handover, last_plugin)
+
+    def test_postinst_repairs_existing_boards(self):
+        text = (ROOT / 'packaging/debian/rebuild-printer.postinst').read_text()
+        self.assertIn('/usr/lib/rebuild/octoprint-venv-owner', text)
+
+    def run_script(self, venv, owner):
+        subprocess.run(['sh', str(self.SCRIPT), str(venv), owner], check=True)
+
+    def test_removes_half_uninstalled_leftovers_only(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            site = Path(tmp) / 'lib/python3.13/site-packages'
+            for name in ('~ctoprint_klipper', '~ctoKlipper-0.3.9.5-py3.13.egg-info',
+                         'octoprint_klipper', 'octoklipper-0.4.dist-info'):
+                (site / name).mkdir(parents=True)
+                (site / name / 'file').write_text('x')
+            self.run_script(tmp, os.environ.get('USER') or 'root')
+            self.assertEqual(sorted(p.name for p in site.iterdir()),
+                             ['octoklipper-0.4.dist-info', 'octoprint_klipper'])
+
+    def test_missing_venv_is_not_an_error(self):
+        self.run_script('/nonexistent/venv', 'root')
+
+    @unittest.skipUnless(os.geteuid() == 0, 'chown needs root')
+    def test_gives_root_owned_files_to_the_owner(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            f = Path(tmp) / 'lib/python3.13/site-packages/Top_Temp-0.0.2.5-py3.13.egg-info'
+            f.parent.mkdir(parents=True)
+            f.write_text('x')
+            self.run_script(tmp, 'nobody')
+            self.assertEqual(f.owner(), 'nobody')
