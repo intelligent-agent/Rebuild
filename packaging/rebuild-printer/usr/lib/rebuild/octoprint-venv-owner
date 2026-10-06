@@ -1,0 +1,26 @@
+#!/bin/sh
+# Give OctoPrint's virtualenv back to the user OctoPrint runs as.
+#
+#   octoprint-venv-owner [VENV] [USER]
+#
+# Images up to v1.1.0 installed OctoKlipper, TopTemp and the Recore plugin as
+# root, after the venv had been handed to printer. OctoPrint updates a plugin
+# with pip as printer, which then cannot delete the root-owned old version: it
+# renames it to ~name and leaves it, OctoPrint keeps reading the old version's
+# metadata, and the same update is offered again and again.
+#
+# So: everything in the venv to USER, and those half-removed ~name leftovers
+# deleted - pip names them so precisely because they are safe to remove.
+set -eu
+
+VENV=${1:-/home/printer/OctoPrint/venv}
+OWNER=${2:-printer}
+
+[ -d "$VENV" ] || exit 0
+id "$OWNER" >/dev/null 2>&1 || exit 0
+
+for site in "$VENV"/lib/python3*/site-packages; do
+    [ -d "$site" ] || continue
+    find "$site" -mindepth 1 -maxdepth 1 -name '~*' -exec rm -rf {} +
+done
+find "$VENV" ! -user "$OWNER" -exec chown -h "$OWNER:$(id -gn "$OWNER")" {} +

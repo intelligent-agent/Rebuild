@@ -76,6 +76,12 @@ if [ "$1" = configure ] && [ -x /usr/bin/weston ] && \
     sh /usr/lib/rebuild/configure-weston-session
 fi
 
+# Every configure, not just the first: boards from images that installed
+# OctoPrint's plugins as root need it once, and it is a no-op after that.
+if [ "$1" = configure ]; then
+    /usr/lib/rebuild/octoprint-venv-owner || true
+fi
+
 if [ "$1" = configure ] && [ -d /run/systemd/system ]; then
     systemctl daemon-reload || true
     udevadm control --reload || true
