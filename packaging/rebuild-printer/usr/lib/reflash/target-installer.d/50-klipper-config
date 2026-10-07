@@ -1,0 +1,35 @@
+#!/bin/bash
+# target-installer step from rebuild-printer: give a freshly flashed printer
+# the Klipper config for its revision, with its web interface included.
+#
+# Only on prepare, and only on a fresh flash's config: configure runs again
+# whenever the user changes a setting, and must never overwrite a printer.cfg
+# they have edited since.
+set -euo pipefail
+
+R="${REFLASH_TEST_ROOT:-}"
+[ "${1:-}" = prepare ] || exit 0
+
+rev=${REFLASH_REVISION:-}
+cfg="$R/usr/share/rebuild/klipper/config/generic-recore-$rev.cfg"
+dir="$R/home/printer/printer_data/config"
+[ -d "$dir" ] || { echo "no $dir, no Klipper config to install"; exit 0; }
+[ -f "$cfg" ] || { echo "ERROR: no Klipper config for Recore $rev"; exit 1; }
+
+cp "$cfg" "$dir/printer.cfg"
+chown --reference="$dir" "$dir/printer.cfg"
+echo "Klipper config: generic-recore-$rev.cfg"
+
+# The web interface's own macros, included once, after the "# See docs" line
+# every Recore config has (or at the top). The package's configs carry no
+# include of their own.
+for ui in mainsail fluidd; do
+    [ -f "$dir/$ui.cfg" ] || continue
+    grep -q "^\[include $ui.cfg\]" "$dir/printer.cfg" && continue
+    if grep -q '^# See docs' "$dir/printer.cfg"; then
+        sed -i "0,/^# See docs.*/s//&\n\n[include $ui.cfg]/" "$dir/printer.cfg"
+    else
+        sed -i "1i [include $ui.cfg]\n" "$dir/printer.cfg"
+    fi
+    echo "Klipper config: includes $ui.cfg"
+done
