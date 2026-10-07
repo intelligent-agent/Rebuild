@@ -1,9 +1,12 @@
 #!/bin/bash
 
-. /etc/rebuild-settings
-# Holds the plaintext wifi password - make sure it's root-only
-# regardless of how/when it was last written.
-chmod 600 /etc/rebuild-settings
+# The network to join is NetworkManager's Client profile, written by the
+# image's installer under Reflash, or by rebuild-settings-migrate from an
+# older Reflash's /etc/rebuild-settings (#134). No profile, no network: the
+# hotspot.
+CLIENT=/etc/NetworkManager/system-connections/Client.nmconnection
+WIFI_SSID=$(/usr/lib/rebuild/wifi-client ssid 2>/dev/null || true)
+
 wifidev=`nmcli dev | grep "wifi " | cut -d' ' -f1`
 
 # No radio, nothing to do - and this has to be checked before anything else
@@ -63,16 +66,6 @@ create_hotspot() {
   nmcli con modify Hotspot wifi-sec.psk "$hotspot_PW"
 }
 
-create_client() {
-  echo "Creating wifi client config"
-  nmcli con add type wifi ifname "$wifidev" con-name Client ssid "$WIFI_SSID"
-  # Unbind from the interface it was created on (#90). See unbind_profiles.
-  nmcli con modify Client connection.interface-name ""
-  nmcli con modify Client connection.autoconnect no
-  nmcli con modify Client wifi-sec.key-mgmt wpa-psk
-  nmcli con modify Client wifi-sec.psk "$WIFI_PSK"
-}
-
 # Let either profile run on whatever WiFi device is present (#90).
 #
 # `con add ... ifname "$wifidev"` sets connection.interface-name, and
@@ -105,20 +98,12 @@ if [ ! -f /etc/NetworkManager/system-connections/Hotspot.nmconnection ]; then
   create_hotspot
 fi
 
-if [ ! -f /etc/NetworkManager/system-connections/Client.nmconnection ]; then
-  if [ -n "$WIFI_SSID" ]; then
-    create_client
-  else
-    echo "No WIFI_SSID found in /etc/rebuild-settings. Skipping Client setup."
-  fi
-fi
-
 unbind_profiles
 
 # Decide which connection to bring up this boot. Both connections have
 # autoconnect disabled, so NetworkManager never arbitrates between them
 # itself - the choice is made explicitly, once, here.
-if [ -n "$WIFI_SSID" ] && [ -f /etc/NetworkManager/system-connections/Client.nmconnection ]; then
+if [ -n "$WIFI_SSID" ] && [ -f "$CLIENT" ]; then
   echo "Trying to connect to $WIFI_SSID for up to ${CLIENT_TIMEOUT}s..."
   # Retry against a wall-clock deadline instead of handing the whole budget to
   # one nmcli call. `nmcli -w` only bounds how long *nmcli* waits; NetworkManager

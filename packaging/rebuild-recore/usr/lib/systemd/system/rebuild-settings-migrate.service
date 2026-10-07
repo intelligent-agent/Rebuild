@@ -1,0 +1,14 @@
+[Unit]
+Description=Apply an /etc/rebuild-settings from an older Reflash, once
+# Before autohotspot looks for a Client profile, and before anything starts
+# or stops SSH by it (#134).
+ConditionPathExists=/etc/rebuild-settings
+After=NetworkManager.service
+Before=autohotspot.service auto-disable-ssh.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/rebuild/migrate-rebuild-settings
+
+[Install]
+WantedBy=multi-user.target

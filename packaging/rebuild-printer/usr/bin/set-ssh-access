@@ -3,11 +3,10 @@
 IS_ACTIVE=$1
 
 if [ "${IS_ACTIVE}" == "true" ]; then
-  systemctl start ssh
-  sed -i 's/^SSH_ENABLED_ON_BOOT.*/SSH_ENABLED_ON_BOOT=true/'  /etc/rebuild-settings
+  # Now and at every boot: ssh.service enabled is the setting (#134).
+  systemctl enable --now ssh.service
 elif [ "${IS_ACTIVE}" == "false" ]; then
-  systemctl stop ssh
-  sed -i 's/^SSH_ENABLED_ON_BOOT.*/SSH_ENABLED_ON_BOOT=false/'  /etc/rebuild-settings
+  systemctl disable --now ssh.service
 else
   echo "usage $0 true/false"
   exit 1

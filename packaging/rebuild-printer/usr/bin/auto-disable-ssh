@@ -3,7 +3,15 @@
 # If SSH is enabled and password has not been changed, disable SSH access
 # We use a monotonic timer that can work even without a valid clock.
 
-. /etc/rebuild-settings
+# Whether SSH comes up at boot is ssh.service being enabled - there is no
+# settings file for it any more (#134). Sixty minutes with the factory
+# password, then it is switched off.
+SSH_TIMEOUT=60
+if systemctl is-enabled --quiet ssh.service; then
+    SSH_ENABLED_ON_BOOT=true
+else
+    SSH_ENABLED_ON_BOOT=false
+fi
 
 reset_timer(){
     echo 0 > /etc/ssh-active-without-pw-change
@@ -17,7 +25,7 @@ increase_timer(){
 
 set_boot_state(){
     echo "Setting state at next boot to: SSH_ENABLED_ON_BOOT=$1"
-    sed -i "s/^SSH_ENABLED_ON_BOOT.*/SSH_ENABLED_ON_BOOT=$1/"  /etc/rebuild-settings
+    if [ "$1" = true ]; then systemctl enable ssh.service; else systemctl disable ssh.service; fi
 }
 
 # Check if this is first time the script is run after a reboot

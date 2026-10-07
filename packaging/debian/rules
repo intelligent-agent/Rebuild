@@ -20,5 +20,5 @@ override_dh_auto_clean:
 # that already ran it would reflash the STM32 and RP2040 on the next boot,
 # so the image build enables it instead.
 override_dh_installsystemd:
-	dh_installsystemd -prebuild-recore --no-start --no-stop-on-upgrade autohotspot.service
+	dh_installsystemd -prebuild-recore --no-start --no-stop-on-upgrade autohotspot.service rebuild-settings-migrate.service
 	dh_installsystemd -prebuild-printer --no-start --no-stop-on-upgrade auto-disable-ssh.timer rebuild-trim-logs.timer

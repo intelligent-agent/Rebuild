@@ -137,13 +137,6 @@ set_password() {
     echo "login password set for $user"
 }
 
-# A value as one shell word: /etc/rebuild-settings is sourced by bash as root
-# (rebuild-first-run, autohotspot), so a passphrase such as it's-my-wifi must
-# not break it, and a crafted one must not run anything (Reflash#157).
-shell_quote() {
-    printf "'%s'" "${1//\'/\'\\\'\'}"
-}
-
 # The screen, touch input and boot splash, turned by SCREEN_ROTATION degrees
 # clockwise. Every place that draws is set, whichever this image uses, because
 # a user can switch between them later.
@@ -199,17 +192,24 @@ EOF
     echo "screen rotation: $deg"
 }
 
-# The current choices, in the order and names of the settings format.
-current_settings() {
-    local file="$R/etc/rebuild-settings"
-    [ -f "$file" ] || { printf 'false\n0\n\n\n'; return; }
-    # Our own file, quoted as it was written (shell_quote; Reflash#157).
-    bash -c '. "$1"; printf "%s\n%s\n%s\n%s\n" "${SSH_ENABLED_ON_BOOT:-false}" \
-        "${EXTERNAL_SCREEN_ROTATION:-0}" "$WIFI_SSID" "$WIFI_PSK"' _ "$file"
+WIFI_CLIENT="$R/usr/lib/rebuild/wifi-client"
+
+# Each choice lives where the system itself reads it - there is no settings
+# file (#134): Wi-Fi in NetworkManager's Client profile, SSH in whether
+# ssh.service is enabled, the rotation in armbianEnv.txt and the compositor's
+# config. Reading them back is reading those.
+ssh_enabled() {
+    if systemctl ${R:+--root="$R"} is-enabled --quiet ssh.service 2>/dev/null; then echo true; else echo false; fi
+}
+
+current_rotation() {
+    local n
+    n=$(grep -o 'fbcon=rotate:[0-3]' "$R/boot/armbianEnv.txt" 2>/dev/null | head -1 | cut -d: -f2)
+    echo $(( ${n:-0} * 90 ))
 }
 
 configure() {
-    local file="$R/etc/rebuild-settings" stdin ssh rot ssid psk
+    local stdin ssid psk
     stdin=$(mktemp)
     trap 'rm -f "$stdin"' RETURN
     cat > "$stdin"
@@ -218,27 +218,35 @@ configure() {
     # Only what was given changes; everything else stays as it is, so changing
     # one choice later - a forgotten password, from a Reflash booted to repair
     # it - does not reset the rest.
-    { read -r ssh; read -r rot; read -r ssid; read -r psk; } < <(current_settings)
-    [ -z "${S[SSH_ENABLED]+set}" ] || ssh=${S[SSH_ENABLED]}
-    [ -z "${S[WIFI_SSID]+set}" ] || ssid=${S[WIFI_SSID]}
-    [ -z "${S[WIFI_PSK]+set}" ] || psk=${S[WIFI_PSK]}
     if [ -n "${S[SCREEN_ROTATION]+set}" ]; then
-        rot=${S[SCREEN_ROTATION]}
-        rotate "$rot"
+        rotate "${S[SCREEN_ROTATION]}"
+    fi
+
+    if [ -n "${S[SSH_ENABLED]+set}" ]; then
+        if [ "${S[SSH_ENABLED]}" = true ]; then
+            systemctl ${R:+--root="$R"} enable ssh.service
+        else
+            systemctl ${R:+--root="$R"} disable ssh.service
+        fi
+        echo "SSH at boot: ${S[SSH_ENABLED]}"
     fi
 
     # Never echo the passphrase or the password: this output is Reflash's log.
-    {
-        echo "# Settings from Reflash"
-        echo "SSH_ENABLED_ON_BOOT=$ssh"
-        echo "SSH_TIMEOUT=60"
-        echo "EXTERNAL_SCREEN_ROTATION=$rot"
-        echo "WIFI_SSID=$(shell_quote "$ssid")"
-        echo "WIFI_PSK=$(shell_quote "$psk")"
-    } > "$file.new"
-    chmod 600 "$file.new"
-    mv "$file.new" "$file"
-    echo "settings: SSH enabled $ssh, Wi-Fi network '$ssid'"
+    if [ -n "${S[WIFI_SSID]+set}" ] || [ -n "${S[WIFI_PSK]+set}" ]; then
+        ssid=${S[WIFI_SSID]-$("$WIFI_CLIENT" ssid)}
+        psk=${S[WIFI_PSK]-$("$WIFI_CLIENT" psk)}
+        if [ -n "$ssid" ]; then
+            printf '%s\n%s\n' "$ssid" "$psk" | "$WIFI_CLIENT" set
+            echo "Wi-Fi network: '$ssid'"
+        else
+            "$WIFI_CLIENT" remove
+            echo "Wi-Fi network: none, the board starts its hotspot"
+        fi
+    fi
+
+    # From an older Reflash, or a board from before #134: not read by anything
+    # any more, and it holds the passphrase in a second place.
+    rm -f "$R/etc/rebuild-settings"
 
     if [ -n "${S[LOGIN_PASSWORD]:-}" ]; then
         set_password "${S[LOGIN_PASSWORD]}"
@@ -250,9 +258,8 @@ configure() {
 # For Reflash to show before the user changes anything. Secrets are never
 # printed; whether one is set is not even hinted at.
 settings() {
-    local ssh rot ssid psk
-    { read -r ssh; read -r rot; read -r ssid; read -r psk; } < <(current_settings)
-    printf 'SETTINGS=1\nSSH_ENABLED=%s\nSCREEN_ROTATION=%s\nWIFI_SSID=%s\n' "$ssh" "$rot" "$ssid"
+    printf 'SETTINGS=1\nSSH_ENABLED=%s\nSCREEN_ROTATION=%s\nWIFI_SSID=%s\n' \
+        "$(ssh_enabled)" "$(current_rotation)" "$("$WIFI_CLIENT" ssid)"
 }
 
 case ${1:-} in

@@ -1,0 +1,109 @@
+#!/bin/bash
+# The Wi-Fi network this board joins: NetworkManager's "Client" profile, and
+# nothing else. There used to be a second copy in /etc/rebuild-settings, read
+# once to create the profile and then ignored - so changing it did nothing
+# (#134). This writes the profile itself.
+#
+#   wifi-client set       SSID and passphrase on stdin, one line each
+#   wifi-client remove
+#   wifi-client ssid      print the network's name, empty when there is none
+#   wifi-client psk       print the passphrase (root only; never log it)
+#
+# Secrets come on stdin, never as arguments: a command line is in ps and in logs.
+# Works on a running system and inside Reflash's chroot alike - it only writes
+# the keyfile, and tells NetworkManager to reread it when it is running.
+set -euo pipefail
+
+R="${REFLASH_TEST_ROOT:-}"
+FILE="$R/etc/NetworkManager/system-connections/Client.nmconnection"
+
+# A GLib key file value, as NetworkManager reads it: backslash escapes, and
+# leading or trailing spaces kept by escaping them - otherwise "home " would
+# silently be a different network from "home".
+escape() {
+    local v=${1//\\/\\\\}
+    [[ $v == " "* ]] && v="\\s${v:1}"
+    [[ $v == *" " ]] && v="${v%?}\\s"
+    printf '%s' "$v"
+}
+
+unescape() {
+    local v=$1 out="" c
+    while [ -n "$v" ]; do
+        c=${v:0:1}; v=${v:1}
+        if [ "$c" = '\' ] && [ -n "$v" ]; then
+            case ${v:0:1} in
+                s) out+=" " ;; n) out+=$'\n' ;; t) out+=$'\t' ;; r) out+=$'\r' ;; *) out+=${v:0:1} ;;
+            esac
+            v=${v:1}
+        else
+            out+=$c
+        fi
+    done
+    printf '%s' "$out"
+}
+
+value() {
+    [ -f "$FILE" ] || return 0
+    local line
+    line=$(grep -m1 "^$1=" "$FILE" || true)
+    unescape "${line#*=}"
+}
+
+reload() {
+    # Only when NetworkManager is running here - not in a chroot, not in tests.
+    [ -z "$R" ] && command -v nmcli >/dev/null && nmcli general status >/dev/null 2>&1 &&
+        nmcli connection reload || true
+}
+
+case ${1:-} in
+    set)
+        IFS= read -r ssid || true
+        IFS= read -r psk || true
+        [ -n "$ssid" ] || { echo "wifi-client: no network name" >&2; exit 1; }
+        # Keep the profile's identity across a change of network.
+        uuid=$(grep -m1 '^uuid=' "$FILE" 2>/dev/null | cut -d= -f2 || true)
+        [ -n "$uuid" ] || uuid=$(cat /proc/sys/kernel/random/uuid)
+        mkdir -p "$(dirname "$FILE")"
+        # The options autohotspot gave it with nmcli: not bound to an interface
+        # name (#90), and never autoconnected - autohotspot decides each boot
+        # between this and the hotspot (#65).
+        {
+            echo "[connection]"
+            echo "id=Client"
+            echo "uuid=$uuid"
+            echo "type=wifi"
+            echo "autoconnect=false"
+            echo
+            echo "[wifi]"
+            echo "mode=infrastructure"
+            echo "ssid=$(escape "$ssid")"
+            echo
+            if [ -n "$psk" ]; then
+                echo "[wifi-security]"
+                echo "key-mgmt=wpa-psk"
+                echo "psk=$(escape "$psk")"
+                echo
+            fi
+            echo "[ipv4]"
+            echo "method=auto"
+            echo
+            echo "[ipv6]"
+            echo "addr-gen-mode=default"
+            echo "method=auto"
+        } > "$FILE.new"
+        chmod 600 "$FILE.new"
+        mv "$FILE.new" "$FILE"
+        reload
+        ;;
+    remove)
+        rm -f "$FILE"
+        reload
+        ;;
+    ssid) value ssid; echo ;;
+    psk) value psk; echo ;;
+    *)
+        echo "usage: $0 set | remove | ssid | psk" >&2
+        exit 2
+        ;;
+esac

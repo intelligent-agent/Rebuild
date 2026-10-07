@@ -18,6 +18,8 @@ setup() {
     cp "$PKG/rebuild-recore/usr/lib/reflash/target-installer" "$R/usr/lib/reflash/"
     cp -r "$PKG/rebuild-printer/usr/lib/reflash/target-installer.d" "$R/usr/lib/reflash/"
     cp -r "$PKG/rebuild-printer/usr/share/rebuild/klipper/config" "$R/usr/share/rebuild/klipper/"
+    mkdir -p "$R/usr/lib/rebuild"
+    cp "$PKG/rebuild-recore/usr/lib/rebuild/wifi-client" "$PKG/rebuild-recore/usr/lib/rebuild/migrate-rebuild-settings" "$R/usr/lib/rebuild/"
 
     cat > "$R/etc/fstab" <<'EOF'
 UUID=old-root / ext4 defaults,noatime,commit=120,errors=remount-ro 0 1
@@ -54,6 +56,16 @@ EOF
     cat > "$SHIMS/chage" <<'EOF'
 #!/bin/bash
 echo "chage $*" >> "$CALLS"
+EOF
+    # systemctl --root=R enable|disable|is-enabled ssh.service, kept in a file.
+    cat > "$SHIMS/systemctl" <<'EOF'
+#!/bin/bash
+echo "systemctl $*" >> "$CALLS"
+for a in "$@"; do case $a in
+    enable) echo enabled > "$REFLASH_TEST_ROOT/.ssh" ;;
+    disable) echo disabled > "$REFLASH_TEST_ROOT/.ssh" ;;
+    is-enabled) [ "$(cat "$REFLASH_TEST_ROOT/.ssh" 2>/dev/null)" = enabled ]; exit ;;
+esac; done
 EOF
     chmod +x "$SHIMS"/*
     PATH="$SHIMS:$PATH"
@@ -116,17 +128,78 @@ settings() {
     [ "$status" -eq 0 ]
 }
 
-@test "configure: settings file survives being sourced, whatever was typed" {
-    pwned="$R/pwned"
-    settings 270 "Bob's \"home\" net" "it's \$(touch $pwned) wifi" > "$R/s"
+client() { cat "$R/etc/NetworkManager/system-connections/Client.nmconnection"; }
+
+@test "configure: Wi-Fi goes into NetworkManager's Client profile, taken literally" {
+    settings 270 "Bob's \"home\" net " "it's \$(touch x) wifi" > "$R/s"
     run "$INSTALLER" configure < "$R/s"
     [ "$status" -eq 0 ]
-    [ "$(stat -c %a "$R/etc/rebuild-settings")" = 600 ]
-    out=$(bash -c '. "$1" && printf "%s|%s|%s|%s" "$SSH_ENABLED_ON_BOOT" "$EXTERNAL_SCREEN_ROTATION" "$WIFI_SSID" "$WIFI_PSK"' _ "$R/etc/rebuild-settings")
-    [ "$out" = "true|270|Bob's \"home\" net|it's \$(touch $pwned) wifi" ]
-    [ ! -e "$pwned" ]
-    # The passphrase is never in the installer's output, which is Reflash's log.
+    [ "$(stat -c %a "$R/etc/NetworkManager/system-connections/Client.nmconnection")" = 600 ]
+    client | grep -qx 'id=Client'
+    client | grep -qx 'autoconnect=false'
+    # The trailing space kept, as GLib key files need it written.
+    client | grep -qxF 'ssid=Bob'"'"'s "home" net\s'
+    client | grep -qxF 'psk=it'"'"'s $(touch x) wifi'
+    [ "$("$R/usr/lib/rebuild/wifi-client" ssid)" = "Bob's \"home\" net " ]
+    [ "$("$R/usr/lib/rebuild/wifi-client" psk)" = "it's \$(touch x) wifi" ]
+    # Nothing else holds it, and the passphrase is never in the output.
+    [ ! -e "$R/etc/rebuild-settings" ]
     [[ "$output" != *"touch"* ]]
+}
+
+@test "configure: SSH at boot is ssh.service enabled or disabled" {
+    cfg SSH_ENABLED=true
+    "$INSTALLER" configure < "$R/s"
+    grep -qx "systemctl --root=$R enable ssh.service" "$CALLS"
+    cfg SSH_ENABLED=false
+    "$INSTALLER" configure < "$R/s"
+    grep -qx "systemctl --root=$R disable ssh.service" "$CALLS"
+}
+
+@test "configure: an empty network name removes the profile, and the board starts its hotspot" {
+    cfg "WIFI_SSID=home" "WIFI_PSK=secret1"
+    "$INSTALLER" configure < "$R/s"
+    cfg "WIFI_SSID="
+    run "$INSTALLER" configure < "$R/s"
+    [ "$status" -eq 0 ]
+    [ ! -e "$R/etc/NetworkManager/system-connections/Client.nmconnection" ]
+}
+
+@test "configure: a new passphrase alone keeps the network, and the profile's identity" {
+    cfg "WIFI_SSID=home" "WIFI_PSK=secret1"
+    "$INSTALLER" configure < "$R/s"
+    uuid=$(client | grep ^uuid=)
+    cfg "WIFI_PSK=secret2"
+    "$INSTALLER" configure < "$R/s"
+    client | grep -qx 'ssid=home'
+    client | grep -qx 'psk=secret2'
+    [ "$(client | grep ^uuid=)" = "$uuid" ]
+}
+
+@test "configure: an old /etc/rebuild-settings is removed - it held the passphrase twice" {
+    printf "WIFI_PSK='old'\n" > "$R/etc/rebuild-settings"
+    cfg SCREEN_ROTATION=0
+    "$INSTALLER" configure < "$R/s"
+    [ ! -e "$R/etc/rebuild-settings" ]
+}
+
+@test "migrate: an older Reflash's settings file becomes the Client profile and ssh.service, once" {
+    printf "SSH_ENABLED_ON_BOOT=true\nSSH_TIMEOUT=60\nWIFI_SSID='Bob'\\''s net'\nWIFI_PSK='p\$ss'\n" > "$R/etc/rebuild-settings"
+    WIFI_CLIENT="$R/usr/lib/rebuild/wifi-client" run bash "$R/usr/lib/rebuild/migrate-rebuild-settings"
+    [ "$status" -eq 0 ]
+    [ "$("$R/usr/lib/rebuild/wifi-client" ssid)" = "Bob's net" ]
+    [ "$("$R/usr/lib/rebuild/wifi-client" psk)" = 'p$ss' ]
+    grep -qx "systemctl --root=$R enable ssh.service" "$CALLS"
+    [ ! -e "$R/etc/rebuild-settings" ]
+}
+
+@test "migrate: a board that already joins a network keeps it" {
+    printf 'mine\nkept\n' | "$R/usr/lib/rebuild/wifi-client" set
+    printf "SSH_ENABLED_ON_BOOT=false\nWIFI_SSID='theirs'\nWIFI_PSK='x'\n" > "$R/etc/rebuild-settings"
+    WIFI_CLIENT="$R/usr/lib/rebuild/wifi-client" run bash "$R/usr/lib/rebuild/migrate-rebuild-settings"
+    [ "$status" -eq 0 ]
+    [ "$("$R/usr/lib/rebuild/wifi-client" ssid)" = mine ]
+    grep -qx "systemctl --root=$R disable ssh.service" "$CALLS"
 }
 
 @test "configure: rotation reaches Weston, the console and the splash, once" {
@@ -167,10 +240,12 @@ cfg() { printf '%s\n' SETTINGS=1 "$@" > "$R/s"; }
     cfg SSH_ENABLED=true SCREEN_ROTATION=270 "WIFI_SSID=home" "WIFI_PSK=secret1"
     "$INSTALLER" configure < "$R/s"
     cfg SCREEN_ROTATION=90
+    : > "$CALLS"
     run "$INSTALLER" configure < "$R/s"
     [ "$status" -eq 0 ]
-    out=$(bash -c '. "$1"; echo "$SSH_ENABLED_ON_BOOT|$EXTERNAL_SCREEN_ROTATION|$WIFI_SSID|$WIFI_PSK"' _ "$R/etc/rebuild-settings")
-    [ "$out" = "true|90|home|secret1" ]
+    client | grep -qx 'ssid=home'
+    client | grep -qx 'psk=secret1'
+    ! grep -q '^systemctl' "$CALLS"
     grep -qx 'transform=rotate-270' "$R/etc/xdg/weston/weston.ini"
     grep -q 'fbcon=rotate:1 ' "$R/boot/armbianEnv.txt"
 }
@@ -192,7 +267,7 @@ cfg() { printf '%s\n' SETTINGS=1 "$@" > "$R/s"; }
     grep -qE "^chage -R $R -d 20[0-9]{2}-[0-9]{2}-[0-9]{2} debian$" "$CALLS"
     [[ "$output" == *"login password set for debian"* ]]
     [[ "$output" != *"horse"* ]]
-    ! grep -q horse "$R/etc/rebuild-settings"
+    ! grep -rq horse "$R/etc/NetworkManager" 2>/dev/null
 }
 
 @test "configure: barebone has only root, so that is whose password it is" {

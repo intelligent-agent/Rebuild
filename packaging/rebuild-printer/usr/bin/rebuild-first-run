@@ -12,7 +12,6 @@ set -e
 # first run, which is far worse than the loop it replaced.
 set -o pipefail
 
-. /etc/rebuild-settings
 
 # Say so in the log that survives a reboot, not just the journal. An
 # unrecoverable first run is now bounded by StartLimitBurst (see the unit), so

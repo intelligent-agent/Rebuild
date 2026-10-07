@@ -42,11 +42,12 @@ if [ "$1" = configure ] && [ -z "$2" ]; then
     set_aside /etc/systemd/system.conf.d/10-watchdog.conf
     set_aside /etc/systemd/resolved.conf.d/no-dnssec.conf
 
-    # Settings that set-ssh-access rewrites: state, not a conffile, so it is
-    # created once and never touched by an upgrade.
-    if [ ! -e /etc/rebuild-settings ]; then
-        install -m 600 /usr/share/rebuild/rebuild-settings.default /etc/rebuild-settings
-    fi
+    # SSH is off on a fresh image until someone turns it on - in Reflash, or
+    # with set-ssh-access - which is what the default /etc/rebuild-settings
+    # (SSH_ENABLED_ON_BOOT=false) used to say. Whether it comes up at boot is
+    # now ssh.service's own enablement (#134). A fresh install of this package
+    # only happens in the image build; an upgrade keeps the board's choice.
+    systemctl disable ssh.service 2>/dev/null || true
 
     # Only on the first install, so an upgrade never undoes a user's choice
     # of theme. The initramfs is rebuilt by the update-initramfs trigger.

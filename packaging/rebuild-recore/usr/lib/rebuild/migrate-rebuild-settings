@@ -1,0 +1,45 @@
+#!/bin/bash
+# Apply an /etc/rebuild-settings once, where the system keeps those choices,
+# and remove it (#134).
+#
+# Rebuild no longer writes that file: the image's installer puts Wi-Fi straight
+# into NetworkManager's Client profile and SSH into ssh.service. But a Reflash
+# from before the target interface (v1.1.x) still writes it into any image it
+# installs, and boards upgraded in place have one from before. So once, before
+# autohotspot looks for a Client profile:
+#
+#   WIFI_SSID / WIFI_PSK   -> the Client profile, unless there already is one
+#                             (on an upgraded board, that is the network it
+#                             joins today, and it stays)
+#   SSH_ENABLED_ON_BOOT    -> ssh.service enabled or disabled
+#
+# The file is sourced, as everything that read it always did; it is root's own,
+# written quoted by Reflash (Reflash#157).
+set -euo pipefail
+
+R="${REFLASH_TEST_ROOT:-}"
+FILE="$R/etc/rebuild-settings"
+WIFI_CLIENT="${WIFI_CLIENT:-/usr/lib/rebuild/wifi-client}"
+
+[ -f "$FILE" ] || exit 0
+
+eval "$(bash -c '. "$1"
+    printf "ssid=%q\npsk=%q\nssh=%q\n" "${WIFI_SSID:-}" "${WIFI_PSK:-}" "${SSH_ENABLED_ON_BOOT:-}"' _ "$FILE")"
+
+if [ -n "$ssid" ] && [ -z "$("$WIFI_CLIENT" ssid)" ]; then
+    printf '%s\n%s\n' "$ssid" "$psk" | "$WIFI_CLIENT" set
+    echo "migrated the Wi-Fi network '$ssid' to NetworkManager's Client profile"
+fi
+
+# --now on a running board, so this boot follows the setting too: an image's
+# own default is SSH disabled. No ordering against ssh.service for the same
+# reason - starting it from a unit it must wait for would never return.
+now=--now
+[ -z "$R" ] || now=""
+case $ssh in
+    true) systemctl ${R:+--root="$R"} enable $now ssh.service && echo "migrated: SSH enabled" ;;
+    false) systemctl ${R:+--root="$R"} disable $now ssh.service && echo "migrated: SSH disabled" ;;
+esac
+
+rm -f "$FILE"
+echo "removed $FILE"
