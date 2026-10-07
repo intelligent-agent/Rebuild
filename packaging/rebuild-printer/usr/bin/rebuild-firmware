@@ -3,7 +3,7 @@
 # own changes to Rebuild's stock configs (#106).
 #
 #   rebuild-firmware build [--force] [--no-flash] [--all-variants] [ROLE...]
-#   rebuild-firmware reference [ROLE...]
+#   rebuild-firmware reference [--missing] [ROLE...]
 #   rebuild-firmware menuconfig ROLE
 #
 # ROLE is ar100, stm32 or rp2040; none means all of them. A board builds only
@@ -271,9 +271,31 @@ cmd_build() {
     exit $failed
 }
 
+# --missing: only the roles whose reference is not already written for this
+# board and this Klipper, judged by its first line, which names both. That is
+# how rebuild-first-run calls it, at install time and again on the first boot
+# (#130): writing all three takes about 36 s on the board, nearly all of it
+# copying and parsing Klipper's tree, and the second run has nothing to do.
 cmd_reference() {
-    local roles=("$@") r v
+    local missing="" roles=() r v rev
+    for r in "$@"; do
+        case $r in --missing) missing=1 ;; *) roles+=("$r") ;; esac
+    done
     [ ${#roles[@]} -gt 0 ] || roles=(ar100 stm32 rp2040)
+    if [ -n "$missing" ]; then
+        rev=$(get-recore-revision 2>/dev/null || echo "?")
+        local todo=()
+        for r in "${roles[@]}"; do
+            v=$(variant_of "$r")
+            if [ "$(head -n1 "$USERDIR/$r.reference" 2>/dev/null)" = "# $v for this Recore ${rev^^}, Klipper $(klipper_version)" ]; then
+                say "$r.reference is current"
+            else
+                todo+=("$r")
+            fi
+        done
+        [ ${#todo[@]} -gt 0 ] || return 0
+        roles=("${todo[@]}")
+    fi
     prepare_tree
     user_folder
     for r in "${roles[@]}"; do
