@@ -1,0 +1,199 @@
+#!/bin/bash
+# Rebuild's side of Reflash's target interface v1 (Reflash
+# docs/target-interface.md, Reflash#179): how this image installs itself.
+#
+#   target-installer prepare      after Reflash has written the image
+#   target-installer configure    with the user's choices on stdin
+#
+# Reflash runs this chrooted into the freshly written image, with /boot
+# mounted, so it uses this image's own tools and knows this image's layout.
+# Reflash itself knows none of it. That is the point: a Reflash flashed today
+# can install a Rebuild made years from now.
+#
+# Packages add their own steps in target-installer.d/: each executable there
+# runs after this script's own, with the same argument and environment, and
+# with the settings on stdin for configure.
+#
+# Both actions may run more than once on the same board, and must end in the
+# same state each time.
+set -euo pipefail
+
+# Everything is relative to $R: empty under Reflash, a scratch tree in the
+# tests.
+R="${REFLASH_TEST_ROOT:-}"
+HOOKS="$R/usr/lib/reflash/target-installer.d"
+
+die() {
+    echo "ERROR: $*"
+    exit 1
+}
+
+[ "${REFLASH_INTERFACE:-}" = 1 ] || die "Reflash speaks target interface '${REFLASH_INTERFACE:-}', this image needs 1"
+
+run_hooks() {
+    local hook
+    for hook in "$HOOKS"/*; do
+        [ -x "$hook" ] || continue
+        echo "running ${hook##*/}"
+        "$hook" "$@"
+    done
+}
+
+prepare() {
+    local rev=${REFLASH_REVISION:-} root_uuid boot_uuid env dtb
+    [[ $rev =~ ^[a-z][0-9]+$ ]] || die "Reflash gave no usable hardware revision ('$rev')"
+    [ -n "${REFLASH_BOOT_DEV:-}" ] || die "this image needs its boot partition mounted at /boot"
+
+    root_uuid=$(blkid -s UUID -o value "$REFLASH_ROOT_DEV")
+    boot_uuid=$(blkid -s UUID -o value "$REFLASH_BOOT_DEV")
+    [ -n "$root_uuid" ] && [ -n "$boot_uuid" ] || die "could not read the partitions' UUIDs"
+
+    # The UUIDs Reflash just gave the partitions, so the installed system
+    # mounts its own and not the USB drive's, which can carry the same image.
+    echo "fstab: root $root_uuid, boot $boot_uuid"
+    sed -i "s:^UUID=[^ ]* / :UUID=$root_uuid / :" "$R/etc/fstab"
+    sed -i "s:^UUID=[^ ]* /boot :UUID=$boot_uuid /boot :" "$R/etc/fstab"
+
+    # Reflash has already grown the root filesystem; Armbian's first-boot
+    # resize would only find nothing to do.
+    touch "$R/root/.no_rootfs_resize"
+
+    # New host keys for this board. The image ships keys baked into the build's
+    # rootfs cache, and without this every board flashed from it would share
+    # one key pair. Deleted first: ssh-keygen -A only creates keys that are
+    # missing. And Armbian's own first-boot regeneration is off, since this has
+    # done it - before first boot, so the first login can be checked.
+    if [ -f "$R/etc/default/armbian-firstrun" ]; then
+        sed -i 's/OPENSSHD_REGENERATE_HOST_KEYS=true/OPENSSHD_REGENERATE_HOST_KEYS=false/' "$R/etc/default/armbian-firstrun"
+    fi
+    rm -f "$R"/etc/ssh/ssh_host_*
+    ssh-keygen -A ${R:+-f "$R"} > /dev/null
+    echo "new SSH host keys"
+
+    # The device tree for this revision, chosen before the first boot. Not a
+    # warning when it is missing: the board would boot the generic tree, and an
+    # A5/A6 would run its DDR3 under voltage (Reflash#138). Reflash's own boot
+    # script reads this fdtfile= too, to set the DRAM rail on the next flash -
+    # that is part of the interface (section 5).
+    env="$R/boot/armbianEnv.txt"
+    dtb="allwinner/sun50i-a64-recore-$rev.dtb"
+    [ -f "$R/boot/dtb/$dtb" ] || die "this image has no device tree for Recore $rev (/boot/dtb/$dtb)"
+    [ -f "$env" ] || die "this image has no /boot/armbianEnv.txt"
+    sed -i -e '/^rootdev=/d' -e '/^fdtfile=/d' -e '/^$/d' "$env"
+    printf 'rootdev=UUID=%s\nfdtfile=%s\n' "$root_uuid" "$dtb" >> "$env"
+    # Boot scripts on Reflash sticks from before fdtfile= read this symlink
+    # for the DRAM rail. It does not last on the board - the linux-dtb
+    # package owns the name - which is why fdtfile= is what selects the tree.
+    ln -sf "sun50i-a64-recore-$rev.dtb" "$R/boot/dtb/allwinner/sun50i-a64-recore.dtb"
+    echo "device tree: $dtb"
+
+    run_hooks prepare
+}
+
+# Settings, KEY=VALUE per line, the value literal to the end of the line.
+# Unknown keys are ignored, as the interface requires.
+declare -A S=()
+read_settings() {
+    local line
+    while IFS= read -r line || [ -n "$line" ]; do
+        line=${line%$'\r'}
+        [[ $line == *=* ]] || continue
+        S[${line%%=*}]=${line#*=}
+    done
+    [ "${S[SETTINGS]:-}" = 1 ] || die "settings version '${S[SETTINGS]:-}' is not 1"
+    case ${S[SCREEN_ROTATION]:-0} in 0 | 90 | 180 | 270) ;; *) die "screen rotation '${S[SCREEN_ROTATION]}' is not 0, 90, 180 or 270" ;; esac
+    case ${S[SSH_ENABLED]:-false} in true | false) ;; *) die "SSH_ENABLED '${S[SSH_ENABLED]}' is not true or false" ;; esac
+}
+
+# A value as one shell word: /etc/rebuild-settings is sourced by bash as root
+# (rebuild-first-run, autohotspot), so a passphrase such as it's-my-wifi must
+# not break it, and a crafted one must not run anything (Reflash#157).
+shell_quote() {
+    printf "'%s'" "${1//\'/\'\\\'\'}"
+}
+
+# The screen, touch input and boot splash, turned by SCREEN_ROTATION degrees
+# clockwise. Every place that draws is set, whichever this image uses, because
+# a user can switch between them later.
+rotate() {
+    local deg=$1 xorg fbcon plymouth weston matrix env
+    case $deg in
+        0) xorg=normal fbcon=0 plymouth=normal weston=normal matrix="1 0 0 0 1 0 0 0 1" ;;
+        90) xorg=right fbcon=1 plymouth=right_side_up weston=rotate-270 matrix="0 1 0 -1 0 1 0 0 1" ;;
+        180) xorg=inverted fbcon=2 plymouth=upside_down weston=rotate-180 matrix="-1 0 1 0 -1 1 0 0 1" ;;
+        270) xorg=left fbcon=3 plymouth=left_side_up weston=rotate-90 matrix="0 -1 1 1 0 0 0 0 1" ;;
+    esac
+
+    # Xorg names the output by the driver that owns it: HDMI-1 under sun4i-drm,
+    # None-1 under simpledrm. A Monitor section naming no output is unused, so
+    # both are written.
+    if [ -d "$R/usr/share/X11/xorg.conf.d" ]; then
+        cat > "$R/usr/share/X11/xorg.conf.d/90-monitor.conf" <<EOF
+Section "Monitor"
+    Identifier "HDMI-1"
+    Option "Rotate" "$xorg"
+EndSection
+Section "Monitor"
+    Identifier "None-1"
+    Option "Rotate" "$xorg"
+EndSection
+Section "InputClass"
+    Identifier "Coordinate Transformation Matrix"
+    MatchIsTouchscreen "on"
+    MatchDevicePath "/dev/input/event*"
+    MatchDriver "libinput"
+    Option "CalibrationMatrix" "$matrix"
+EndSection
+EOF
+    fi
+
+    if [ -f "$R/etc/xdg/weston/weston.ini" ]; then
+        sed -i "s/^transform=.*/transform=$weston/" "$R/etc/xdg/weston/weston.ini"
+    fi
+
+    # The kernel console, and Plymouth, which ignores fbcon=rotate: and reads
+    # the DRM panel orientation instead. Both connector names again: HDMI-A-1
+    # under sun4i-drm, Unknown-1 under simpledrm, and the kernel ignores a
+    # video= for a connector that does not exist. Earlier values are removed
+    # first, so running this twice gives the same line.
+    env="$R/boot/armbianEnv.txt"
+    if [ -f "$env" ]; then
+        grep -q '^extraargs=' "$env" || echo 'extraargs=' >> "$env"
+        sed -i -E -e '/^extraargs=/ s/ *fbcon=rotate:[0-3]//g' \
+            -e '/^extraargs=/ s/ *video=(HDMI-A-1|Unknown-1):panel_orientation=[a-z_]*//g' "$env"
+        sed -i "/^extraargs=/ s|\$| fbcon=rotate:$fbcon video=HDMI-A-1:panel_orientation=$plymouth video=Unknown-1:panel_orientation=$plymouth|" "$env"
+        sed -i 's/^extraargs= /extraargs=/' "$env"
+    fi
+    echo "screen rotation: $deg"
+}
+
+configure() {
+    local file="$R/etc/rebuild-settings" stdin
+    stdin=$(mktemp)
+    trap 'rm -f "$stdin"' RETURN
+    cat > "$stdin"
+    read_settings < "$stdin"
+
+    rotate "${S[SCREEN_ROTATION]:-0}"
+
+    # Never echo the passphrase: this output is Reflash's log.
+    {
+        echo "# Settings from Reflash"
+        echo "SSH_ENABLED_ON_BOOT=${S[SSH_ENABLED]:-false}"
+        echo "SSH_TIMEOUT=60"
+        echo "EXTERNAL_SCREEN_ROTATION=${S[SCREEN_ROTATION]:-0}"
+        echo "WIFI_SSID=$(shell_quote "${S[WIFI_SSID]:-}")"
+        echo "WIFI_PSK=$(shell_quote "${S[WIFI_PSK]:-}")"
+    } > "$file.new"
+    chmod 600 "$file.new"
+    mv "$file.new" "$file"
+    echo "settings: SSH enabled ${S[SSH_ENABLED]:-false}, Wi-Fi network '${S[WIFI_SSID]:-}'"
+
+    run_hooks configure < "$stdin"
+}
+
+case ${1:-} in
+    prepare) prepare ;;
+    configure) configure ;;
+    *) die "usage: $0 prepare | configure" ;;
+esac
