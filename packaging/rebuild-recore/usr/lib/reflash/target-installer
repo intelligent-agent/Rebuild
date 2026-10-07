@@ -5,6 +5,8 @@
 #   target-installer prepare      after Reflash has written the image
 #   target-installer configure    with the user's choices on stdin
 #   target-installer settings     print the current choices (no secrets)
+#   target-installer backup       the user's files, as a gzip tar on stdout
+#   target-installer restore      ...and back from stdin, onto a fresh install
 #
 # Any other action exits 3, "not supported", as the interface asks.
 #
@@ -262,9 +264,57 @@ settings() {
         "$(ssh_enabled)" "$(current_rotation)" "$("$WIFI_CLIENT" ssid)"
 }
 
+# What a user would lose in a reinstall, and nothing else (Reflash#175): the
+# printer's configuration (printer.cfg, the UI's, KlipperScreen's, LED effects,
+# firmware options), Moonraker's database (history, the UI's own settings) and
+# OctoPrint's settings. Not gcodes, logs or timelapses - large, and not
+# configuration. Relative to the root, as tar stores them.
+BACKUP_PATHS=(
+    home/printer/printer_data/config
+    home/printer/printer_data/database
+    home/printer/.octoprint/config.yaml
+    home/printer/.octoprint/users.yaml
+    home/printer/.octoprint/data
+)
+BACKUP_EXCLUDES=(--exclude='*.log' --exclude='*.log.*' --exclude=home/printer/.octoprint/data/timelapse)
+
+backup() {
+    local p have=()
+    for p in "${BACKUP_PATHS[@]}"; do
+        [ -e "$R/$p" ] && have+=("$p")
+    done
+    echo "backing up: ${have[*]:-nothing - this system has none of the files}" >&2
+    # Ownership by name, so a restore onto a newer image gives the files to
+    # that image's printer user whatever its number.
+    tar -C "$R/" -czf - "${BACKUP_EXCLUDES[@]}" "${have[@]}"
+}
+
+# Only the paths above come back, whatever the archive holds: it is a file a
+# user carried around on a USB drive, and must not be able to write anywhere
+# else in the system. GNU tar already strips leading / and refuses "..".
+restore() {
+    local t p n=0
+    t=$(mktemp -d)
+    trap 'rm -rf "$t"' RETURN
+    tar -C "$t" -xzf - --no-same-permissions --same-owner 2>&1 | sed 's/^/tar: /' >&2 || true
+    for p in "${BACKUP_PATHS[@]}"; do
+        [ -e "$t/$p" ] || continue
+        mkdir -p "$R/$(dirname "$p")"
+        rm -rf "${R:?}/$p.restore-old"
+        [ ! -e "$R/$p" ] || mv "$R/$p" "$R/$p.restore-old"
+        cp -a "$t/$p" "$R/$p"
+        rm -rf "${R:?}/$p.restore-old"
+        echo "restored $p" >&2
+        n=$((n + 1))
+    done
+    [ "$n" -gt 0 ] || { echo "ERROR: the archive holds none of this system's files" >&2; exit 1; }
+}
+
 case ${1:-} in
     prepare) prepare ;;
     configure) configure ;;
     settings) settings ;;
+    backup) backup ;;
+    restore) restore ;;
     *) echo "ERROR: action '${1:-}' is not supported by this image" >&2; exit 3 ;;
 esac

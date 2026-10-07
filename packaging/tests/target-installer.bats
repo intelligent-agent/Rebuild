@@ -313,6 +313,40 @@ cfg() { printf '%s\n' SETTINGS=1 "$@" > "$R/s"; }
 }
 
 @test "an action this image does not support exits 3" {
-    run "$INSTALLER" backup
+    run "$INSTALLER" teleport
     [ "$status" -eq 3 ]
+}
+
+@test "backup: the printer's configuration and database, not gcodes or logs" {
+    d="$R/home/printer/printer_data"
+    mkdir -p "$d/database" "$d/gcodes" "$d/logs"
+    echo "[printer]" > "$d/config/printer.cfg"
+    echo db > "$d/database/moonraker-sql.db"
+    echo big > "$d/gcodes/benchy.gcode"
+    echo log > "$d/config/klippy.log"
+    "$INSTALLER" backup > "$R/b.tgz" 2>/dev/null
+    tar -tzf "$R/b.tgz" > "$R/list"
+    grep -qx 'home/printer/printer_data/config/printer.cfg' "$R/list"
+    grep -qx 'home/printer/printer_data/database/moonraker-sql.db' "$R/list"
+    ! grep -q gcodes "$R/list"
+    ! grep -q 'klippy.log' "$R/list"
+}
+
+@test "restore: puts the files back over a fresh install, and nothing outside them" {
+    d="$R/home/printer/printer_data"
+    echo "mine" > "$d/config/printer.cfg"
+    "$INSTALLER" backup > "$R/b.tgz" 2>/dev/null
+    echo "stock" > "$d/config/printer.cfg"
+    run "$INSTALLER" restore < "$R/b.tgz"
+    [ "$status" -eq 0 ]
+    [ "$(cat "$d/config/printer.cfg")" = mine ]
+
+    # An archive that reaches for the rest of the system gets nowhere.
+    mkdir -p "$R/evil/etc"
+    echo "root::0:0" > "$R/evil/etc/shadow"
+    tar -C "$R/evil" -czf "$R/evil.tgz" etc/shadow
+    run "$INSTALLER" restore < "$R/evil.tgz"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"ERROR: the archive holds none of this system's files"* ]]
+    [ ! -e "$R/etc/shadow" ]
 }
