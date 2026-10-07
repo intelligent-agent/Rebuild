@@ -4,6 +4,9 @@
 #
 #   target-installer prepare      after Reflash has written the image
 #   target-installer configure    with the user's choices on stdin
+#   target-installer settings     print the current choices (no secrets)
+#
+# Any other action exits 3, "not supported", as the interface asks.
 #
 # Reflash runs this chrooted into the freshly written image, with /boot
 # mounted, so it uses this image's own tools and knows this image's layout.
@@ -103,6 +106,35 @@ read_settings() {
     [ "${S[SETTINGS]:-}" = 1 ] || die "settings version '${S[SETTINGS]:-}' is not 1"
     case ${S[SCREEN_ROTATION]:-0} in 0 | 90 | 180 | 270) ;; *) die "screen rotation '${S[SCREEN_ROTATION]}' is not 0, 90, 180 or 270" ;; esac
     case ${S[SSH_ENABLED]:-false} in true | false) ;; *) die "SSH_ENABLED '${S[SSH_ENABLED]}' is not true or false" ;; esac
+    return 0
+}
+
+# The account a person logs in with: debian on the printer images, root on
+# barebone, which has no other user.
+login_user() {
+    if grep -q '^debian:' "$R/etc/passwd"; then echo debian; else echo root; fi
+}
+
+# The new login password, checked by this image's own rules before it is set
+# (Reflash#182). Those are PAM's pam_unix "obscure" (common-password; there is
+# no pwquality): for a new password with no old one to compare against, at
+# least 6 characters and not a palindrome. chpasswd runs as root, and PAM does
+# not check root's changes, so they are applied here.
+set_password() {
+    local pw=$1 user rev today
+    user=$(login_user)
+    [ "${#pw}" -ge 6 ] || die "the password is too short: at least 6 characters"
+    rev=$(rev <<< "$pw")
+    [ "$pw" != "$rev" ] || die "the password is a palindrome"
+    printf '%s:%s\n' "$user" "$pw" | chpasswd ${R:+-R "$R"}
+    # No forced change at first login: the user has just chosen this one.
+    # chpasswd dates the change by the clock, and Reflash's can be unset in
+    # hotspot mode; a change dated 1970 is what "must change now" means, so
+    # never record one earlier than this image.
+    today=$(date +%F)
+    [[ $today > 2026-01-01 ]] || today=2026-01-01
+    chage ${R:+-R "$R"} -d "$today" "$user"
+    echo "login password set for $user"
 }
 
 # A value as one shell word: /etc/rebuild-settings is sourced by bash as root
@@ -167,33 +199,65 @@ EOF
     echo "screen rotation: $deg"
 }
 
+# The current choices, in the order and names of the settings format.
+current_settings() {
+    local file="$R/etc/rebuild-settings"
+    [ -f "$file" ] || { printf 'false\n0\n\n\n'; return; }
+    # Our own file, quoted as it was written (shell_quote; Reflash#157).
+    bash -c '. "$1"; printf "%s\n%s\n%s\n%s\n" "${SSH_ENABLED_ON_BOOT:-false}" \
+        "${EXTERNAL_SCREEN_ROTATION:-0}" "$WIFI_SSID" "$WIFI_PSK"' _ "$file"
+}
+
 configure() {
-    local file="$R/etc/rebuild-settings" stdin
+    local file="$R/etc/rebuild-settings" stdin ssh rot ssid psk
     stdin=$(mktemp)
     trap 'rm -f "$stdin"' RETURN
     cat > "$stdin"
     read_settings < "$stdin"
 
-    rotate "${S[SCREEN_ROTATION]:-0}"
+    # Only what was given changes; everything else stays as it is, so changing
+    # one choice later - a forgotten password, from a Reflash booted to repair
+    # it - does not reset the rest.
+    { read -r ssh; read -r rot; read -r ssid; read -r psk; } < <(current_settings)
+    [ -z "${S[SSH_ENABLED]+set}" ] || ssh=${S[SSH_ENABLED]}
+    [ -z "${S[WIFI_SSID]+set}" ] || ssid=${S[WIFI_SSID]}
+    [ -z "${S[WIFI_PSK]+set}" ] || psk=${S[WIFI_PSK]}
+    if [ -n "${S[SCREEN_ROTATION]+set}" ]; then
+        rot=${S[SCREEN_ROTATION]}
+        rotate "$rot"
+    fi
 
-    # Never echo the passphrase: this output is Reflash's log.
+    # Never echo the passphrase or the password: this output is Reflash's log.
     {
         echo "# Settings from Reflash"
-        echo "SSH_ENABLED_ON_BOOT=${S[SSH_ENABLED]:-false}"
+        echo "SSH_ENABLED_ON_BOOT=$ssh"
         echo "SSH_TIMEOUT=60"
-        echo "EXTERNAL_SCREEN_ROTATION=${S[SCREEN_ROTATION]:-0}"
-        echo "WIFI_SSID=$(shell_quote "${S[WIFI_SSID]:-}")"
-        echo "WIFI_PSK=$(shell_quote "${S[WIFI_PSK]:-}")"
+        echo "EXTERNAL_SCREEN_ROTATION=$rot"
+        echo "WIFI_SSID=$(shell_quote "$ssid")"
+        echo "WIFI_PSK=$(shell_quote "$psk")"
     } > "$file.new"
     chmod 600 "$file.new"
     mv "$file.new" "$file"
-    echo "settings: SSH enabled ${S[SSH_ENABLED]:-false}, Wi-Fi network '${S[WIFI_SSID]:-}'"
+    echo "settings: SSH enabled $ssh, Wi-Fi network '$ssid'"
+
+    if [ -n "${S[LOGIN_PASSWORD]:-}" ]; then
+        set_password "${S[LOGIN_PASSWORD]}"
+    fi
 
     run_hooks configure < "$stdin"
+}
+
+# For Reflash to show before the user changes anything. Secrets are never
+# printed; whether one is set is not even hinted at.
+settings() {
+    local ssh rot ssid psk
+    { read -r ssh; read -r rot; read -r ssid; read -r psk; } < <(current_settings)
+    printf 'SETTINGS=1\nSSH_ENABLED=%s\nSCREEN_ROTATION=%s\nWIFI_SSID=%s\n' "$ssh" "$rot" "$ssid"
 }
 
 case ${1:-} in
     prepare) prepare ;;
     configure) configure ;;
-    *) die "usage: $0 prepare | configure" ;;
+    settings) settings ;;
+    *) echo "ERROR: action '${1:-}' is not supported by this image" >&2; exit 3 ;;
 esac

@@ -31,6 +31,7 @@ EOF
     echo baked > "$R/etc/ssh/ssh_host_ed25519_key"
     printf '[output]\nname=HDMI-A-1\ntransform=normal\n' > "$R/etc/xdg/weston/weston.ini"
     echo '[gcode_macro X]' > "$R/home/printer/printer_data/config/fluidd.cfg"
+    printf 'root:x:0:0::/root:/bin/bash\ndebian:x:1000:1000::/home/debian:/bin/bash\n' > "$R/etc/passwd"
 
     SHIMS="$R/.shims"
     mkdir -p "$SHIMS"
@@ -42,6 +43,17 @@ EOF
     cat > "$SHIMS/ssh-keygen" <<'EOF'
 #!/bin/bash
 echo "ssh-keygen $*" >> "$CALLS"
+EOF
+    # chpasswd and chage record what they were asked; chpasswd also what it
+    # read, which is where a password may go and nowhere else.
+    cat > "$SHIMS/chpasswd" <<'EOF'
+#!/bin/bash
+echo "chpasswd $*" >> "$CALLS"
+cat > "$CALLS.chpasswd"
+EOF
+    cat > "$SHIMS/chage" <<'EOF'
+#!/bin/bash
+echo "chage $*" >> "$CALLS"
 EOF
     chmod +x "$SHIMS"/*
     PATH="$SHIMS:$PATH"
@@ -147,4 +159,79 @@ settings() {
     printf 'SETTINGS=2\n' > "$R/s"
     run "$INSTALLER" configure < "$R/s"
     [ "$status" -ne 0 ]
+}
+
+cfg() { printf '%s\n' SETTINGS=1 "$@" > "$R/s"; }
+
+@test "configure: only the settings given change, the rest stay as they were" {
+    cfg SSH_ENABLED=true SCREEN_ROTATION=270 "WIFI_SSID=home" "WIFI_PSK=secret1"
+    "$INSTALLER" configure < "$R/s"
+    cfg SCREEN_ROTATION=90
+    run "$INSTALLER" configure < "$R/s"
+    [ "$status" -eq 0 ]
+    out=$(bash -c '. "$1"; echo "$SSH_ENABLED_ON_BOOT|$EXTERNAL_SCREEN_ROTATION|$WIFI_SSID|$WIFI_PSK"' _ "$R/etc/rebuild-settings")
+    [ "$out" = "true|90|home|secret1" ]
+    grep -qx 'transform=rotate-270' "$R/etc/xdg/weston/weston.ini"
+    grep -q 'fbcon=rotate:1 ' "$R/boot/armbianEnv.txt"
+}
+
+@test "configure: without a rotation key the screen is left alone" {
+    cfg "WIFI_SSID=home"
+    run "$INSTALLER" configure < "$R/s"
+    [ "$status" -eq 0 ]
+    grep -qx 'transform=normal' "$R/etc/xdg/weston/weston.ini"
+    ! grep -q 'fbcon=rotate' "$R/boot/armbianEnv.txt"
+}
+
+@test "configure: LOGIN_PASSWORD sets debian's password, without logging it, and ends the forced change" {
+    cfg "LOGIN_PASSWORD=correct horse"
+    run "$INSTALLER" configure < "$R/s"
+    [ "$status" -eq 0 ]
+    grep -qx "chpasswd -R $R" "$CALLS"
+    [ "$(cat "$CALLS.chpasswd")" = "debian:correct horse" ]
+    grep -qE "^chage -R $R -d 20[0-9]{2}-[0-9]{2}-[0-9]{2} debian$" "$CALLS"
+    [[ "$output" == *"login password set for debian"* ]]
+    [[ "$output" != *"horse"* ]]
+    ! grep -q horse "$R/etc/rebuild-settings"
+}
+
+@test "configure: barebone has only root, so that is whose password it is" {
+    sed -i '/^debian:/d' "$R/etc/passwd"
+    cfg "LOGIN_PASSWORD=correct horse"
+    run "$INSTALLER" configure < "$R/s"
+    [ "$status" -eq 0 ]
+    [ "$(cat "$CALLS.chpasswd")" = "root:correct horse" ]
+}
+
+@test "configure: a password the image's rules refuse fails, and nothing is set" {
+    cfg "LOGIN_PASSWORD=abc"
+    run "$INSTALLER" configure < "$R/s"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"ERROR: the password is too short"* ]]
+
+    cfg "LOGIN_PASSWORD=abcddcba"
+    run "$INSTALLER" configure < "$R/s"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"ERROR: the password is a palindrome"* ]]
+    ! grep -q chpasswd "$CALLS"
+}
+
+@test "configure: no LOGIN_PASSWORD, or an empty one, leaves the account alone" {
+    cfg "LOGIN_PASSWORD="
+    run "$INSTALLER" configure < "$R/s"
+    [ "$status" -eq 0 ]
+    ! grep -qE '^(chpasswd|chage)' "$CALLS"
+}
+
+@test "settings: the current choices, never the secrets" {
+    cfg SSH_ENABLED=true SCREEN_ROTATION=270 "WIFI_SSID=Bob's net" "WIFI_PSK=secret1" "LOGIN_PASSWORD=correct horse"
+    "$INSTALLER" configure < "$R/s"
+    run "$INSTALLER" settings
+    [ "$status" -eq 0 ]
+    [ "$output" = $'SETTINGS=1\nSSH_ENABLED=true\nSCREEN_ROTATION=270\nWIFI_SSID=Bob\'s net' ]
+}
+
+@test "an action this image does not support exits 3" {
+    run "$INSTALLER" backup
+    [ "$status" -eq 3 ]
 }
