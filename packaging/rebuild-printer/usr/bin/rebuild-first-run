@@ -27,7 +27,16 @@ set -e
 set -o pipefail
 
 BIN=${REBUILD_FIRST_RUN_BIN:-/usr/bin}
-LOGFILE=${REBUILD_FIRST_RUN_LOG:-/var/log.hdd/rebuild-first-run.log}
+# The log that survives a reboot. On a running system that is /var/log.hdd,
+# which armbian-ramlog bind-mounts from the disk's /var/log. Under Reflash
+# nothing is mounted, and the /var/log.hdd directory is the one that mount
+# hides - writing there, the install-time part of the log was never seen
+# (#133). The disk's /var/log is the same file either way.
+if [ -n "${REFLASH_INTERFACE:-}" ]; then
+    LOGFILE=${REBUILD_FIRST_RUN_LOG:-/var/log/rebuild-first-run.log}
+else
+    LOGFILE=${REBUILD_FIRST_RUN_LOG:-/var/log.hdd/rebuild-first-run.log}
+fi
 
 if [ -n "${REFLASH_INTERFACE:-}" ]; then
     # Only the install step; configure (the user's settings) is not ours.
