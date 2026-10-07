@@ -43,6 +43,9 @@ hotspot_PW="12345678"
 # be enumerating.
 CLIENT_TIMEOUT=120
 
+# Whole seconds since boot: a clock NTP cannot step.
+uptime_s() { cut -d. -f1 /proc/uptime; }
+
 create_hotspot() {
   echo "Creating hotspot"
   nmcli con add type wifi ifname "$wifidev" con-name Hotspot ssid "$hotspot_SSID"
@@ -130,7 +133,14 @@ if [ -n "$WIFI_SSID" ] && [ -f /etc/NetworkManager/system-connections/Client.nmc
   # Deliberately attempt every round rather than first checking the SSID appears
   # in the scan - a hidden network never appears, and skipping the attempt would
   # break it.
-  deadline=$(( $(date +%s) + CLIENT_TIMEOUT ))
+  #
+  # And against the time since boot, not the date. A Recore has no RTC: it boots
+  # with a stale clock and NTP steps it forward once the network is up, which is
+  # in the middle of this loop. On the Voron the clock jumped 1.5 hours during
+  # the first attempt (15:31:33 "Trying...", 17:02:31 "Timeout expired (20
+  # seconds)"), the deadline read as long past, and it fell back to the hotspot
+  # after one try of the 120s it promised.
+  deadline=$(( $(uptime_s) + CLIENT_TIMEOUT ))
   connected=no
   while :; do
     nmcli dev wifi rescan >/dev/null 2>&1
@@ -139,7 +149,7 @@ if [ -n "$WIFI_SSID" ] && [ -f /etc/NetworkManager/system-connections/Client.nmc
       connected=yes
       break
     fi
-    [ "$(date +%s)" -ge "$deadline" ] && break
+    [ "$(uptime_s)" -ge "$deadline" ] && break
     echo "  ...still looking for $WIFI_SSID"
     sleep 5
   done
