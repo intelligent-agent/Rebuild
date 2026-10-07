@@ -184,7 +184,13 @@ client() { cat "$R/etc/NetworkManager/system-connections/Client.nmconnection"; }
 }
 
 @test "migrate: an older Reflash's settings file becomes the Client profile and ssh.service, once" {
-    printf "SSH_ENABLED_ON_BOOT=true\nSSH_TIMEOUT=60\nWIFI_SSID='Bob'\\''s net'\nWIFI_PSK='p\$ss'\n" > "$R/etc/rebuild-settings"
+    # As Reflash v1.1.x writes it: shell-quoted (Reflash#157).
+    cat > "$R/etc/rebuild-settings" <<'EOF'
+SSH_ENABLED_ON_BOOT=true
+SSH_TIMEOUT=60
+WIFI_SSID='Bob'\''s net'
+WIFI_PSK='p$ss'
+EOF
     WIFI_CLIENT="$R/usr/lib/rebuild/wifi-client" run bash "$R/usr/lib/rebuild/migrate-rebuild-settings"
     [ "$status" -eq 0 ]
     [ "$("$R/usr/lib/rebuild/wifi-client" ssid)" = "Bob's net" ]
