@@ -4,9 +4,30 @@ set -e
 
 
 FLASH_DEVICE=/dev/ttyS2
-FIRMWARE=/opt/firmware
+FIRMWARE=${REBUILD_FIRMWARE_DIR:-/opt/firmware}
 
-systemctl stop klipper
+# What was last written to the STM32: the build's variant and its sha256.
+# rebuild-first-run runs at install time under Reflash and again on the first
+# boot (#130); whichever comes second finds the chip already has this build and
+# leaves it alone, without so much as a trip into its bootloader. A rebuilt
+# firmware (rebuild-firmware build) has a different sha and is flashed. FORCE=1
+# flashes regardless.
+MARKER=$FIRMWARE/stm32.flashed
+if [ -z "${FORCE:-}" ] && read -r was_variant was_sha 2>/dev/null < "$MARKER" &&
+   [ -f "$FIRMWARE/$was_variant.bin" ] &&
+   [ "$(sha256sum < "$FIRMWARE/$was_variant.bin" | cut -d' ' -f1)" = "$was_sha" ]; then
+    echo "flash-stm32: already has $was_variant (sha256 ${was_sha:0:12}) - nothing to do"
+    exit 0
+fi
+
+# Klipper owns the STM32's serial line, so it is stopped while the chip is
+# flashed. Not under Reflash: that is a chroot with no systemd, and no Klipper
+# running to stop.
+klipper() {
+    [ -n "${REFLASH_INTERFACE:-}" ] || systemctl "$1" klipper
+}
+
+klipper stop
 
 # Release the boot pin however this script exits (#92).
 #
@@ -67,7 +88,7 @@ leave_bootloader() {
     drop_boot_pin
     gpioset -t 10ms,0 -c 1 196=0
     gpioget -c 1 -b pull-up 196
-    systemctl restart klipper
+    klipper restart
 }
 if [ ! -f "$STM32_BINARY" ]; then
     echo "flash-stm32: no $STM32_BINARY - not flashing" >&2
@@ -79,6 +100,7 @@ if [ "$(stat -c %s "$STM32_BINARY")" -gt $((FLASH_KB * 1024)) ]; then
 fi
 
 stm32flash -w ${STM32_BINARY} -v -g 0 ${FLASH_DEVICE}
+echo "$VARIANT $(sha256sum < "$STM32_BINARY" | cut -d' ' -f1)" > "$MARKER"
 
 # The other chip's build, and the names from before #106, are not for this
 # board.
@@ -90,4 +112,4 @@ drop_boot_pin
 # 196 needs to be pull-up so the STM32 can use reset
 gpioget -c 1 -b pull-up 196
 
-systemctl restart klipper
+klipper restart

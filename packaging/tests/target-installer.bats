@@ -18,6 +18,8 @@ setup() {
     cp "$PKG/rebuild-recore/usr/lib/reflash/target-installer" "$R/usr/lib/reflash/"
     cp -r "$PKG/rebuild-printer/usr/lib/reflash/target-installer.d" "$R/usr/lib/reflash/"
     cp -r "$PKG/rebuild-printer/usr/share/rebuild/klipper/config" "$R/usr/share/rebuild/klipper/"
+    mkdir -p "$R/usr/lib/rebuild"
+    cp "$PKG/rebuild-recore/usr/lib/rebuild/wifi-client" "$PKG/rebuild-recore/usr/lib/rebuild/migrate-rebuild-settings" "$R/usr/lib/rebuild/"
 
     cat > "$R/etc/fstab" <<'EOF'
 UUID=old-root / ext4 defaults,noatime,commit=120,errors=remount-ro 0 1
@@ -31,6 +33,7 @@ EOF
     echo baked > "$R/etc/ssh/ssh_host_ed25519_key"
     printf '[output]\nname=HDMI-A-1\ntransform=normal\n' > "$R/etc/xdg/weston/weston.ini"
     echo '[gcode_macro X]' > "$R/home/printer/printer_data/config/fluidd.cfg"
+    printf 'root:x:0:0::/root:/bin/bash\ndebian:x:1000:1000::/home/debian:/bin/bash\n' > "$R/etc/passwd"
 
     SHIMS="$R/.shims"
     mkdir -p "$SHIMS"
@@ -42,6 +45,27 @@ EOF
     cat > "$SHIMS/ssh-keygen" <<'EOF'
 #!/bin/bash
 echo "ssh-keygen $*" >> "$CALLS"
+EOF
+    # chpasswd and chage record what they were asked; chpasswd also what it
+    # read, which is where a password may go and nowhere else.
+    cat > "$SHIMS/chpasswd" <<'EOF'
+#!/bin/bash
+echo "chpasswd $*" >> "$CALLS"
+cat > "$CALLS.chpasswd"
+EOF
+    cat > "$SHIMS/chage" <<'EOF'
+#!/bin/bash
+echo "chage $*" >> "$CALLS"
+EOF
+    # systemctl --root=R enable|disable|is-enabled ssh.service, kept in a file.
+    cat > "$SHIMS/systemctl" <<'EOF'
+#!/bin/bash
+echo "systemctl $*" >> "$CALLS"
+for a in "$@"; do case $a in
+    enable) echo enabled > "$REFLASH_TEST_ROOT/.ssh" ;;
+    disable) echo disabled > "$REFLASH_TEST_ROOT/.ssh" ;;
+    is-enabled) [ "$(cat "$REFLASH_TEST_ROOT/.ssh" 2>/dev/null)" = enabled ]; exit ;;
+esac; done
 EOF
     chmod +x "$SHIMS"/*
     PATH="$SHIMS:$PATH"
@@ -104,17 +128,84 @@ settings() {
     [ "$status" -eq 0 ]
 }
 
-@test "configure: settings file survives being sourced, whatever was typed" {
-    pwned="$R/pwned"
-    settings 270 "Bob's \"home\" net" "it's \$(touch $pwned) wifi" > "$R/s"
+client() { cat "$R/etc/NetworkManager/system-connections/Client.nmconnection"; }
+
+@test "configure: Wi-Fi goes into NetworkManager's Client profile, taken literally" {
+    settings 270 "Bob's \"home\" net " "it's \$(touch x) wifi" > "$R/s"
     run "$INSTALLER" configure < "$R/s"
     [ "$status" -eq 0 ]
-    [ "$(stat -c %a "$R/etc/rebuild-settings")" = 600 ]
-    out=$(bash -c '. "$1" && printf "%s|%s|%s|%s" "$SSH_ENABLED_ON_BOOT" "$EXTERNAL_SCREEN_ROTATION" "$WIFI_SSID" "$WIFI_PSK"' _ "$R/etc/rebuild-settings")
-    [ "$out" = "true|270|Bob's \"home\" net|it's \$(touch $pwned) wifi" ]
-    [ ! -e "$pwned" ]
-    # The passphrase is never in the installer's output, which is Reflash's log.
+    [ "$(stat -c %a "$R/etc/NetworkManager/system-connections/Client.nmconnection")" = 600 ]
+    client | grep -qx 'id=Client'
+    client | grep -qx 'autoconnect=false'
+    # The trailing space kept, as GLib key files need it written.
+    client | grep -qxF 'ssid=Bob'"'"'s "home" net\s'
+    client | grep -qxF 'psk=it'"'"'s $(touch x) wifi'
+    [ "$("$R/usr/lib/rebuild/wifi-client" ssid)" = "Bob's \"home\" net " ]
+    [ "$("$R/usr/lib/rebuild/wifi-client" psk)" = "it's \$(touch x) wifi" ]
+    # Nothing else holds it, and the passphrase is never in the output.
+    [ ! -e "$R/etc/rebuild-settings" ]
     [[ "$output" != *"touch"* ]]
+}
+
+@test "configure: SSH at boot is ssh.service enabled or disabled" {
+    cfg SSH_ENABLED=true
+    "$INSTALLER" configure < "$R/s"
+    grep -qx "systemctl --root=$R enable ssh.service" "$CALLS"
+    cfg SSH_ENABLED=false
+    "$INSTALLER" configure < "$R/s"
+    grep -qx "systemctl --root=$R disable ssh.service" "$CALLS"
+}
+
+@test "configure: an empty network name removes the profile, and the board starts its hotspot" {
+    cfg "WIFI_SSID=home" "WIFI_PSK=secret1"
+    "$INSTALLER" configure < "$R/s"
+    cfg "WIFI_SSID="
+    run "$INSTALLER" configure < "$R/s"
+    [ "$status" -eq 0 ]
+    [ ! -e "$R/etc/NetworkManager/system-connections/Client.nmconnection" ]
+}
+
+@test "configure: a new passphrase alone keeps the network, and the profile's identity" {
+    cfg "WIFI_SSID=home" "WIFI_PSK=secret1"
+    "$INSTALLER" configure < "$R/s"
+    uuid=$(client | grep ^uuid=)
+    cfg "WIFI_PSK=secret2"
+    "$INSTALLER" configure < "$R/s"
+    client | grep -qx 'ssid=home'
+    client | grep -qx 'psk=secret2'
+    [ "$(client | grep ^uuid=)" = "$uuid" ]
+}
+
+@test "configure: an old /etc/rebuild-settings is removed - it held the passphrase twice" {
+    printf "WIFI_PSK='old'\n" > "$R/etc/rebuild-settings"
+    cfg SCREEN_ROTATION=0
+    "$INSTALLER" configure < "$R/s"
+    [ ! -e "$R/etc/rebuild-settings" ]
+}
+
+@test "migrate: an older Reflash's settings file becomes the Client profile and ssh.service, once" {
+    # As Reflash v1.1.x writes it: shell-quoted (Reflash#157).
+    cat > "$R/etc/rebuild-settings" <<'EOF'
+SSH_ENABLED_ON_BOOT=true
+SSH_TIMEOUT=60
+WIFI_SSID='Bob'\''s net'
+WIFI_PSK='p$ss'
+EOF
+    WIFI_CLIENT="$R/usr/lib/rebuild/wifi-client" run bash "$R/usr/lib/rebuild/migrate-rebuild-settings"
+    [ "$status" -eq 0 ]
+    [ "$("$R/usr/lib/rebuild/wifi-client" ssid)" = "Bob's net" ]
+    [ "$("$R/usr/lib/rebuild/wifi-client" psk)" = 'p$ss' ]
+    grep -qx "systemctl --root=$R enable ssh.service" "$CALLS"
+    [ ! -e "$R/etc/rebuild-settings" ]
+}
+
+@test "migrate: a board that already joins a network keeps it" {
+    printf 'mine\nkept\n' | "$R/usr/lib/rebuild/wifi-client" set
+    printf "SSH_ENABLED_ON_BOOT=false\nWIFI_SSID='theirs'\nWIFI_PSK='x'\n" > "$R/etc/rebuild-settings"
+    WIFI_CLIENT="$R/usr/lib/rebuild/wifi-client" run bash "$R/usr/lib/rebuild/migrate-rebuild-settings"
+    [ "$status" -eq 0 ]
+    [ "$("$R/usr/lib/rebuild/wifi-client" ssid)" = mine ]
+    grep -qx "systemctl --root=$R disable ssh.service" "$CALLS"
 }
 
 @test "configure: rotation reaches Weston, the console and the splash, once" {
@@ -147,4 +238,115 @@ settings() {
     printf 'SETTINGS=2\n' > "$R/s"
     run "$INSTALLER" configure < "$R/s"
     [ "$status" -ne 0 ]
+}
+
+cfg() { printf '%s\n' SETTINGS=1 "$@" > "$R/s"; }
+
+@test "configure: only the settings given change, the rest stay as they were" {
+    cfg SSH_ENABLED=true SCREEN_ROTATION=270 "WIFI_SSID=home" "WIFI_PSK=secret1"
+    "$INSTALLER" configure < "$R/s"
+    cfg SCREEN_ROTATION=90
+    : > "$CALLS"
+    run "$INSTALLER" configure < "$R/s"
+    [ "$status" -eq 0 ]
+    client | grep -qx 'ssid=home'
+    client | grep -qx 'psk=secret1'
+    ! grep -q '^systemctl' "$CALLS"
+    grep -qx 'transform=rotate-270' "$R/etc/xdg/weston/weston.ini"
+    grep -q 'fbcon=rotate:1 ' "$R/boot/armbianEnv.txt"
+}
+
+@test "configure: without a rotation key the screen is left alone" {
+    cfg "WIFI_SSID=home"
+    run "$INSTALLER" configure < "$R/s"
+    [ "$status" -eq 0 ]
+    grep -qx 'transform=normal' "$R/etc/xdg/weston/weston.ini"
+    ! grep -q 'fbcon=rotate' "$R/boot/armbianEnv.txt"
+}
+
+@test "configure: LOGIN_PASSWORD sets debian's password, without logging it, and ends the forced change" {
+    cfg "LOGIN_PASSWORD=correct horse"
+    run "$INSTALLER" configure < "$R/s"
+    [ "$status" -eq 0 ]
+    grep -qx "chpasswd -R $R" "$CALLS"
+    [ "$(cat "$CALLS.chpasswd")" = "debian:correct horse" ]
+    grep -qE "^chage -R $R -d 20[0-9]{2}-[0-9]{2}-[0-9]{2} debian$" "$CALLS"
+    [[ "$output" == *"login password set for debian"* ]]
+    [[ "$output" != *"horse"* ]]
+    ! grep -rq horse "$R/etc/NetworkManager" 2>/dev/null
+}
+
+@test "configure: barebone has only root, so that is whose password it is" {
+    sed -i '/^debian:/d' "$R/etc/passwd"
+    cfg "LOGIN_PASSWORD=correct horse"
+    run "$INSTALLER" configure < "$R/s"
+    [ "$status" -eq 0 ]
+    [ "$(cat "$CALLS.chpasswd")" = "root:correct horse" ]
+}
+
+@test "configure: a password the image's rules refuse fails, and nothing is set" {
+    cfg "LOGIN_PASSWORD=abc"
+    run "$INSTALLER" configure < "$R/s"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"ERROR: the password is too short"* ]]
+
+    cfg "LOGIN_PASSWORD=abcddcba"
+    run "$INSTALLER" configure < "$R/s"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"ERROR: the password is a palindrome"* ]]
+    ! grep -q chpasswd "$CALLS"
+}
+
+@test "configure: no LOGIN_PASSWORD, or an empty one, leaves the account alone" {
+    cfg "LOGIN_PASSWORD="
+    run "$INSTALLER" configure < "$R/s"
+    [ "$status" -eq 0 ]
+    ! grep -qE '^(chpasswd|chage)' "$CALLS"
+}
+
+@test "settings: the current choices, never the secrets" {
+    cfg SSH_ENABLED=true SCREEN_ROTATION=270 "WIFI_SSID=Bob's net" "WIFI_PSK=secret1" "LOGIN_PASSWORD=correct horse"
+    "$INSTALLER" configure < "$R/s"
+    run "$INSTALLER" settings
+    [ "$status" -eq 0 ]
+    [ "$output" = $'SETTINGS=1\nSSH_ENABLED=true\nSCREEN_ROTATION=270\nWIFI_SSID=Bob\'s net' ]
+}
+
+@test "an action this image does not support exits 3" {
+    run "$INSTALLER" teleport
+    [ "$status" -eq 3 ]
+}
+
+@test "backup: the printer's configuration and database, not gcodes or logs" {
+    d="$R/home/printer/printer_data"
+    mkdir -p "$d/database" "$d/gcodes" "$d/logs"
+    echo "[printer]" > "$d/config/printer.cfg"
+    echo db > "$d/database/moonraker-sql.db"
+    echo big > "$d/gcodes/benchy.gcode"
+    echo log > "$d/config/klippy.log"
+    "$INSTALLER" backup > "$R/b.tgz" 2>/dev/null
+    tar -tzf "$R/b.tgz" > "$R/list"
+    grep -qx 'home/printer/printer_data/config/printer.cfg' "$R/list"
+    grep -qx 'home/printer/printer_data/database/moonraker-sql.db' "$R/list"
+    ! grep -q gcodes "$R/list"
+    ! grep -q 'klippy.log' "$R/list"
+}
+
+@test "restore: puts the files back over a fresh install, and nothing outside them" {
+    d="$R/home/printer/printer_data"
+    echo "mine" > "$d/config/printer.cfg"
+    "$INSTALLER" backup > "$R/b.tgz" 2>/dev/null
+    echo "stock" > "$d/config/printer.cfg"
+    run "$INSTALLER" restore < "$R/b.tgz"
+    [ "$status" -eq 0 ]
+    [ "$(cat "$d/config/printer.cfg")" = mine ]
+
+    # An archive that reaches for the rest of the system gets nowhere.
+    mkdir -p "$R/evil/etc"
+    echo "root::0:0" > "$R/evil/etc/shadow"
+    tar -C "$R/evil" -czf "$R/evil.tgz" etc/shadow
+    run "$INSTALLER" restore < "$R/evil.tgz"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"ERROR: the archive holds none of this system's files"* ]]
+    [ ! -e "$R/etc/shadow" ]
 }

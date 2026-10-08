@@ -16,13 +16,20 @@
 
 set -u
 
-FIRMWARE=/opt/firmware/rp2040.uf2
+FIRMWARE=${REBUILD_FIRMWARE_DIR:-/opt/firmware}/rp2040.uf2
+# Which boards already have this build: "<by-id name> <sha256>" per line. The
+# by-id name carries the chip's unique id, so it is the same board after a
+# reflash. rebuild-first-run runs at install time under Reflash and again on
+# the first boot (#130); the second finds each board done and leaves it alone.
+# A new build, or a board not seen before, is flashed. FORCE=1 flashes all.
+MARKER=${FIRMWARE%/*}/rp2040.flashed
 KLIPPER=/home/printer/klipper
 BOOTLOADER_ID=2e8a:0003
 
 log() { echo "$1"; }
 
 [ -f "$FIRMWARE" ] || { log "No $FIRMWARE - nothing to flash"; exit 0; }
+SHA=$(sha256sum < "$FIRMWARE" | cut -d' ' -f1)
 
 # Match Klipper's own by-id names, never a bare VID:PID.
 #
@@ -40,7 +47,12 @@ if [ "${#DEVICES[@]}" -eq 0 ]; then
 fi
 
 for dev in "${DEVICES[@]}"; do
-    log "Flashing $(basename "$dev")"
+    name=$(basename "$dev")
+    if [ -z "${FORCE:-}" ] && grep -qxF "$name $SHA" "$MARKER" 2>/dev/null; then
+        log "$name already has this build - nothing to do"
+        continue
+    fi
+    log "Flashing $name"
 
     if lsusb | grep -q "$BOOTLOADER_ID"; then
         log "  something is already in the bootloader - refusing to guess which board it is"
@@ -65,6 +77,8 @@ for dev in "${DEVICES[@]}"; do
 
     if /usr/local/bin/rp2040_flash "$FIRMWARE"; then
         log "  flashed"
+        { grep -vF "$name " "$MARKER" 2>/dev/null || true; echo "$name $SHA"; } > "$MARKER.new"
+        mv "$MARKER.new" "$MARKER"
     else
         log "  rp2040_flash failed (running as $(id -un); this needs root)"
     fi

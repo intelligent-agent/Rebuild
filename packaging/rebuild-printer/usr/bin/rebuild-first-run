@@ -1,6 +1,20 @@
 #!/bin/bash
 
-# This script is run only once, the first time Rebuild boots after being flashed
+# Everything a freshly flashed printer needs done once: its STM32 and RP2040
+# flashed with this image's firmware, and the firmware option references
+# written for it.
+#
+# Runs from two places, and every step is idempotent so it does not matter
+# which gets there first (#130):
+#
+#   - Reflash, at install time: target-installer.d/60-first-run is a link to
+#     this script, run chrooted into the freshly written image with
+#     REFLASH_INTERFACE set and "prepare" as its argument. Whatever it gets done
+#     here is no longer on the first boot.
+#   - systemd, on the first boot (rebuild-first-run.service): finishes whatever
+#     Reflash did not do - an older Reflash, hardware Reflash cannot reach, a
+#     step that failed there - and on a board Reflash prepared fully, only
+#     confirms that each step is done. Then it disables itself.
 
 set -e
 
@@ -12,7 +26,27 @@ set -e
 # first run, which is far worse than the loop it replaced.
 set -o pipefail
 
-. /etc/rebuild-settings
+BIN=${REBUILD_FIRST_RUN_BIN:-/usr/bin}
+# The log that survives a reboot. On a running system that is /var/log.hdd,
+# which armbian-ramlog bind-mounts from the disk's /var/log. Under Reflash
+# nothing is mounted, and the /var/log.hdd directory is the one that mount
+# hides - writing there, the install-time part of the log was never seen
+# (#133). The disk's /var/log is the same file either way.
+if [ -n "${REFLASH_INTERFACE:-}" ]; then
+    LOGFILE=${REBUILD_FIRST_RUN_LOG:-/var/log/rebuild-first-run.log}
+else
+    LOGFILE=${REBUILD_FIRST_RUN_LOG:-/var/log.hdd/rebuild-first-run.log}
+fi
+
+if [ -n "${REFLASH_INTERFACE:-}" ]; then
+    # Only the install step; configure (the user's settings) is not ours.
+    [ "${1:-}" = prepare ] || exit 0
+    UNDER_REFLASH=1
+    WHERE="Reflash $REFLASH_VERSION, at install time"
+else
+    UNDER_REFLASH=
+    WHERE="first boot"
+fi
 
 # Say so in the log that survives a reboot, not just the journal. An
 # unrecoverable first run is now bounded by StartLimitBurst (see the unit), so
@@ -27,42 +61,68 @@ report_failure() {
 trap report_failure EXIT
 
 log() {
-    echo "$1" | tee -a /var/log.hdd/rebuild-first-run.log
+    echo "$1" | tee -a "$LOGFILE"
 }
 
-echo "Starting rebuild first run script"
-echo "--Beginning of first run script--" > /var/log.hdd/rebuild-first-run.log
+# Appended, not truncated: the install-time run and the first boot each leave
+# their part, and together they say which of them did each step.
+mkdir -p "$(dirname "$LOGFILE")"
+log "--First run: $WHERE--"
 
+# Under Reflash nothing is fatal: a step that cannot be done there - a chip it
+# cannot reach, a driver it does not have - is done on the first boot instead,
+# and must not fail the installation. On the first boot the STM32 is fatal, as
+# it always was: a printer without it cannot print.
+optional() {
+    local what=$1; shift
+    "$@" 2>&1 | tee -a "$LOGFILE" || log "$what exited non-zero - continuing${UNDER_REFLASH:+, the first boot tries again}"
+}
 
 log "Running flash-stm32 script"
 # Captured, like flash-rp2040 below. This is the mandatory step and the one that
 # actually failed in #92, yet its output went only to the journal - so the
 # persistent log ended at "Running flash-stm32 script" and the reason was gone
 # by the time anyone looked. Safe to pipe now that pipefail is set above.
-/usr/bin/flash-stm32 2>&1 | tee -a /var/log.hdd/rebuild-first-run.log
+if [ -n "$UNDER_REFLASH" ]; then
+    optional flash-stm32 "$BIN/flash-stm32"
+else
+    "$BIN/flash-stm32" 2>&1 | tee -a "$LOGFILE"
+fi
 
 # Any attached RP2040 (ReTool A2, Remote). Exits 0 when none is present, so a
 # board without one is not a failed first boot - unlike flash-stm32, the target
 # here is optional hardware.
-log "Running flash-rp2040 script"
-# Explicitly non-fatal, which pipefail would otherwise have changed.
 #
-# The RP2040 is optional hardware, and this script exits 1 on conditions that
-# say nothing about the board's health - "something is already in the bootloader
-# - refusing to guess which board it is" being the live one. Before pipefail,
-# tee swallowed that status and first run carried on. With pipefail it would
-# propagate, set -e would abort, and Restart=on-failure would retry to the burst
-# limit - failing a perfectly good board over a peripheral. Keep the status
-# visible in the log, but do not let it end the run.
-/usr/bin/flash-rp2040 2>&1 | tee -a /var/log.hdd/rebuild-first-run.log \
-    || log "flash-rp2040 exited non-zero (optional hardware) - continuing"
+# Explicitly non-fatal, which pipefail would otherwise have changed. It exits 1
+# on conditions that say nothing about the board's health - "something is
+# already in the bootloader - refusing to guess which board it is" being the
+# live one - and Restart=on-failure would retry to the burst limit, failing a
+# perfectly good board over a peripheral.
+log "Running flash-rp2040 script"
+optional flash-rp2040 "$BIN/flash-rp2040"
 
 # printer_data/config/firmware: the README and, for this board's MCUs, the
 # options a user can change and rebuild with (#106). The image cannot write
 # these - it does not know which STM32 the board has. Nothing depends on it.
-log "Writing the firmware option references"
-/usr/bin/rebuild-firmware reference 2>&1 | tee -a /var/log.hdd/rebuild-first-run.log \
-    || log "rebuild-firmware reference failed - continuing"
+# --missing: a reference already written for this board and this Klipper is
+# left alone, which is the 36 s this step takes when it does the work.
+# On the first boot only, not under Reflash. Writing them copies Klipper's whole
+# tree and parses its Kconfig - by far the most eMMC traffic this script makes,
+# for files nothing depends on - and a8's eMMC stopped completing I/O in the
+# middle of it during an install (2026-10-07). Not proven to be the cause, but
+# nothing is gained by doing it there: Klipper is already up when the first
+# boot gets to it.
+if [ -z "$UNDER_REFLASH" ]; then
+    log "Writing the firmware option references"
+    optional "rebuild-firmware reference" "$BIN/rebuild-firmware" reference --missing
+else
+    log "Firmware option references: left to the first boot"
+fi
 
-log "Disabling rebuild-first-run.service"
-systemctl disable rebuild-first-run.service
+if [ -n "$UNDER_REFLASH" ]; then
+    # The first boot still runs, to check the steps and do any left undone.
+    log "--First run: done at install time; the first boot checks it--"
+else
+    log "Disabling rebuild-first-run.service"
+    systemctl disable rebuild-first-run.service
+fi

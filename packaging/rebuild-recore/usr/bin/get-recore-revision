@@ -2,6 +2,15 @@
 
 set -e
 
+# Under Reflash (target interface, Reflash#179) the revision is given: Reflash
+# read it from this same partition before writing the image. Use that rather
+# than loop-mounting the eMMC's boot partition from inside the installer's
+# chroot, where udev and the loop devices belong to Reflash, not to us.
+if [ -n "${REFLASH_INTERFACE:-}" ] && [ -n "${REFLASH_REVISION:-}" ]; then
+    echo "$REFLASH_REVISION"
+    exit 0
+fi
+
 mkdir -p /mnt/config
 umount -q /mnt/config || true
 LODEV=$(losetup -f)
