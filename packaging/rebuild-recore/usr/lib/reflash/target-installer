@@ -278,15 +278,41 @@ BACKUP_PATHS=(
 )
 BACKUP_EXCLUDES=(--exclude='*.log' --exclude='*.log.*' --exclude=home/printer/.octoprint/data/timelapse)
 
+# Where the backup came from, as the archive's first entry. Always there, so a
+# system with none of the files above - barebone - still makes a valid backup
+# rather than an empty archive tar refuses to write (#136).
+MANIFEST=rebuild-backup.manifest
+
+version_of() {
+    git -C "$R/$1" describe --tags --always 2>/dev/null || true
+}
+
+manifest() {
+    printf 'format=1\n'
+    printf 'created=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    printf 'rebuild_version=%s\n' "$(cat "$R/etc/rebuild-version" 2>/dev/null)"
+    printf 'hostname=%s\n' "$(cat "$R/etc/hostname" 2>/dev/null)"
+    printf 'board_revision=%s\n' "${REFLASH_REVISION:-}"
+    printf 'board_serial=%s\n' "${REFLASH_SERIAL:-}"
+    printf 'reflash_version=%s\n' "${REFLASH_VERSION:-}"
+    printf 'klipper_version=%s\n' "$(version_of home/printer/klipper)"
+    printf 'moonraker_version=%s\n' "$(version_of home/printer/moonraker)"
+    printf 'paths=%s\n' "$*"
+}
+
 backup() {
-    local p have=()
+    local p have=() t
     for p in "${BACKUP_PATHS[@]}"; do
         [ -e "$R/$p" ] && have+=("$p")
     done
-    echo "backing up: ${have[*]:-nothing - this system has none of the files}" >&2
+    echo "backing up: ${have[*]:-only the manifest - this system has none of the files}" >&2
+    t=$(mktemp -d)
+    trap 'rm -rf "$t"' RETURN
+    manifest "${have[@]}" > "$t/$MANIFEST"
     # Ownership by name, so a restore onto a newer image gives the files to
     # that image's printer user whatever its number.
-    tar -C "$R/" -czf - "${BACKUP_EXCLUDES[@]}" "${have[@]}"
+    # -C only with files after it: a trailing one is an error to tar.
+    tar -czf - "${BACKUP_EXCLUDES[@]}" -C "$t" "$MANIFEST" ${have[@]+-C "$R/" "${have[@]}"}
 }
 
 # Only the paths above come back, whatever the archive holds: it is a file a
@@ -307,7 +333,13 @@ restore() {
         echo "restored $p" >&2
         n=$((n + 1))
     done
-    [ "$n" -gt 0 ] || { echo "ERROR: the archive holds none of this system's files" >&2; exit 1; }
+    # Only the manifest is a valid backup too - one made on barebone, say - and
+    # there is simply nothing to put back. Neither manifest nor files is not a
+    # backup of ours at all.
+    if [ "$n" -eq 0 ]; then
+        [ -f "$t/$MANIFEST" ] || { echo "ERROR: this is not a Rebuild backup: no manifest and none of this system's files" >&2; exit 1; }
+        echo "nothing to restore: the backup holds none of this system's files" >&2
+    fi
 }
 
 case ${1:-} in

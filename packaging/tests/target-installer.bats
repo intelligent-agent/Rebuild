@@ -332,6 +332,39 @@ cfg() { printf '%s\n' SETTINGS=1 "$@" > "$R/s"; }
     ! grep -q 'klippy.log' "$R/list"
 }
 
+# Reflash#184, #136: every backup says where it came from.
+@test "backup: a manifest first, saying where the files came from" {
+    echo "rebuild-fluidd-v1.2.0" > "$R/etc/rebuild-version"
+    echo "[printer]" > "$R/home/printer/printer_data/config/printer.cfg"
+    REFLASH_VERSION=v1.2.0 "$INSTALLER" backup > "$R/b.tgz" 2>/dev/null
+    [ "$(tar -tzf "$R/b.tgz" | head -1)" = rebuild-backup.manifest ]
+    tar -xzOf "$R/b.tgz" rebuild-backup.manifest > "$R/m"
+    grep -qx 'format=1' "$R/m"
+    grep -qx 'rebuild_version=rebuild-fluidd-v1.2.0' "$R/m"
+    grep -qx 'board_revision=a5' "$R/m"
+    grep -qx 'board_serial=0132' "$R/m"
+    grep -qx 'reflash_version=v1.2.0' "$R/m"
+    grep -qx 'paths=home/printer/printer_data/config' "$R/m"
+}
+
+# Barebone has none of the files. tar refused an empty archive and the
+# backup failed (exit 2); now it is the manifest alone.
+@test "backup: a system with none of the files still makes a backup" {
+    rm -rf "$R/home/printer"
+    run "$INSTALLER" backup
+    [ "$status" -eq 0 ]
+    "$INSTALLER" backup > "$R/b.tgz" 2>/dev/null
+    [ "$(tar -tzf "$R/b.tgz")" = rebuild-backup.manifest ]
+}
+
+@test "restore: a backup with only its manifest is valid, with nothing to put back" {
+    rm -rf "$R/home/printer"
+    "$INSTALLER" backup > "$R/b.tgz" 2>/dev/null
+    run "$INSTALLER" restore < "$R/b.tgz"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"nothing to restore"* ]]
+}
+
 @test "restore: puts the files back over a fresh install, and nothing outside them" {
     d="$R/home/printer/printer_data"
     echo "mine" > "$d/config/printer.cfg"
@@ -347,6 +380,6 @@ cfg() { printf '%s\n' SETTINGS=1 "$@" > "$R/s"; }
     tar -C "$R/evil" -czf "$R/evil.tgz" etc/shadow
     run "$INSTALLER" restore < "$R/evil.tgz"
     [ "$status" -ne 0 ]
-    [[ "$output" == *"ERROR: the archive holds none of this system's files"* ]]
+    [[ "$output" == *"ERROR: this is not a Rebuild backup"* ]]
     [ ! -e "$R/etc/shadow" ]
 }
