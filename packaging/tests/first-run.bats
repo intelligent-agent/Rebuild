@@ -60,7 +60,8 @@ first_run_env() {
     flash_stm32_RC=1 run bash "$PKG/rebuild-printer/usr/bin/rebuild-first-run" prepare
     [ "$status" -eq 0 ]
     grep -qx "flash-stm32 " "$CALLS"
-    grep -qx "rebuild-firmware reference --missing" "$CALLS"
+    # The references are left to the first boot (eMMC traffic, #130).
+    ! grep -q "^rebuild-firmware" "$CALLS"
     ! grep -q "^systemctl" "$CALLS"
     grep -q "flash-stm32 exited non-zero - continuing, the first boot tries again" "$T/log/first-run.log"
     grep -q "done at install time; the first boot checks it" "$T/log/first-run.log"

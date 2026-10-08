@@ -106,8 +106,18 @@ optional flash-rp2040 "$BIN/flash-rp2040"
 # these - it does not know which STM32 the board has. Nothing depends on it.
 # --missing: a reference already written for this board and this Klipper is
 # left alone, which is the 36 s this step takes when it does the work.
-log "Writing the firmware option references"
-optional "rebuild-firmware reference" "$BIN/rebuild-firmware" reference --missing
+# On the first boot only, not under Reflash. Writing them copies Klipper's whole
+# tree and parses its Kconfig - by far the most eMMC traffic this script makes,
+# for files nothing depends on - and a8's eMMC stopped completing I/O in the
+# middle of it during an install (2026-10-07). Not proven to be the cause, but
+# nothing is gained by doing it there: Klipper is already up when the first
+# boot gets to it.
+if [ -z "$UNDER_REFLASH" ]; then
+    log "Writing the firmware option references"
+    optional "rebuild-firmware reference" "$BIN/rebuild-firmware" reference --missing
+else
+    log "Firmware option references: left to the first boot"
+fi
 
 if [ -n "$UNDER_REFLASH" ]; then
     # The first boot still runs, to check the steps and do any left undone.
