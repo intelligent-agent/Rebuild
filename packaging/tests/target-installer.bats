@@ -347,6 +347,14 @@ cfg() { printf '%s\n' SETTINGS=1 "$@" > "$R/s"; }
     grep -qx 'paths=home/printer/printer_data/config' "$R/m"
 }
 
+@test "backup: the manifest names the Klipper version of the checkout" {
+    git -C "$R/home/printer" init -q klipper
+    git -C "$R/home/printer/klipper" -c user.email=t@t -c user.name=t commit -q --allow-empty -m k
+    git -C "$R/home/printer/klipper" tag v0.13.0
+    "$INSTALLER" backup > "$R/b.tgz" 2>/dev/null
+    tar -xzOf "$R/b.tgz" rebuild-backup.manifest | grep -qx 'klipper_version=v0.13.0'
+}
+
 # Barebone has none of the files. tar refused an empty archive and the
 # backup failed (exit 2); now it is the manifest alone.
 @test "backup: a system with none of the files still makes a backup" {

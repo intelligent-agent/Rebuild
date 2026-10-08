@@ -283,8 +283,11 @@ BACKUP_EXCLUDES=(--exclude='*.log' --exclude='*.log.*' --exclude=home/printer/.o
 # rather than an empty archive tar refuses to write (#136).
 MANIFEST=rebuild-backup.manifest
 
+# safe.directory: this runs as root over the printer user's checkouts, and git
+# refuses a repository owned by someone else - so both versions came out empty
+# in every backup (seen on the voron, fluidd v1.1.0-95).
 version_of() {
-    git -C "$R/$1" describe --tags --always 2>/dev/null || true
+    git -c safe.directory='*' -C "$R/$1" describe --tags --always 2>/dev/null || true
 }
 
 manifest() {
