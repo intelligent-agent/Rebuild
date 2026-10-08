@@ -326,10 +326,13 @@ restore() {
     for p in "${BACKUP_PATHS[@]}"; do
         [ -e "$t/$p" ] || continue
         mkdir -p "$R/$(dirname "$p")"
-        rm -rf "${R:?}/$p.restore-old"
+        # Not ${R:?}: R is empty under Reflash - the real root - and that
+        # guard aborted every restore on a board. $p is one of the fixed paths
+        # above, never empty, so this can never be "/".
+        rm -rf "$R/$p.restore-old"
         [ ! -e "$R/$p" ] || mv "$R/$p" "$R/$p.restore-old"
         cp -a "$t/$p" "$R/$p"
-        rm -rf "${R:?}/$p.restore-old"
+        rm -rf "$R/$p.restore-old"
         echo "restored $p" >&2
         n=$((n + 1))
     done

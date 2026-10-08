@@ -365,6 +365,13 @@ cfg() { printf '%s\n' SETTINGS=1 "$@" > "$R/s"; }
     [[ "$output" == *"nothing to restore"* ]]
 }
 
+# Every test here sets REFLASH_TEST_ROOT, so none runs with R empty - which is
+# what a board does. ${R:?} passed them all and failed every real restore with
+# "R: parameter null or not set" (Reflash#184, on A5).
+@test "nothing in the installer refuses an empty R" {
+    ! grep -v '^[[:space:]]*#' "$INSTALLER" | grep -n '\${R:?}'
+}
+
 @test "restore: puts the files back over a fresh install, and nothing outside them" {
     d="$R/home/printer/printer_data"
     echo "mine" > "$d/config/printer.cfg"
