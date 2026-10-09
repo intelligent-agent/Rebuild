@@ -66,11 +66,12 @@ cd $BUILD_DIR
 ARMBIAN_REF="813ae7cf3ccd40df1d287733e1838ed0812ceeb8"
 git fetch --tags --prune
 git reset --hard
-git checkout "$ARMBIAN_REF"
 # `git reset --hard` restores the files Armbian tracks but keeps any it does
-# not, and earlier builds in this tree copied patches into patch/: clean them
-# out so they cannot be applied on top of Armbian's own.
+# not, and earlier builds in this tree copied patches into patch/. Cleaned
+# before the checkout, not after: at this ref Armbian tracks the same files,
+# and checkout refuses to overwrite untracked ones.
 git clean -fdq -- patch/
+git checkout "$ARMBIAN_REF"
 rm -rf "userpatches"
 
 cd "$ROOT_DIR"
