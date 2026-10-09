@@ -29,20 +29,6 @@ function post_family_config__rebuild_boot_partition() {
     declare -g BOOTFS_TYPE="ext4"
 }
 
-# Until armbian/build#10853 is merged, carried here together with the U-Boot and
-# TF-A patches in armbian/patch/u-boot/v2026.07-sunxi64/board_recore (copied
-# over Armbian's by rebuild.sh) and userpatches/atf/atf-sunxi64/board_recore;
-# drop all three then.
-#
-# Runs after recore.csc's post_family_config__shrink_atf, which still pins
-# TF-A v2.8.0 in SRAM.
-function post_family_config__900_rebuild_bl31_in_dram() {
-    display_alert "Put BL31 in DRAM to free SRAM A2 for the AR100" "rebuild" "info"
-    declare -g ATFBRANCH="tag:lts-v2.12.9"
-    unset ATF_SKIP_LDFLAGS_WL
-    declare -g ATF_TARGET_MAP="PLAT=$ATF_PLAT DEBUG=0 SUNXI_PSCI_USE_SCPI=0 SUNXI_BL31_IN_DRAM=1 SEPARATE_NOBITS_REGION=0 bl31;;build/$ATF_PLAT/release/bl31.bin"
-}
-
 # Until the sunxi64 kernel configs enable them upstream. simpledrm has to be
 # built in: as a module it loads after the kernel turns off unused clocks, and
 # the panel loses U-Boot's framebuffer for about 0.6 s.
