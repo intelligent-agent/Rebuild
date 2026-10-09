@@ -101,6 +101,14 @@ fi
 log "Running flash-rp2040 script"
 optional flash-rp2040 "$BIN/flash-rp2040"
 
+# printer_data/config/rebuild-reference: this version's example config next to
+# the user's own (#137). An install through Reflash writes it in its configure
+# step; a board flashed some other way never runs that, so the first boot does.
+# Cheap - a few kilobytes, only when it changed - and on any run, so the
+# first boot after an install checks it too.
+log "Writing the reference config"
+optional "rebuild-reference" "$BIN/rebuild-reference"
+
 # printer_data/config/firmware: the README and, for this board's MCUs, the
 # options a user can change and rebuild with (#106). The image cannot write
 # these - it does not know which STM32 the board has. Nothing depends on it.

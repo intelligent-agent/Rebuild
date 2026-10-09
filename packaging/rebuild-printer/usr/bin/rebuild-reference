@@ -1,0 +1,86 @@
+#!/bin/bash
+# The config this version of Rebuild is developed and tested with, kept next to
+# the user's own (#137):
+#
+#   printer_data/config/rebuild-reference/   README, generic-recore-<rev>.cfg
+#
+# Klipper and Moonraker never rewrite a user's config, but what a config may
+# say changes from time to time, and so do Rebuild's own examples. When Klipper
+# will not start with a config after an update, or after a restore from an
+# older Rebuild, this is the known-good file to compare against, or to drop in
+# as printer.cfg to see that everything else works. Fluidd and Mainsail list it
+# in their config editors.
+#
+# Generated, not the user's: written again on every install, configure and
+# package upgrade, and left out of backups, so a restore never puts an old copy
+# over the one that belongs to the installed version.
+#
+#   rebuild-reference [REVISION]     the revision from the board when not given
+set -euo pipefail
+
+R="${REFLASH_TEST_ROOT:-}"
+conf="$R/home/printer/printer_data/config"
+dir="$conf/rebuild-reference"
+src="$R/usr/share/rebuild/klipper/config"
+
+[ -d "$conf" ] || exit 0
+
+rev=${1:-${REFLASH_REVISION:-}}
+[ -n "$rev" ] || rev=$(get-recore-revision 2>/dev/null || true)
+rev=$(printf '%s' "$rev" | tr 'A-Z' 'a-z')
+if [ -z "$rev" ]; then
+    echo "rebuild-reference: the board's revision is not known - nothing written"
+    exit 0
+fi
+cfg="$src/generic-recore-$rev.cfg"
+if [ ! -f "$cfg" ]; then
+    echo "rebuild-reference: no example config for Recore $rev - nothing written"
+    exit 0
+fi
+
+mkdir -p "$dir"
+chown --reference="$conf" "$dir"
+
+# Another board's examples, left by a config that was moved between boards, are
+# only confusing.
+find "$dir" -maxdepth 1 -name 'generic-recore-*.cfg' ! -name "generic-recore-$rev.cfg" -delete
+
+write() {
+    local from=$1 to=$2
+    if ! cmp -s "$from" "$to" 2>/dev/null; then
+        cp "$from" "$to"
+        # Not mktemp's 600 for the README: Moonraker serves these files.
+        chmod 644 "$to"
+        chown --reference="$conf" "$to"
+        echo "rebuild-reference: wrote $(basename "$to")"
+    fi
+}
+
+write "$cfg" "$dir/generic-recore-$rev.cfg"
+
+readme=$(mktemp)
+trap 'rm -f "$readme"' EXIT
+cat >"$readme" <<TEXT
+Reference files from Rebuild. Not yours: written again when Rebuild is
+installed, updated or restored, and left out of backups.
+
+  generic-recore-$rev.cfg
+      The Klipper config this version of Rebuild is developed and tested
+      with, for your Recore ($(printf '%s' "$rev" | tr 'a-z' 'A-Z')). Your own is printer.cfg, one level up.
+
+If Klipper will not start, or starts and complains, after an update or after
+restoring a backup from an older Rebuild:
+
+  1. Compare printer.cfg with generic-recore-$rev.cfg. Klipper's own
+     message says which section or option it does not accept.
+  2. To find out whether the fault is in your config: keep a copy of
+     printer.cfg, put generic-recore-$rev.cfg in its place and restart
+     Klipper. It is the config Rebuild is tested with, so if that starts, the
+     rest of the system is fine and the problem is something in yours.
+  3. Bring your changes back a few at a time.
+
+What Klipper has changed in how a config is written, newest first, is in
+Config_Changes.md in Klipper's docs folder (listed as "docs" in the file
+manager of Fluidd and Mainsail).
+TEXT
+write "$readme" "$dir/README"

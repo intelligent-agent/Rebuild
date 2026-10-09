@@ -83,6 +83,14 @@ if [ "$1" = configure ]; then
     /usr/lib/rebuild/octoprint-venv-owner || true
 fi
 
+# The reference copy of the example config belongs to this version of the
+# package, so an upgrade brings it up to date (#137). Not on the first install,
+# which is the image build: there is no printer or board revision to write it
+# for, and the install's own configure step does it.
+if [ "$1" = configure ] && [ -n "${2:-}" ]; then
+    /usr/bin/rebuild-reference || true
+fi
+
 if [ "$1" = configure ] && [ -d /run/systemd/system ]; then
     systemctl daemon-reload || true
     udevadm control --reload || true

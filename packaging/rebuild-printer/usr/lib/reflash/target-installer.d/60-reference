@@ -1,0 +1,13 @@
+#!/bin/bash
+# target-installer step from rebuild-printer: keep the reference copy of this
+# version's example config next to the user's own (#137). Not essential, so it
+# never fails an install.
+set -uo pipefail
+
+case "${1:-}" in
+    prepare | configure) ;;
+    *) exit 0 ;;
+esac
+
+"${REFLASH_TEST_ROOT:-}/usr/bin/rebuild-reference" || echo "reference config not written"
+exit 0

@@ -287,7 +287,14 @@ BACKUP_PATHS=(
     home/printer/.octoprint/users.yaml
     home/printer/.octoprint/data
 )
-BACKUP_EXCLUDES=(--exclude='*.log' --exclude='*.log.*' --exclude=home/printer/.octoprint/data/timelapse)
+# Also what is generated and not the user's, which a restore would put an old
+# copy of over the installed version's: the reference config (rebuild-reference)
+# and the firmware options' .reference files. Moonraker's own backup of
+# moonraker.conf is its business, not part of a printer.
+BACKUP_EXCLUDES=(--exclude='*.log' --exclude='*.log.*' --exclude=home/printer/.octoprint/data/timelapse
+    --exclude=home/printer/printer_data/config/rebuild-reference
+    --exclude='home/printer/printer_data/config/firmware/*.reference'
+    --exclude=home/printer/printer_data/config/.moonraker.conf.bkp)
 
 # Where the backup came from, as the archive's first entry. Always there, so a
 # system with none of the files above - barebone - still makes a valid backup
@@ -356,6 +363,12 @@ restore() {
     if [ "$n" -eq 0 ]; then
         [ -f "$t/$MANIFEST" ] || { echo "ERROR: this is not a Rebuild backup: no manifest and none of this system's files" >&2; exit 1; }
         echo "nothing to restore: the backup holds none of this system's files" >&2
+    fi
+    # The config folder was replaced whole, and with it the reference config
+    # that belongs to this system. On an install the configure that follows
+    # writes it again; a restore on its own has no configure after it (#137).
+    if [ -x "$R/usr/bin/rebuild-reference" ]; then
+        "$R/usr/bin/rebuild-reference" >&2 || echo "reference config not written" >&2
     fi
 }
 

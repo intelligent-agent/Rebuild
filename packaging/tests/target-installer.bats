@@ -18,7 +18,8 @@ setup() {
     cp "$PKG/rebuild-recore/usr/lib/reflash/target-installer" "$R/usr/lib/reflash/"
     cp -r "$PKG/rebuild-printer/usr/lib/reflash/target-installer.d" "$R/usr/lib/reflash/"
     cp -r "$PKG/rebuild-printer/usr/share/rebuild/klipper/config" "$R/usr/share/rebuild/klipper/"
-    mkdir -p "$R/usr/lib/rebuild"
+    mkdir -p "$R/usr/lib/rebuild" "$R/usr/bin"
+    cp "$PKG/rebuild-printer/usr/bin/rebuild-reference" "$R/usr/bin/"
     cp "$PKG/rebuild-recore/usr/lib/rebuild/wifi-client" "$PKG/rebuild-recore/usr/lib/rebuild/migrate-rebuild-settings" "$R/usr/lib/rebuild/"
 
     cat > "$R/etc/fstab" <<'EOF'
@@ -414,4 +415,123 @@ cfg() { printf '%s\n' SETTINGS=1 "$@" > "$R/s"; }
     [ "$status" -ne 0 ]
     [[ "$output" == *"ERROR: this is not a Rebuild backup"* ]]
     [ ! -e "$R/etc/shadow" ]
+}
+
+# The reference copy of this version's example config (#137), and what a backup
+# leaves out so that a restore does not put an old copy over it.
+
+REF="home/printer/printer_data/config/rebuild-reference"
+
+@test "reference: the board's example and a README, next to the user's config" {
+    run "$R/usr/bin/rebuild-reference"
+    [ "$status" -eq 0 ]
+    cmp "$R/usr/share/rebuild/klipper/config/generic-recore-a5.cfg" "$R/$REF/generic-recore-a5.cfg"
+    grep -q "generic-recore-a5.cfg" "$R/$REF/README"
+    grep -q "Config_Changes.md" "$R/$REF/README"
+    # Readable by whoever serves them: the README came out of mktemp as 600.
+    [ "$(stat -c %a "$R/$REF/README")" = 644 ]
+    [ "$(stat -c %a "$R/$REF/generic-recore-a5.cfg")" = 644 ]
+    # Only this board's, and nothing of the user's touched.
+    [ "$(ls "$R/$REF" | grep -c '^generic-recore')" -eq 1 ]
+    [ ! -e "$R/home/printer/printer_data/config/printer.cfg" ]
+}
+
+@test "reference: written again when the example changes, and left alone when it does not" {
+    "$R/usr/bin/rebuild-reference"
+    run "$R/usr/bin/rebuild-reference"
+    [[ "$output" != *wrote* ]]
+    echo "# a newer example" >> "$R/usr/share/rebuild/klipper/config/generic-recore-a5.cfg"
+    run "$R/usr/bin/rebuild-reference"
+    [[ "$output" == *"wrote generic-recore-a5.cfg"* ]]
+    cmp "$R/usr/share/rebuild/klipper/config/generic-recore-a5.cfg" "$R/$REF/generic-recore-a5.cfg"
+}
+
+@test "reference: another board's example, left from a config moved between boards, goes" {
+    mkdir -p "$R/$REF"
+    echo old > "$R/$REF/generic-recore-a8.cfg"
+    "$R/usr/bin/rebuild-reference"
+    [ ! -e "$R/$REF/generic-recore-a8.cfg" ]
+    [ -e "$R/$REF/generic-recore-a5.cfg" ]
+}
+
+@test "reference: an unknown revision writes nothing and does not fail" {
+    run env REFLASH_REVISION=z9 "$R/usr/bin/rebuild-reference"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"no example config for Recore z9"* ]]
+    [ ! -e "$R/$REF" ]
+    run env REFLASH_REVISION= "$R/usr/bin/rebuild-reference"
+    [ "$status" -eq 0 ]
+    [ ! -e "$R/$REF" ]
+}
+
+@test "reference: a system with no config folder is left alone" {
+    rm -rf "$R/home/printer/printer_data"
+    run "$R/usr/bin/rebuild-reference"
+    [ "$status" -eq 0 ]
+    [ ! -e "$R/home/printer/printer_data" ]
+}
+
+@test "reference hook: on prepare and configure, not on anything else, and never failing" {
+    hook="$R/usr/lib/reflash/target-installer.d/60-reference"
+    run "$hook" settings
+    [ "$status" -eq 0 ]
+    [ ! -e "$R/$REF" ]
+    run "$hook" prepare
+    [ "$status" -eq 0 ]
+    [ -e "$R/$REF/generic-recore-a5.cfg" ]
+    rm -rf "$R/$REF"
+    run "$hook" configure
+    [ "$status" -eq 0 ]
+    [ -e "$R/$REF/generic-recore-a5.cfg" ]
+    # No writer on the image, say: the install goes on.
+    rm "$R/usr/bin/rebuild-reference"
+    run "$hook" configure
+    [ "$status" -eq 0 ]
+}
+
+@test "backup: what Rebuild generates is not the user's, and stays out" {
+    c="$R/home/printer/printer_data/config"
+    mkdir -p "$c/firmware" "$c/$(basename "$REF")"
+    echo mine > "$c/printer.cfg"
+    echo conf > "$c/moonraker.conf"
+    echo bkp > "$c/.moonraker.conf.bkp"
+    echo "CONFIG_X=y" > "$c/firmware/stm32.config"
+    echo "# all options" > "$c/firmware/stm32.reference"
+    echo ref > "$c/rebuild-reference/generic-recore-a5.cfg"
+    "$INSTALLER" backup > "$R/b.tgz"
+    list=$(tar tzf "$R/b.tgz")
+    [[ "$list" == *"config/printer.cfg"* ]]
+    [[ "$list" == *"config/moonraker.conf"* ]]
+    [[ "$list" == *"config/fluidd.cfg"* ]]
+    # The user's own changes to the firmware stay; the generated reference does not.
+    [[ "$list" == *"config/firmware/stm32.config"* ]]
+    [[ "$list" != *"stm32.reference"* ]]
+    [[ "$list" != *"rebuild-reference"* ]]
+    [[ "$list" != *".moonraker.conf.bkp"* ]]
+}
+
+@test "restore: the reference config is written again after the config folder is replaced" {
+    c="$R/home/printer/printer_data/config"
+    echo mine > "$c/printer.cfg"
+    "$INSTALLER" backup > "$R/b.tgz"
+    rm -rf "$R/$REF"
+    run "$INSTALLER" restore < "$R/b.tgz"
+    [ "$status" -eq 0 ]
+    [ "$(cat "$c/printer.cfg")" = mine ]
+    cmp "$R/usr/share/rebuild/klipper/config/generic-recore-a5.cfg" "$R/$REF/generic-recore-a5.cfg"
+}
+
+@test "restore: an older backup's generated files do not come back over the installed ones" {
+    c="$R/home/printer/printer_data/config"
+    mkdir -p "$R/old/home/printer/printer_data/config/rebuild-reference" "$R/old/home/printer/printer_data/config/firmware"
+    o="$R/old/home/printer/printer_data/config"
+    echo mine > "$o/printer.cfg"
+    echo stale > "$o/rebuild-reference/generic-recore-a5.cfg"
+    printf 'format=1\n' > "$R/old/rebuild-backup.manifest"
+    tar czf "$R/old.tgz" -C "$R/old" rebuild-backup.manifest home
+    "$INSTALLER" backup > /dev/null  # a system with its own files
+    run "$INSTALLER" restore < "$R/old.tgz"
+    [ "$status" -eq 0 ]
+    [ "$(cat "$c/printer.cfg")" = mine ]
+    cmp "$R/usr/share/rebuild/klipper/config/generic-recore-a5.cfg" "$R/$REF/generic-recore-a5.cfg"
 }
