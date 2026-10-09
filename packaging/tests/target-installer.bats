@@ -428,6 +428,9 @@ REF="home/printer/printer_data/config/rebuild-reference"
     cmp "$R/usr/share/rebuild/klipper/config/generic-recore-a5.cfg" "$R/$REF/generic-recore-a5.cfg"
     grep -q "generic-recore-a5.cfg" "$R/$REF/README"
     grep -q "Config_Changes.md" "$R/$REF/README"
+    # Readable by whoever serves them: the README came out of mktemp as 600.
+    [ "$(stat -c %a "$R/$REF/README")" = 644 ]
+    [ "$(stat -c %a "$R/$REF/generic-recore-a5.cfg")" = 644 ]
     # Only this board's, and nothing of the user's touched.
     [ "$(ls "$R/$REF" | grep -c '^generic-recore')" -eq 1 ]
     [ ! -e "$R/home/printer/printer_data/config/printer.cfg" ]

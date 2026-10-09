@@ -49,6 +49,8 @@ write() {
     local from=$1 to=$2
     if ! cmp -s "$from" "$to" 2>/dev/null; then
         cp "$from" "$to"
+        # Not mktemp's 600 for the README: Moonraker serves these files.
+        chmod 644 "$to"
         chown --reference="$conf" "$to"
         echo "rebuild-reference: wrote $(basename "$to")"
     fi
