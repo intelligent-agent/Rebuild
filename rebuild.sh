@@ -58,26 +58,19 @@ TAG=${REBUILD_VERSION:-$(git describe --always --tags)}
 NAME="rebuild-${VERSION}-${TAG}"
 
 cd $BUILD_DIR
-ARMBIAN_REF="6125ad65a2996a5dc8c1fc48ec5fe58ac4706b59"
+# The commit Armbian's trunk.84 Recore images were built from: it carries
+# everything Rebuild used to copy in - the Recore device trees (#10850), the
+# U-Boot board patches and BL31 in DRAM (#10853), and the A5/A6 GPU clock,
+# thermal trips and crash log (#10940) - byte for byte, so none of it is
+# copied any more (#117).
+ARMBIAN_REF="813ae7cf3ccd40df1d287733e1838ed0812ceeb8"
 git fetch --tags --prune
 git reset --hard
 git checkout "$ARMBIAN_REF"
-# armbian/build#10853 (U-Boot) is not merged yet. Copy its patches over
-# Armbian's rather than through userpatches: the patch tool keys patches by
-# file name and lets Armbian's own file win over a userpatch of the same name,
-# so a userpatch 0001 was silently replaced by the older one.
-# `git reset --hard` restores the files Armbian tracks but keeps the ones this
-# adds, so clean patch/ first: leftovers from an earlier build in the same tree
-# would otherwise be applied twice.
+# `git reset --hard` restores the files Armbian tracks but keeps any it does
+# not, and earlier builds in this tree copied patches into patch/: clean them
+# out so they cannot be applied on top of Armbian's own.
 git clean -fdq -- patch/
-cp -r "${ROOT_DIR}/armbian/patch/." patch/
-# Armbian copies these DTS files into Linux after kernel patching. Patch the
-# supplied sources first; their changed contents also enter the kernel hash.
-for kernel_line in sunxi-6.18 sunxi-7.2; do
-    patch --batch --forward --fuzz=0 -p6 \
-        -d "patch/kernel/archive/${kernel_line}/dt_64" \
-        < "${ROOT_DIR}/armbian/dts-patches/${kernel_line}/0001-recore-a5-a6-lock-gpu-at-180mhz.patch"
-done
 rm -rf "userpatches"
 
 cd "$ROOT_DIR"
