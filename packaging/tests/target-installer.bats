@@ -312,6 +312,23 @@ cfg() { printf '%s\n' SETTINGS=1 "$@" > "$R/s"; }
     [ "$output" = $'SETTINGS=1\nSSH_ENABLED=true\nSCREEN_ROTATION=270\nWIFI_SSID=Bob\'s net' ]
 }
 
+@test "settings secrets: the Wi-Fi passphrase follows the name, and nothing else secret" {
+    cfg SSH_ENABLED=true SCREEN_ROTATION=90 "WIFI_SSID=Bob's net" "WIFI_PSK=se=cret 1" "LOGIN_PASSWORD=correct horse"
+    "$INSTALLER" configure < "$R/s"
+    run --separate-stderr "$INSTALLER" settings secrets
+    [ "$status" -eq 0 ]
+    [ "$output" = $'SETTINGS=1\nSSH_ENABLED=true\nSCREEN_ROTATION=90\nWIFI_SSID=Bob\'s net\nWIFI_PSK=se=cret 1' ]
+    [[ "$output" != *"correct horse"* ]]
+    # Not on stderr, where Reflash logs it.
+    [[ "$stderr" != *"se=cret"* ]]
+}
+
+@test "settings secrets: no network, no passphrase line" {
+    run "$INSTALLER" settings secrets
+    [ "$status" -eq 0 ]
+    [[ "$output" != *WIFI_PSK* ]]
+}
+
 @test "an action this image does not support exits 3" {
     run "$INSTALLER" teleport
     [ "$status" -eq 3 ]
