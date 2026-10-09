@@ -259,9 +259,20 @@ configure() {
 
 # For Reflash to show before the user changes anything. Secrets are never
 # printed; whether one is set is not even hinted at.
+#
+# Except on `settings secrets`, which Reflash asks for once, just before it
+# writes a new image over this system, to carry the Wi-Fi network across
+# (Reflash#195). Then the passphrase follows the name. It goes to Reflash's
+# memory only - not to its log, the browser or the drive - and never to stderr.
+# The login password cannot be read back and is not printed either way.
 settings() {
+    local ssid
+    ssid=$("$WIFI_CLIENT" ssid)
     printf 'SETTINGS=1\nSSH_ENABLED=%s\nSCREEN_ROTATION=%s\nWIFI_SSID=%s\n' \
-        "$(ssh_enabled)" "$(current_rotation)" "$("$WIFI_CLIENT" ssid)"
+        "$(ssh_enabled)" "$(current_rotation)" "$ssid"
+    if [ "${1:-}" = secrets ] && [ -n "$ssid" ]; then
+        printf 'WIFI_PSK=%s\n' "$("$WIFI_CLIENT" psk)"
+    fi
 }
 
 # What a user would lose in a reinstall, and nothing else (Reflash#175): the
@@ -351,7 +362,7 @@ restore() {
 case ${1:-} in
     prepare) prepare ;;
     configure) configure ;;
-    settings) settings ;;
+    settings) settings "${2:-}" ;;
     backup) backup ;;
     restore) restore ;;
     *) echo "ERROR: action '${1:-}' is not supported by this image" >&2; exit 3 ;;
