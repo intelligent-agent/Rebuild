@@ -27,7 +27,7 @@ shim() {
 
 first_run_env() {
     export REBUILD_FIRST_RUN_BIN="$T/bin" REBUILD_FIRST_RUN_LOG="$T/log/first-run.log"
-    for c in flash-stm32 flash-rp2040 rebuild-firmware; do
+    for c in flash-stm32 flash-rp2040 rebuild-firmware rebuild-reference; do
         printf '#!/bin/bash\necho "%s $*" >> "$CALLS"\necho "%s ran"\nexit ${%s_RC:-0}\n' \
             "$c" "$c" "$(echo "$c" | tr -- '-' '_')" > "$T/bin/$c"
         chmod +x "$T/bin/$c"
@@ -42,6 +42,7 @@ first_run_env() {
     grep -qx "flash-stm32 " "$CALLS"
     grep -qx "flash-rp2040 " "$CALLS"
     grep -qx "rebuild-firmware reference --missing" "$CALLS"
+    grep -qx "rebuild-reference " "$CALLS"
     grep -qx "systemctl disable rebuild-first-run.service" "$CALLS"
     grep -q -- "--First run: first boot--" "$T/log/first-run.log"
 }
