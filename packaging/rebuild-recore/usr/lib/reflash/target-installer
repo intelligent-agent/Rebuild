@@ -7,6 +7,14 @@
 #   target-installer settings     print the current choices (no secrets)
 #   target-installer backup       the user's files, as a gzip tar on stdout
 #   target-installer restore      ...and back from stdin, onto a fresh install
+#   target-installer list         the files a backup could hold, one per line
+#   target-installer list-archive the files in a backup given on stdin
+#
+# backup and restore take --include PATH, any number of times, to save or put
+# back only those files and folders (a path as list prints it). A restore with
+# paths merges them into what is there; one without replaces, as before.
+# restore --merge puts back everything the archive holds, merged the same way:
+# the files in it are written, and nothing else is removed.
 #
 # Any other action exits 3, "not supported", as the interface asks.
 #
@@ -108,6 +116,19 @@ read_settings() {
     [ "${S[SETTINGS]:-}" = 1 ] || die "settings version '${S[SETTINGS]:-}' is not 1"
     case ${S[SCREEN_ROTATION]:-0} in 0 | 90 | 180 | 270) ;; *) die "screen rotation '${S[SCREEN_ROTATION]}' is not 0, 90, 180 or 270" ;; esac
     case ${S[SSH_ENABLED]:-false} in true | false) ;; *) die "SSH_ENABLED '${S[SSH_ENABLED]}' is not true or false" ;; esac
+    # A key that is there and empty puts the choice back to the image's own
+    # (Reflash's "Default"): no country, UTC, the usual Wi-Fi behaviour.
+    [[ ${S[WIFI_COUNTRY]:-} =~ ^([A-Z]{2})?$ ]] || die "country '${S[WIFI_COUNTRY]}' is not a two-letter code like NO"
+    case ${S[WIFI_MODE]:-auto} in auto | client | ap) ;; *) die "Wi-Fi mode '${S[WIFI_MODE]}' is not auto, client or ap" ;; esac
+    if [ -n "${S[TIMEZONE]:-}" ]; then
+        [[ ${S[TIMEZONE]} =~ ^[A-Za-z0-9_+-]+(/[A-Za-z0-9_+-]+)*$ ]] || die "timezone '${S[TIMEZONE]}' is not a name like Europe/Oslo"
+    fi
+    if [ -n "${S[HOTSPOT_SSID]:-}" ] && [ "$(printf %s "${S[HOTSPOT_SSID]}" | wc -c)" -gt 32 ]; then
+        die "the hotspot's name is longer than 32 bytes"
+    fi
+    if [ -n "${S[HOTSPOT_PSK]:-}" ]; then
+        [ "${#S[HOTSPOT_PSK]}" -ge 8 ] && [ "${#S[HOTSPOT_PSK]}" -le 63 ] || die "the hotspot's password must be 8 to 63 characters"
+    fi
     return 0
 }
 
@@ -117,14 +138,13 @@ login_user() {
     if grep -q '^debian:' "$R/etc/passwd"; then echo debian; else echo root; fi
 }
 
-# The new login password, checked by this image's own rules before it is set
+# A new password for USER, checked by this image's own rules before it is set
 # (Reflash#182). Those are PAM's pam_unix "obscure" (common-password; there is
 # no pwquality): for a new password with no old one to compare against, at
 # least 6 characters and not a palindrome. chpasswd runs as root, and PAM does
 # not check root's changes, so they are applied here.
 set_password() {
-    local pw=$1 user rev today
-    user=$(login_user)
+    local user=$1 pw=$2 rev today
     [ "${#pw}" -ge 6 ] || die "the password is too short: at least 6 characters"
     rev=$(rev <<< "$pw")
     [ "$pw" != "$rev" ] || die "the password is a palindrome"
@@ -195,6 +215,87 @@ EOF
 }
 
 WIFI_CLIENT="$R/usr/lib/rebuild/wifi-client"
+SOFTWARE="$R/usr/lib/rebuild/software"
+
+# The Wi-Fi regulatory domain: which channels and how much power the radio may
+# use. A kernel argument, so it holds whatever loads cfg80211 and whether it
+# is built in or a module. On a running kernel it also takes effect now; in a
+# chroot that is Reflash's own radio, which is the country it is used in too.
+ARGS_COUNTRY='cfg80211\.ieee80211_regdom=[A-Za-z0-9]*'
+
+current_country() {
+    grep -o "$ARGS_COUNTRY" "$R/boot/armbianEnv.txt" 2>/dev/null | head -1 | cut -d= -f2 || true
+}
+
+set_country() {
+    local cc=$1 env="$R/boot/armbianEnv.txt"
+    if [ -f "$env" ]; then
+        grep -q '^extraargs=' "$env" || echo 'extraargs=' >> "$env"
+        sed -i -E "/^extraargs=/ s/ *$ARGS_COUNTRY//g" "$env"
+        [ -z "$cc" ] || sed -i "/^extraargs=/ s|\$| cfg80211.ieee80211_regdom=$cc|" "$env"
+        sed -i 's/^extraargs= /extraargs=/' "$env"
+    fi
+    [ -z "$R" ] && command -v iw > /dev/null && iw reg set "${cc:-00}" > /dev/null 2>&1 || true
+    if [ -n "$cc" ] && [ ! -e "$R/usr/lib/firmware/regulatory.db" ] && [ ! -e "$R/lib/firmware/regulatory.db" ]; then
+        echo "WARNING: this image has no wireless-regdb, so the radio keeps the world domain whatever the country"
+    fi
+    echo "Wi-Fi country: ${cc:-none}"
+}
+
+current_timezone() {
+    local tz
+    tz=$(cat "$R/etc/timezone" 2>/dev/null || true)
+    [ -n "$tz" ] || tz=$(readlink "$R/etc/localtime" 2>/dev/null | sed 's|.*/zoneinfo/||' || true)
+    echo "${tz:-Etc/UTC}"
+}
+
+set_timezone() {
+    local tz=${1:-Etc/UTC}
+    [ -e "$R/usr/share/zoneinfo/$tz" ] || die "this image does not know the timezone '$tz'"
+    ln -sf "/usr/share/zoneinfo/$tz" "$R/etc/localtime"
+    echo "$tz" > "$R/etc/timezone"
+    echo "timezone: $tz"
+}
+
+# How the board uses Wi-Fi, and the hotspot's own name and password, in the
+# file autohotspot reads - its own settings, not a general one (#134). The
+# password is in it, so only root reads it; it is never printed here except
+# for Reflash's start (settings secrets), as with the network's.
+HOTSPOT_CONF="$R/etc/default/autohotspot"
+
+hotspot_get() {
+    [ -f "$HOTSPOT_CONF" ] || return 0
+    (. "$HOTSPOT_CONF"; eval "printf %s \"\${$1:-}\"")
+}
+
+# KEY VALUE; an empty value takes the key out, which is the default.
+hotspot_set() {
+    local key=$1 val=$2 tmp
+    mkdir -p "$(dirname "$HOTSPOT_CONF")"
+    tmp=$(mktemp)
+    if [ -f "$HOTSPOT_CONF" ]; then grep -v "^$key=" "$HOTSPOT_CONF" | grep -v '^#' > "$tmp" || true; fi
+    [ -z "$val" ] || printf '%s=%q\n' "$key" "$val" >> "$tmp"
+    if [ -s "$tmp" ]; then
+        { echo "# Written by the installer (Reflash): how autohotspot behaves. Read by /usr/bin/autohotspot."; cat "$tmp"; } > "$HOTSPOT_CONF"
+        chmod 600 "$HOTSPOT_CONF"
+    else
+        rm -f "$HOTSPOT_CONF"
+    fi
+    rm -f "$tmp"
+}
+
+# Armbian asks, on the first console login, for a root password, a new user,
+# the locale and the timezone, and takes the serial console's autologin away.
+# What Reflash has just set is what it asks for, so it is not asked again; the
+# autologin stays, which is what the rig and anyone debugging over the serial
+# console rely on. Nothing set, nothing changed.
+skip_first_login() {
+    if [ -e "$R/root/.not_logged_in_yet" ]; then
+        rm -f "$R/root/.not_logged_in_yet"
+        echo "Armbian's first-login setup is not needed"
+    fi
+}
+
 
 # Each choice lives where the system itself reads it - there is no settings
 # file (#134): Wi-Fi in NetworkManager's Client profile, SSH in whether
@@ -251,8 +352,48 @@ configure() {
     rm -f "$R/etc/rebuild-settings"
 
     if [ -n "${S[LOGIN_PASSWORD]:-}" ]; then
-        set_password "${S[LOGIN_PASSWORD]}"
+        set_password "$(login_user)" "${S[LOGIN_PASSWORD]}"
     fi
+
+    if [ -n "${S[ROOT_PASSWORD]:-}" ]; then
+        set_password root "${S[ROOT_PASSWORD]}"
+        skip_first_login
+    fi
+
+    if [ -n "${S[WIFI_COUNTRY]+set}" ]; then
+        set_country "${S[WIFI_COUNTRY]}"
+        skip_first_login
+    fi
+
+    if [ -n "${S[TIMEZONE]+set}" ]; then
+        set_timezone "${S[TIMEZONE]}"
+        skip_first_login
+    fi
+
+    if [ -n "${S[WIFI_MODE]+set}" ]; then
+        hotspot_set WIFI_MODE "$([ "${S[WIFI_MODE]}" = auto ] || echo "${S[WIFI_MODE]}")"
+        echo "Wi-Fi mode: ${S[WIFI_MODE]:-auto}"
+    fi
+    if [ -n "${S[HOTSPOT_SSID]+set}" ]; then
+        hotspot_set HOTSPOT_SSID "${S[HOTSPOT_SSID]}"
+        echo "hotspot name: ${S[HOTSPOT_SSID]:-the default}"
+    fi
+    if [ -n "${S[HOTSPOT_PSK]+set}" ]; then
+        hotspot_set HOTSPOT_PSK "${S[HOTSPOT_PSK]}"
+        if [ -n "${S[HOTSPOT_PSK]}" ]; then echo "hotspot password: set"; else echo "hotspot password: the default"; fi
+    fi
+
+    local key name
+    for key in "${!S[@]}"; do
+        [[ $key == SOFTWARE_* ]] || continue
+        name=${key#SOFTWARE_}
+        [[ $name =~ ^[a-z0-9_]+$ ]] || die "'$name' is not a name of optional software"
+        case ${S[$key]} in
+            on) "$SOFTWARE" install "$name" ;;
+            off) "$SOFTWARE" remove "$name" ;;
+            *) die "${key} '${S[$key]}' is not on or off" ;;
+        esac
+    done
 
     run_hooks configure < "$stdin"
 }
@@ -266,12 +407,21 @@ configure() {
 # memory only - not to its log, the browser or the drive - and never to stderr.
 # The login password cannot be read back and is not printed either way.
 settings() {
-    local ssid
+    local ssid name
     ssid=$("$WIFI_CLIENT" ssid)
     printf 'SETTINGS=1\nSSH_ENABLED=%s\nSCREEN_ROTATION=%s\nWIFI_SSID=%s\n' \
         "$(ssh_enabled)" "$(current_rotation)" "$ssid"
-    if [ "${1:-}" = secrets ] && [ -n "$ssid" ]; then
-        printf 'WIFI_PSK=%s\n' "$("$WIFI_CLIENT" psk)"
+    printf 'WIFI_COUNTRY=%s\nTIMEZONE=%s\nWIFI_MODE=%s\nHOTSPOT_SSID=%s\n' \
+        "$(current_country)" "$(current_timezone)" "$(hotspot_get WIFI_MODE | grep . || echo auto)" "$(hotspot_get HOTSPOT_SSID)"
+    if [ "${1:-}" = secrets ]; then
+        [ -z "$ssid" ] || printf 'WIFI_PSK=%s\n' "$("$WIFI_CLIENT" psk)"
+        [ -z "$(hotspot_get HOTSPOT_PSK)" ] || printf 'HOTSPOT_PSK=%s\n' "$(hotspot_get HOTSPOT_PSK)"
+    fi
+    if [ -x "$SOFTWARE" ] && [ -n "$("$SOFTWARE" list)" ]; then
+        printf 'SOFTWARE_LIST=%s\n' "$("$SOFTWARE" list | tr '\n' ' ' | sed 's/ $//')"
+        for name in $("$SOFTWARE" list); do
+            printf 'SOFTWARE_%s=%s\nSOFTWARE_%s_INFO=%s\n' "$name" "$("$SOFTWARE" status "$name")" "$name" "$("$SOFTWARE" info "$name")"
+        done
     fi
 }
 
@@ -321,11 +471,70 @@ manifest() {
     printf 'paths=%s\n' "$*"
 }
 
+# --include PATH ... : the paths as `list` prints them, each inside one of
+# BACKUP_PATHS. Anything else is refused, so a list from outside cannot name a
+# place in the system that a backup never holds.
+INCLUDES=()
+MERGE=""
+parse_includes() {
+    local p ok bp
+    while [ $# -gt 0 ]; do
+        case $1 in
+            --merge)
+                MERGE=1
+                shift ;;
+            --include)
+                [ $# -ge 2 ] || die "--include needs a path"
+                p=${2#/}; p=${p%/}
+                [[ $p != *..* ]] || die "'$2' is not a path inside a backup"
+                ok=""
+                for bp in "${BACKUP_PATHS[@]}"; do
+                    [[ $p == "$bp" || $p == "$bp"/* ]] && ok=1
+                done
+                [ -n "$ok" ] || die "'$2' is not something a backup holds"
+                INCLUDES+=("$p")
+                shift 2 ;;
+            *) die "unknown argument '$1'" ;;
+        esac
+    done
+}
+
+# Everything below the saved folders, as files, so a tree can be drawn. Same
+# excludes as a backup, which is the point: what is listed is what is saved.
+list() {
+    local p
+    for p in "${BACKUP_PATHS[@]}"; do
+        [ -e "$R/$p" ] || continue
+        (cd "$R/" && find "$p" -type f | sort)
+    done | grep -vE '\.log(\.[^/]*)?$|/\.octoprint/data/timelapse/|/config/rebuild-reference/|/config/firmware/[^/]*\.reference$|/config/\.moonraker\.conf\.bkp$' || true
+}
+
+# The same for an archive on stdin, limited to what a restore would take.
+list_archive() {
+    local f bp ok
+    tar -tzf - 2> /dev/null | while IFS= read -r f; do
+        [[ $f == */ || $f == *..* ]] && continue
+        f=${f#./}
+        ok=""
+        for bp in "${BACKUP_PATHS[@]}"; do
+            [[ $f == "$bp" || $f == "$bp"/* ]] && ok=1
+        done
+        [ -n "$ok" ] && echo "$f"
+    done | sort || true
+}
+
 backup() {
     local p have=() t
-    for p in "${BACKUP_PATHS[@]}"; do
-        [ -e "$R/$p" ] && have+=("$p")
-    done
+    parse_includes "$@"
+    if [ ${#INCLUDES[@]} -gt 0 ]; then
+        for p in "${INCLUDES[@]}"; do
+            [ -e "$R/$p" ] && have+=("$p")
+        done
+    else
+        for p in "${BACKUP_PATHS[@]}"; do
+            [ -e "$R/$p" ] && have+=("$p")
+        done
+    fi
     echo "backing up: ${have[*]:-only the manifest - this system has none of the files}" >&2
     t=$(mktemp -d)
     trap 'rm -rf "$t"' RETURN
@@ -339,24 +548,52 @@ backup() {
 # Only the paths above come back, whatever the archive holds: it is a file a
 # user carried around on a USB drive, and must not be able to write anywhere
 # else in the system. GNU tar already strips leading / and refuses "..".
+#
+# With --include only those come back, laid over what is there: the rest of
+# the config stays as it is. Without, each saved folder is replaced whole, as
+# it always was.
 restore() {
     local t p n=0
+    parse_includes "$@"
+    # Everything the archive holds, merged: each saved folder in turn, and a
+    # folder the archive does not have is simply not there to merge.
+    if [ -n "$MERGE" ] && [ ${#INCLUDES[@]} -eq 0 ]; then
+        INCLUDES=("${BACKUP_PATHS[@]}")
+    fi
     t=$(mktemp -d)
     trap 'rm -rf "$t"' RETURN
     tar -C "$t" -xzf - --no-same-permissions --same-owner 2>&1 | sed 's/^/tar: /' >&2 || true
-    for p in "${BACKUP_PATHS[@]}"; do
-        [ -e "$t/$p" ] || continue
-        mkdir -p "$R/$(dirname "$p")"
-        # Not ${R:?}: R is empty under Reflash - the real root - and that
-        # guard aborted every restore on a board. $p is one of the fixed paths
-        # above, never empty, so this can never be "/".
-        rm -rf "$R/$p.restore-old"
-        [ ! -e "$R/$p" ] || mv "$R/$p" "$R/$p.restore-old"
-        cp -a "$t/$p" "$R/$p"
-        rm -rf "$R/$p.restore-old"
-        echo "restored $p" >&2
-        n=$((n + 1))
-    done
+    if [ ${#INCLUDES[@]} -gt 0 ]; then
+        for p in "${INCLUDES[@]}"; do
+            if [ ! -e "$t/$p" ]; then
+                [ -n "$MERGE" ] || echo "not in the backup: $p" >&2
+                continue
+            fi
+            mkdir -p "$R/$(dirname "$p")"
+            if [ -d "$t/$p" ]; then
+                mkdir -p "$R/$p"
+                cp -a "$t/$p/." "$R/$p/"
+            else
+                cp -a "$t/$p" "$R/$p"
+            fi
+            echo "restored $p" >&2
+            n=$((n + 1))
+        done
+    else
+        for p in "${BACKUP_PATHS[@]}"; do
+            [ -e "$t/$p" ] || continue
+            mkdir -p "$R/$(dirname "$p")"
+            # Not ${R:?}: R is empty under Reflash - the real root - and that
+            # guard aborted every restore on a board. $p is one of the fixed paths
+            # above, never empty, so this can never be "/".
+            rm -rf "$R/$p.restore-old"
+            [ ! -e "$R/$p" ] || mv "$R/$p" "$R/$p.restore-old"
+            cp -a "$t/$p" "$R/$p"
+            rm -rf "$R/$p.restore-old"
+            echo "restored $p" >&2
+            n=$((n + 1))
+        done
+    fi
     # Only the manifest is a valid backup too - one made on barebone, say - and
     # there is simply nothing to put back. Neither manifest nor files is not a
     # backup of ours at all.
@@ -364,9 +601,9 @@ restore() {
         [ -f "$t/$MANIFEST" ] || { echo "ERROR: this is not a Rebuild backup: no manifest and none of this system's files" >&2; exit 1; }
         echo "nothing to restore: the backup holds none of this system's files" >&2
     fi
-    # The config folder was replaced whole, and with it the reference config
-    # that belongs to this system. On an install the configure that follows
-    # writes it again; a restore on its own has no configure after it (#137).
+    # The config folder was replaced, and with it the reference config that
+    # belongs to this system. On an install the configure that follows writes
+    # it again; a restore on its own has no configure after it (#137).
     if [ -x "$R/usr/bin/rebuild-reference" ]; then
         "$R/usr/bin/rebuild-reference" >&2 || echo "reference config not written" >&2
     fi
@@ -376,7 +613,9 @@ case ${1:-} in
     prepare) prepare ;;
     configure) configure ;;
     settings) settings "${2:-}" ;;
-    backup) backup ;;
-    restore) restore ;;
+    backup) shift; backup "$@" ;;
+    restore) shift; restore "$@" ;;
+    list) list ;;
+    list-archive) list_archive ;;
     *) echo "ERROR: action '${1:-}' is not supported by this image" >&2; exit 3 ;;
 esac

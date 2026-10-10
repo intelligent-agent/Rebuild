@@ -11,5 +11,5 @@ installer=/usr/lib/reflash/target-installer
 # Written here it is /var/log.hdd/reflash.log on the running system, and
 # copied into the RAM /var/log at every boot.
 log=/var/log/reflash.log
-settings=SSH_ENABLED,SCREEN_ROTATION,WIFI_SSID,WIFI_PSK,LOGIN_PASSWORD
-actions=settings,backup,restore
+settings=SSH_ENABLED,SCREEN_ROTATION,WIFI_SSID,WIFI_PSK,LOGIN_PASSWORD,ROOT_PASSWORD,WIFI_COUNTRY,TIMEZONE,WIFI_MODE,HOTSPOT_SSID,HOTSPOT_PSK,SOFTWARE
+actions=settings,backup,restore,list,list-archive

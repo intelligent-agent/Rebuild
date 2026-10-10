@@ -1,0 +1,89 @@
+#!/bin/bash
+# Optional software: Klipper modules that ship with Rebuild but are not in use
+# until someone asks for them (Reflash#198). Each is one file in
+# /usr/share/rebuild/klipper/optional, put into Klipper's tree as a link when
+# installed and taken out again when removed. Nothing is fetched, so it works
+# in Reflash's chroot and without a network.
+#
+#   software list            the names, one per line (none without Klipper)
+#   software info NAME       one line for people
+#   software status NAME     on or off
+#   software install NAME
+#   software remove NAME
+#
+# Installed means Klipper can load the module, which is a link at the place it
+# looks. Whether the printer's config uses it is the config's business: Klipper
+# still needs its [section]. A module put there some other way - a clone of the
+# author's own repository, say - counts as installed and is never touched.
+set -euo pipefail
+
+R="${REFLASH_TEST_ROOT:-}"
+OPTIONAL="$R/usr/share/rebuild/klipper/optional"
+KLIPPER="$R/home/printer/klipper"
+TARGET="$KLIPPER/klippy/extras"
+EXCLUDE="$KLIPPER/.git/info/exclude"
+
+info_of() {
+    case $1 in
+        led_effect) echo "LED effects: animated effects for addressable LEDs (led_effect, by Julian Schill)" ;;
+        *) return 1 ;;
+    esac
+}
+
+die() { echo "ERROR: $*" >&2; exit 1; }
+
+known() { info_of "$1" > /dev/null || die "'$1' is not optional software Rebuild knows"; [ -f "$OPTIONAL/$1.py" ] || die "this image does not have $1"; }
+
+ours() { [ "$(readlink "$TARGET/$1.py" 2> /dev/null)" = "/usr/share/rebuild/klipper/optional/$1.py" ] || [ "$(readlink "$TARGET/$1.py" 2> /dev/null)" = "$OPTIONAL/$1.py" ]; }
+
+# Like klipper-extras: Moonraker's update page lists untracked files in the
+# checkout, and this link is not the user's change.
+exclude() {
+    local line="/klippy/extras/$1.py" rest
+    [ -d "$KLIPPER/.git" ] || return 0
+    if [ "$2" = add ]; then
+        mkdir -p "$(dirname "$EXCLUDE")"
+        grep -qxF "$line" "$EXCLUDE" 2> /dev/null || echo "$line" >> "$EXCLUDE"
+    elif grep -qxF "$line" "$EXCLUDE" 2> /dev/null; then
+        rest=$(grep -vxF "$line" "$EXCLUDE")
+        printf '%s\n' "$rest" > "$EXCLUDE"
+    fi
+}
+
+case ${1:-} in
+    list)
+        [ -d "$TARGET" ] || exit 0
+        for f in "$OPTIONAL"/*.py; do
+            [ -f "$f" ] && basename "$f" .py
+        done
+        ;;
+    info) info_of "${2:-}" ;;
+    status)
+        known "${2:-}"
+        if [ -e "$TARGET/$2.py" ] || [ -L "$TARGET/$2.py" ]; then echo on; else echo off; fi
+        ;;
+    install)
+        known "${2:-}"
+        [ -d "$TARGET" ] || die "there is no Klipper on this system to put $2 into"
+        if [ -e "$TARGET/$2.py" ] || [ -L "$TARGET/$2.py" ]; then
+            echo "$2 is already installed"
+        else
+            ln -s "/usr/share/rebuild/klipper/optional/$2.py" "$TARGET/$2.py"
+            exclude "$2" add
+            echo "$2 installed"
+        fi
+        ;;
+    remove)
+        known "${2:-}"
+        if ours "$2"; then
+            rm -f "$TARGET/$2.py"
+            exclude "$2" remove
+            echo "$2 removed"
+        elif [ -e "$TARGET/$2.py" ] || [ -L "$TARGET/$2.py" ]; then
+            echo "$2 was not installed by Rebuild; left as it is"
+        else
+            echo "$2 is not installed"
+        fi
+        ;;
+    *) die "usage: software list | info NAME | status NAME | install NAME | remove NAME" ;;
+esac
