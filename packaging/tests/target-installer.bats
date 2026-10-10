@@ -79,7 +79,7 @@ EOF
 echo "git $*" >> "$CALLS"
 case $1 in
     ls-remote) [ ! -e "$REFLASH_TEST_ROOT/.offline" ] ;;
-    clone) mkdir -p "${@: -1}/src" && echo "# led_effect" > "${@: -1}/src/led_effect.py" ;;
+    clone) mkdir -p "${@: -1}/src"; [ ! -e "$REFLASH_TEST_ROOT/.clone-fails" ] || exit 1; echo "# led_effect" > "${@: -1}/src/led_effect.py" ;;
     *) exec /usr/bin/git "$@" ;;
 esac
 EOF
@@ -686,6 +686,9 @@ give() { printf 'SETTINGS=1\n'; printf '%s\n' "$@"; }
     give SOFTWARE_led_effect=off | "$INSTALLER" configure
     [ ! -e "$R/home/printer/klipper/klippy/extras/led_effect.py" ]
     [ -d "$R/home/printer/klipper-led_effect" ]
+    ! grep -q "^\[update_manager led_effect\]" "$R/home/printer/printer_data/config/moonraker.conf"
+    give SOFTWARE_led_effect=on | "$INSTALLER" configure
+    [ "$(grep -c "^\[update_manager led_effect\]" "$R/home/printer/printer_data/config/moonraker.conf")" -eq 1 ]
 }
 
 @test "software: no connection to GitHub changes nothing and says why" {
@@ -850,4 +853,50 @@ tree_fixture() {
     "$INSTALLER" backup --include home/printer/printer_data/config/printer.cfg > "$R/partial.tgz"
     "$INSTALLER" restore < "$R/partial.tgz"
     [ ! -e "$c/moonraker.conf" ]
+}
+
+@test "software: a failed clone leaves no checkout or module" {
+    touch "$R/.clone-fails"
+    run bash -c "printf 'SETTINGS=1\nSOFTWARE_led_effect=on\n' | '$INSTALLER' configure"
+    [ "$status" -ne 0 ]
+    [[ $output == *"could not clone"* ]]
+    [ ! -e "$R/home/printer/klipper-led_effect" ]
+    [ ! -L "$R/home/printer/klipper/klippy/extras/led_effect.py" ]
+}
+
+@test "software: an existing git link gets its updater and is reported as installed separately" {
+    mkdir -p "$R/home/printer/klipper-led_effect/src"
+    echo mine > "$R/home/printer/klipper-led_effect/src/led_effect.py"
+    ln -s "$R/home/printer/klipper-led_effect/src/led_effect.py" "$R/home/printer/klipper/klippy/extras/led_effect.py"
+    printf '[server]\nhost: 0.0.0.0\n' > "$R/home/printer/printer_data/config/moonraker.conf"
+    run "$INSTALLER" settings
+    [[ $output == *"installed separately"* ]]
+    give SOFTWARE_led_effect=on | "$INSTALLER" configure
+    ! grep -q 'git clone' "$CALLS"
+    grep -q '^\[update_manager led_effect\]' "$R/home/printer/printer_data/config/moonraker.conf"
+    [ "$(cat "$R/home/printer/klipper-led_effect/src/led_effect.py")" = mine ]
+}
+
+@test "software: a resolving bundled link migrates to git" {
+    mkdir -p "$R/usr/share/rebuild/klipper/optional"
+    echo bundled > "$R/usr/share/rebuild/klipper/optional/led_effect.py"
+    ln -s "$R/usr/share/rebuild/klipper/optional/led_effect.py" "$R/home/printer/klipper/klippy/extras/led_effect.py"
+    give SOFTWARE_led_effect=on | "$INSTALLER" configure
+    grep -q 'git clone' "$CALLS"
+    [ "$(readlink "$R/home/printer/klipper/klippy/extras/led_effect.py")" = '../../../klipper-led_effect/src/led_effect.py' ]
+}
+
+@test "software: removing a standalone module leaves the user's file" {
+    echo mine > "$R/home/printer/klipper/klippy/extras/led_effect.py"
+    give SOFTWARE_led_effect=off | "$INSTALLER" configure
+    [ "$(cat "$R/home/printer/klipper/klippy/extras/led_effect.py")" = mine ]
+}
+
+@test "restore: warns when restored config files need led_effect without installing it" {
+    echo '[led_effect lights]' > "$R/home/printer/printer_data/config/printer.cfg"
+    "$INSTALLER" backup > "$R/archive.tgz"
+    run bash -c "'$INSTALLER' restore < '$R/archive.tgz'"
+    [ "$status" -eq 0 ]
+    [[ $output == *"WARNING: restored config files use led_effect"* ]]
+    [ ! -e "$R/home/printer/klipper-led_effect" ]
 }

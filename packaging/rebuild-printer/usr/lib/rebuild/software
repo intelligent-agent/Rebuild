@@ -55,7 +55,7 @@ exclude() {
         mkdir -p "$(dirname "$EXCLUDE")"
         grep -qxF "$line" "$EXCLUDE" 2> /dev/null || echo "$line" >> "$EXCLUDE"
     elif grep -qxF "$line" "$EXCLUDE" 2> /dev/null; then
-        rest=$(grep -vxF "$line" "$EXCLUDE")
+        rest=$(grep -vxF "$line" "$EXCLUDE" || true)
         printf '%s\n' "$rest" > "$EXCLUDE"
     fi
 }
@@ -63,13 +63,43 @@ exclude() {
 # Installed means Klipper can load it: the file is there and resolves. A link
 # left by an older image to a copy that image shipped is dangling, and is not.
 installed() { [ -e "$TARGET/$1.py" ]; }
+bundled() {
+    local link
+    link=$(readlink "$TARGET/$1.py" 2>/dev/null || true)
+    [[ $link == /usr/share/rebuild/klipper/optional/$1.py || $link == "$R/usr/share/rebuild/klipper/optional/$1.py" ]]
+}
+
+updater() {
+    local name=$1 action=$2 tmp
+    [ -f "$MOONRAKER_CONF" ] || return 0
+    if [ "$action" = add ]; then
+        if ! grep -q "^\[update_manager $name\]" "$MOONRAKER_CONF"; then
+            printf '\n[update_manager %s]\ntype: git_repo\npath: ~/klipper-%s\norigin: %s\nis_system_service: False\n' "$name" "$name" "$(origin_of "$name")" >> "$MOONRAKER_CONF"
+        fi
+    else
+        tmp=$(mktemp)
+        awk -v section="[update_manager $name]" '
+            /^[[:space:]]*\[/ { skip = ($0 == section) }
+            !skip { print }
+        ' "$MOONRAKER_CONF" > "$tmp"
+        cat "$tmp" > "$MOONRAKER_CONF"
+        rm -f "$tmp"
+    fi
+}
 
 case ${1:-} in
     list)
         [ -d "$TARGET" ] || exit 0
         echo led_effect
         ;;
-    info) info_of "${2:-}" ;;
+    info)
+        known "${2:-}"
+        info=$(info_of "$2")
+        if installed "$2" && ! bundled "$2" && [ "$(readlink "$TARGET/$2.py" 2>/dev/null || true)" != "../../../klipper-$2/$(module_of "$2")" ]; then
+            info="$info (installed separately)"
+        fi
+        echo "$info"
+        ;;
     status)
         known "${2:-}"
         if installed "$2"; then echo on; else echo off; fi
@@ -78,7 +108,11 @@ case ${1:-} in
         known "${2:-}"
         name=$2
         [ -d "$TARGET" ] || die "there is no Klipper on this system to put $name into"
-        if installed "$name"; then
+        if installed "$name" && ! bundled "$name"; then
+            # Register an existing git installation without changing its files.
+            if [ -f "$PRINTER_HOME/klipper-$name/$(module_of "$name")" ] && [ "$(readlink -f "$TARGET/$name.py")" = "$(readlink -f "$PRINTER_HOME/klipper-$name/$(module_of "$name")")" ]; then
+                updater "$name" add
+            fi
             echo "$name is already installed"
             exit 0
         fi
@@ -90,27 +124,33 @@ case ${1:-} in
             die "$name is installed from GitHub and there is no connection to it: connect the board to the internet and try again"
         fi
         if [ ! -d "$repo" ]; then
-            $AS_PRINTER git clone -q --depth 1 "$origin" "$repo" || { rm -rf "$repo"; die "could not clone $origin"; }
+            timeout 120 $AS_PRINTER git clone -q --depth 1 "$origin" "$repo" || { rm -rf "$repo"; die "could not clone $origin"; }
         fi
         [ -f "$repo/$(module_of "$name")" ] || die "$repo has no $(module_of "$name")"
         rm -f "$TARGET/$name.py"
         # Relative, so it resolves the same in the chroot and on the running system.
         $AS_PRINTER ln -s "$(realpath -m --relative-to="$TARGET" "$repo/$(module_of "$name")")" "$TARGET/$name.py"
         exclude "$name" add
-        # Moonraker's update manager, once.
-        if [ -f "$MOONRAKER_CONF" ] && ! grep -q "^\[update_manager $name\]" "$MOONRAKER_CONF"; then
-            printf '\n[update_manager %s]\ntype: git_repo\npath: ~/klipper-%s\norigin: %s\nis_system_service: False\n' "$name" "$name" "$origin" >> "$MOONRAKER_CONF"
-        fi
+        updater "$name" add
         echo "$name installed"
         ;;
     remove)
         known "${2:-}"
-        if [ -L "$TARGET/$2.py" ] || [ -e "$TARGET/$2.py" ]; then
+        if [ -L "$TARGET/$2.py" ]; then
             rm -f "$TARGET/$2.py"
             exclude "$2" remove
+            updater "$2" remove
             echo "$2 removed"
+        elif installed "$2"; then
+            echo "$2 was installed separately; left as it is"
         else
+            updater "$2" remove
             echo "$2 is not installed"
+        fi
+        ;;
+    warn-config)
+        if ! installed led_effect && grep -rqsE '^[[:space:]]*\[led_effect[[:space:]]' "$PRINTER_HOME/printer_data/config" --include='*.cfg' --exclude-dir=rebuild-reference; then
+            echo "WARNING: restored config files use led_effect, but it is not installed. Enable LED effects in Reflash with an internet connection before starting Klipper." >&2
         fi
         ;;
     *) die "usage: software list | info NAME | status NAME | install NAME | remove NAME" ;;

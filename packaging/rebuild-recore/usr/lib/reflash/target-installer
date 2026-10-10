@@ -609,6 +609,7 @@ restore() {
     if [ -x "$R/usr/bin/rebuild-reference" ]; then
         "$R/usr/bin/rebuild-reference" >&2 || echo "reference config not written" >&2
     fi
+    [ ! -x "$SOFTWARE" ] || "$SOFTWARE" warn-config >&2
 }
 
 case ${1:-} in
