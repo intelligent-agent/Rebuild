@@ -1,0 +1,109 @@
+#!/usr/bin/env python3
+"""Measure how long the STM32 and the A64 last after the input fails (Rebuild#140).
+
+    sudo power-loss-probe [--period-ms 5]
+
+Run on the board, then cut its power. Everything goes to the serial console,
+which the rig captures and which outlives the board's own storage:
+
+    PLP H <t>                   the A64 is alive at <t> (every --period-ms)
+    PLP E1 <t> <edge>           first UC-INT-1 edge (PG3): the STM32 saw the drop
+    PLP E <n> <t>               edges so far and the latest one (every 10 ms)
+
+<t> is seconds of CLOCK_MONOTONIC since the probe started. The STM32 toggles
+UC-INT-1 every millisecond once tripped, so from one cut:
+
+    STM32 lifetime = last edge time - E1 time
+    A64 lifetime   = last H time    - E1 time
+
+The console runs at 115200 baud (about 11 KB/s); lines are kept short and
+edges summarised so it never falls behind - a backlog would be lost with the
+board and shorten the A64's apparent lifetime.
+"""
+import argparse
+import os
+import socket
+import subprocess
+import threading
+import time
+
+CONSOLE = "/dev/ttyS0"
+LINE = "195"                        # A64 PG3, UC-INT-1
+
+
+def main_pio_chip():
+    """The A64's main pin controller (PA-PH), whatever gpiochip number it got:
+    gpiochip1 on these boards, the R_PIO (PL) being gpiochip0."""
+    out = subprocess.run(["gpiodetect"], capture_output=True, text=True).stdout
+    for line in out.splitlines():
+        if "1c20800.pinctrl" in line:
+            return line.split()[0]
+    raise SystemExit("no 1c20800.pinctrl gpiochip:\n" + out)
+
+
+CHIP = main_pio_chip()
+
+t0 = time.monotonic()
+lock = threading.Lock()
+edges = {"n": 0, "last": None}
+
+
+def now():
+    return time.monotonic() - t0
+
+
+udp = None    # (socket, address) with --udp
+
+
+def out(fd, text):
+    data = (text + "\n").encode()
+    with lock:
+        if udp:
+            try:
+                udp[0].sendto(data, udp[1])
+            except OSError:
+                pass
+        if fd is not None:
+            os.write(fd, data)
+
+
+def watch(fd):
+    mon = subprocess.Popen(["gpiomon", "-c", CHIP, "-e", "both", "--format", "%E", LINE],
+                           stdout=subprocess.PIPE, text=True, bufsize=1)
+    for line in mon.stdout:
+        t = now()
+        edges["n"] += 1
+        edges["last"] = t
+        if edges["n"] == 1:
+            out(fd, "PLP E1 %.4f %s" % (t, line.strip()))
+
+
+def main():
+    p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    p.add_argument("--period-ms", type=float, default=5.0)
+    # Also, or instead, to a listener on the rig, which timestamps arrivals:
+    # for when the serial capture is not recording.
+    p.add_argument("--udp", metavar="HOST:PORT")
+    p.add_argument("--no-console", action="store_true")
+    args = p.parse_args()
+    global udp
+    if args.udp:
+        host, port = args.udp.rsplit(":", 1)
+        udp = (socket.socket(socket.AF_INET, socket.SOCK_DGRAM), (host, int(port)))
+    fd = None if args.no_console else os.open(CONSOLE, os.O_WRONLY | os.O_NOCTTY)
+    out(fd, "PLP start: watching %s line %s, heartbeat every %g ms" % (CHIP, LINE, args.period_ms))
+    threading.Thread(target=watch, args=(fd,), daemon=True).start()
+    period = args.period_ms / 1000.0
+    next_t, next_e = time.monotonic(), 0.0
+    while True:
+        t = now()
+        out(fd, "PLP H %.4f" % t)
+        if edges["n"] > 1 and t >= next_e:
+            out(fd, "PLP E %d %.4f" % (edges["n"], edges["last"]))
+            next_e = t + 0.010
+        next_t += period
+        time.sleep(max(0.0, next_t - time.monotonic()))
+
+
+if __name__ == "__main__":
+    main()
