@@ -773,3 +773,37 @@ tree_fixture() {
     [[ $output == *"not in the backup"* ]]
     [ ! -e "$R/home/printer/printer_data/config/nothere.cfg" ]
 }
+
+# The bug the demo found (Reflash#198): a partial archive restored with no file
+# list replaced the whole config folder, and took moonraker.conf and
+# KlipperScreen.conf with it. --merge is "all of the archive, and nothing removed".
+@test "restore --merge: a partial archive writes its files and removes nothing" {
+    tree_fixture
+    c="$R/home/printer/printer_data/config"
+    "$INSTALLER" backup --include home/printer/printer_data/config/printer.cfg > "$R/partial.tgz"
+    echo changed > "$c/printer.cfg"
+    "$INSTALLER" restore --merge < "$R/partial.tgz"
+    [ "$(cat "$c/printer.cfg")" = p ]
+    [ -e "$c/moonraker.conf" ]
+    [ -e "$c/peripherals/sensors/chamber.cfg" ]
+    [ -e "$R/home/printer/printer_data/database/moonraker-sql.db" ]
+}
+
+@test "restore --merge: a whole archive is laid over what is there, and what only the system has stays" {
+    tree_fixture
+    c="$R/home/printer/printer_data/config"
+    "$INSTALLER" backup > "$R/a.tgz"
+    echo changed > "$c/printer.cfg"; echo extra > "$c/extra.cfg"; rm "$c/peripherals/led.cfg"
+    "$INSTALLER" restore --merge < "$R/a.tgz"
+    [ "$(cat "$c/printer.cfg")" = p ]
+    [ "$(cat "$c/peripherals/led.cfg")" = led ]
+    [ "$(cat "$c/extra.cfg")" = extra ]
+}
+
+@test "restore without --merge or --include is still a replace, for a Reflash that does not ask for more" {
+    tree_fixture
+    c="$R/home/printer/printer_data/config"
+    "$INSTALLER" backup --include home/printer/printer_data/config/printer.cfg > "$R/partial.tgz"
+    "$INSTALLER" restore < "$R/partial.tgz"
+    [ ! -e "$c/moonraker.conf" ]
+}

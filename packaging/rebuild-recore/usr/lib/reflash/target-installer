@@ -13,6 +13,8 @@
 # backup and restore take --include PATH, any number of times, to save or put
 # back only those files and folders (a path as list prints it). A restore with
 # paths merges them into what is there; one without replaces, as before.
+# restore --merge puts back everything the archive holds, merged the same way:
+# the files in it are written, and nothing else is removed.
 #
 # Any other action exits 3, "not supported", as the interface asks.
 #
@@ -473,10 +475,14 @@ manifest() {
 # BACKUP_PATHS. Anything else is refused, so a list from outside cannot name a
 # place in the system that a backup never holds.
 INCLUDES=()
+MERGE=""
 parse_includes() {
     local p ok bp
     while [ $# -gt 0 ]; do
         case $1 in
+            --merge)
+                MERGE=1
+                shift ;;
             --include)
                 [ $# -ge 2 ] || die "--include needs a path"
                 p=${2#/}; p=${p%/}
@@ -549,12 +555,20 @@ backup() {
 restore() {
     local t p n=0
     parse_includes "$@"
+    # Everything the archive holds, merged: each saved folder in turn, and a
+    # folder the archive does not have is simply not there to merge.
+    if [ -n "$MERGE" ] && [ ${#INCLUDES[@]} -eq 0 ]; then
+        INCLUDES=("${BACKUP_PATHS[@]}")
+    fi
     t=$(mktemp -d)
     trap 'rm -rf "$t"' RETURN
     tar -C "$t" -xzf - --no-same-permissions --same-owner 2>&1 | sed 's/^/tar: /' >&2 || true
     if [ ${#INCLUDES[@]} -gt 0 ]; then
         for p in "${INCLUDES[@]}"; do
-            [ -e "$t/$p" ] || { echo "not in the backup: $p" >&2; continue; }
+            if [ ! -e "$t/$p" ]; then
+                [ -n "$MERGE" ] || echo "not in the backup: $p" >&2
+                continue
+            fi
             mkdir -p "$R/$(dirname "$p")"
             if [ -d "$t/$p" ]; then
                 mkdir -p "$R/$p"
