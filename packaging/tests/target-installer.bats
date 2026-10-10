@@ -21,8 +21,8 @@ setup() {
     mkdir -p "$R/usr/lib/rebuild" "$R/usr/bin"
     cp "$PKG/rebuild-printer/usr/bin/rebuild-reference" "$R/usr/bin/"
     cp "$PKG/rebuild-recore/usr/lib/rebuild/wifi-client" "$PKG/rebuild-recore/usr/lib/rebuild/migrate-rebuild-settings" "$PKG/rebuild-printer/usr/lib/rebuild/software" "$R/usr/lib/rebuild/"
-    mkdir -p "$R/usr/share/rebuild/klipper/optional" "$R/home/printer/klipper/klippy/extras" "$R/usr/share/zoneinfo/Europe"
-    cp "$PKG/rebuild-printer/usr/share/rebuild/klipper/optional/led_effect.py" "$R/usr/share/rebuild/klipper/optional/"
+    mkdir -p "$R/home/printer/klipper/klippy/extras" "$R/usr/share/zoneinfo/Europe"
+    export REBUILD_AS_PRINTER=
     : > "$R/usr/share/zoneinfo/Europe/Oslo"; : > "$R/usr/share/zoneinfo/Europe/Berlin"; mkdir -p "$R/usr/share/zoneinfo/Etc"; : > "$R/usr/share/zoneinfo/Etc/UTC"
     : > "$R/root/.not_logged_in_yet"
 
@@ -71,6 +71,17 @@ for a in "$@"; do case $a in
     disable) echo disabled > "$REFLASH_TEST_ROOT/.ssh" ;;
     is-enabled) [ "$(cat "$REFLASH_TEST_ROOT/.ssh" 2>/dev/null)" = enabled ]; exit ;;
 esac; done
+EOF
+    # git: ls-remote answers unless the "network" is off; clone makes the
+    # repository the module comes from.
+    cat > "$SHIMS/git" <<'EOF'
+#!/bin/bash
+echo "git $*" >> "$CALLS"
+case $1 in
+    ls-remote) [ ! -e "$REFLASH_TEST_ROOT/.offline" ] ;;
+    clone) mkdir -p "${@: -1}/src" && echo "# led_effect" > "${@: -1}/src/led_effect.py" ;;
+    *) exec /usr/bin/git "$@" ;;
+esac
 EOF
     chmod +x "$SHIMS"/*
     PATH="$SHIMS:$PATH"
@@ -654,24 +665,62 @@ give() { printf 'SETTINGS=1\n'; printf '%s\n' "$@"; }
     bash -n "$PKG/rebuild-recore/usr/bin/autohotspot"
 }
 
-@test "software: listed, installed, read back and removed, as a link into Klipper" {
+@test "software: listed, cloned with git, linked, registered with Moonraker, read back and removed" {
+    printf '[server]\nhost: 0.0.0.0\n' > "$R/home/printer/printer_data/config/moonraker.conf"
     run "$INSTALLER" settings
     [[ $output == *"SOFTWARE_LIST=led_effect"* && $output == *"SOFTWARE_led_effect=off"* && $output == *"SOFTWARE_led_effect_INFO=LED effects"* ]]
     give SOFTWARE_led_effect=on | "$INSTALLER" configure
+    grep -q 'git clone -q --depth 1 https://github.com/julianschill/klipper-led_effect.git' "$CALLS"
+    [ -f "$R/home/printer/klipper-led_effect/src/led_effect.py" ]
     [ -L "$R/home/printer/klipper/klippy/extras/led_effect.py" ]
+    [ -e "$R/home/printer/klipper/klippy/extras/led_effect.py" ]
+    [ "$(grep -c '^\[update_manager led_effect\]' "$R/home/printer/printer_data/config/moonraker.conf")" -eq 1 ]
+    grep -q '^path: ~/klipper-led_effect' "$R/home/printer/printer_data/config/moonraker.conf"
     run "$INSTALLER" settings
     [[ $output == *"SOFTWARE_led_effect=on"* ]]
+    # Again: nothing is cloned or registered twice.
+    : > "$CALLS"
     give SOFTWARE_led_effect=on | "$INSTALLER" configure
+    ! grep -q 'git clone' "$CALLS"
+    [ "$(grep -c '^\[update_manager led_effect\]' "$R/home/printer/printer_data/config/moonraker.conf")" -eq 1 ]
     give SOFTWARE_led_effect=off | "$INSTALLER" configure
     [ ! -e "$R/home/printer/klipper/klippy/extras/led_effect.py" ]
+    [ -d "$R/home/printer/klipper-led_effect" ]
+}
+
+@test "software: no connection to GitHub changes nothing and says why" {
+    touch "$R/.offline"
+    run bash -c "printf 'SETTINGS=1\nSOFTWARE_led_effect=on\n' | '$INSTALLER' configure"
+    [ "$status" -ne 0 ]
+    [[ $output == *"ERROR: led_effect is installed from GitHub and there is no connection"* ]]
+    [ ! -e "$R/home/printer/klipper-led_effect" ]
+    [ ! -e "$R/home/printer/klipper/klippy/extras/led_effect.py" ]
+    ! grep -q 'git clone' "$CALLS"
+}
+
+@test "software: the other settings are all applied even when it cannot be installed" {
+    touch "$R/.offline"
+    run bash -c "printf 'SETTINGS=1\nTIMEZONE=Europe/Oslo\nSOFTWARE_led_effect=on\n' | '$INSTALLER' configure"
+    [ "$status" -ne 0 ]
+    [ "$(cat "$R/etc/timezone")" = Europe/Oslo ]
 }
 
 @test "software: a copy somebody else put there counts as installed and is left alone" {
     echo mine > "$R/home/printer/klipper/klippy/extras/led_effect.py"
     run "$INSTALLER" settings
     [[ $output == *"SOFTWARE_led_effect=on"* ]]
-    give SOFTWARE_led_effect=off | "$INSTALLER" configure
+    : > "$CALLS"
+    give SOFTWARE_led_effect=on | "$INSTALLER" configure
+    ! grep -q 'git' "$CALLS"
     [ "$(cat "$R/home/printer/klipper/klippy/extras/led_effect.py")" = mine ]
+}
+
+@test "software: a link left by an image that shipped its own copy is not installed, and is replaced" {
+    ln -s /usr/share/rebuild/klipper/optional/led_effect.py "$R/home/printer/klipper/klippy/extras/led_effect.py"
+    run "$INSTALLER" settings
+    [[ $output == *"SOFTWARE_led_effect=off"* ]]
+    give SOFTWARE_led_effect=on | "$INSTALLER" configure
+    [ -e "$R/home/printer/klipper/klippy/extras/led_effect.py" ]
 }
 
 @test "software: nothing is offered without Klipper, and an unknown name is refused" {
@@ -682,11 +731,6 @@ give() { printf 'SETTINGS=1\n'; printf '%s\n' "$@"; }
     [ "$status" -ne 0 ]
     run bash -c "printf 'SETTINGS=1\nSOFTWARE_LED_EFFECT=on\n' | '$INSTALLER' configure"
     [ "$status" -ne 0 ]
-}
-
-@test "software: the vendored module is the author's, with its licence beside it" {
-    head -8 "$PKG/rebuild-printer/usr/share/rebuild/klipper/optional/led_effect.py" | grep -q GPLv3
-    grep -q "GNU GENERAL PUBLIC LICENSE" "$PKG/rebuild-printer/usr/share/rebuild/klipper/optional/led_effect.LICENSE"
 }
 
 # ---- include lists ----

@@ -383,6 +383,10 @@ configure() {
         if [ -n "${S[HOTSPOT_PSK]}" ]; then echo "hotspot password: set"; else echo "hotspot password: the default"; fi
     fi
 
+    run_hooks configure < "$stdin"
+
+    # Last: it needs the network, and a board without one must still get all of
+    # the above. A failure is the install's error, with the reason.
     local key name
     for key in "${!S[@]}"; do
         [[ $key == SOFTWARE_* ]] || continue
@@ -394,8 +398,6 @@ configure() {
             *) die "${key} '${S[$key]}' is not on or off" ;;
         esac
     done
-
-    run_hooks configure < "$stdin"
 }
 
 # For Reflash to show before the user changes anything. Secrets are never
