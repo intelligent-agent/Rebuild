@@ -20,7 +20,11 @@ setup() {
     cp -r "$PKG/rebuild-printer/usr/share/rebuild/klipper/config" "$R/usr/share/rebuild/klipper/"
     mkdir -p "$R/usr/lib/rebuild" "$R/usr/bin"
     cp "$PKG/rebuild-printer/usr/bin/rebuild-reference" "$R/usr/bin/"
-    cp "$PKG/rebuild-recore/usr/lib/rebuild/wifi-client" "$PKG/rebuild-recore/usr/lib/rebuild/migrate-rebuild-settings" "$R/usr/lib/rebuild/"
+    cp "$PKG/rebuild-recore/usr/lib/rebuild/wifi-client" "$PKG/rebuild-recore/usr/lib/rebuild/migrate-rebuild-settings" "$PKG/rebuild-printer/usr/lib/rebuild/software" "$R/usr/lib/rebuild/"
+    mkdir -p "$R/usr/share/rebuild/klipper/optional" "$R/home/printer/klipper/klippy/extras" "$R/usr/share/zoneinfo/Europe"
+    cp "$PKG/rebuild-printer/usr/share/rebuild/klipper/optional/led_effect.py" "$R/usr/share/rebuild/klipper/optional/"
+    : > "$R/usr/share/zoneinfo/Europe/Oslo"; : > "$R/usr/share/zoneinfo/Europe/Berlin"; mkdir -p "$R/usr/share/zoneinfo/Etc"; : > "$R/usr/share/zoneinfo/Etc/UTC"
+    : > "$R/root/.not_logged_in_yet"
 
     cat > "$R/etc/fstab" <<'EOF'
 UUID=old-root / ext4 defaults,noatime,commit=120,errors=remount-ro 0 1
@@ -310,7 +314,10 @@ cfg() { printf '%s\n' SETTINGS=1 "$@" > "$R/s"; }
     "$INSTALLER" configure < "$R/s"
     run "$INSTALLER" settings
     [ "$status" -eq 0 ]
-    [ "$output" = $'SETTINGS=1\nSSH_ENABLED=true\nSCREEN_ROTATION=270\nWIFI_SSID=Bob\'s net' ]
+    [ "$(head -4 <<< "$output")" = $'SETTINGS=1\nSSH_ENABLED=true\nSCREEN_ROTATION=270\nWIFI_SSID=Bob\'s net' ]
+    # What Reflash#198 added, in the order it is printed, still with no secret.
+    [[ "$output" == *$'WIFI_COUNTRY=\nTIMEZONE=Etc/UTC\nWIFI_MODE=auto\nHOTSPOT_SSID='* ]]
+    [[ "$output" != *secret1* && "$output" != *"correct horse"* ]]
 }
 
 @test "settings secrets: the Wi-Fi passphrase follows the name, and nothing else secret" {
@@ -318,7 +325,8 @@ cfg() { printf '%s\n' SETTINGS=1 "$@" > "$R/s"; }
     "$INSTALLER" configure < "$R/s"
     run --separate-stderr "$INSTALLER" settings secrets
     [ "$status" -eq 0 ]
-    [ "$output" = $'SETTINGS=1\nSSH_ENABLED=true\nSCREEN_ROTATION=90\nWIFI_SSID=Bob\'s net\nWIFI_PSK=se=cret 1' ]
+    [ "$(head -4 <<< "$output")" = $'SETTINGS=1\nSSH_ENABLED=true\nSCREEN_ROTATION=90\nWIFI_SSID=Bob\'s net' ]
+    [[ "$output" == *$'\nWIFI_PSK=se=cret 1'* ]]
     [[ "$output" != *"correct horse"* ]]
     # Not on stderr, where Reflash logs it.
     [[ "$stderr" != *"se=cret"* ]]
@@ -534,4 +542,234 @@ REF="home/printer/printer_data/config/rebuild-reference"
     [ "$status" -eq 0 ]
     [ "$(cat "$c/printer.cfg")" = mine ]
     cmp "$R/usr/share/rebuild/klipper/config/generic-recore-a5.cfg" "$R/$REF/generic-recore-a5.cfg"
+}
+
+
+# ---- Reflash#198: root password, country, timezone, Wi-Fi mode, software ----
+
+give() { printf 'SETTINGS=1\n'; printf '%s\n' "$@"; }
+
+@test "root password: set with chpasswd, and Armbian's first login is skipped" {
+    run bash -c "printf 'SETTINGS=1\nROOT_PASSWORD=sekret-77\n' | '$INSTALLER' configure"
+    [ "$status" -eq 0 ]
+    grep -q '^chpasswd' "$CALLS"
+    [ "$(cat "$CALLS.chpasswd")" = "root:sekret-77" ]
+    grep -q '^chage .* root$' "$CALLS"
+    [ ! -e "$R/root/.not_logged_in_yet" ]
+    [[ $output != *sekret-77* ]]
+}
+
+@test "root password: too short is refused and nothing else changes" {
+    run bash -c "printf 'SETTINGS=1\nROOT_PASSWORD=abc\n' | '$INSTALLER' configure"
+    [ "$status" -ne 0 ]
+    [[ $output == *"too short"* ]]
+    [ -e "$R/root/.not_logged_in_yet" ]
+}
+
+@test "nothing set: the first-login setup is left as it is" {
+    run bash -c "printf 'SETTINGS=1\nSSH_ENABLED=true\nSCREEN_ROTATION=90\n' | '$INSTALLER' configure"
+    [ "$status" -eq 0 ]
+    [ -e "$R/root/.not_logged_in_yet" ]
+}
+
+@test "country: a kernel argument, replaced not repeated, and removed by an empty value" {
+    give WIFI_COUNTRY=NO | "$INSTALLER" configure
+    give WIFI_COUNTRY=SE | "$INSTALLER" configure
+    [ "$(grep -o 'cfg80211.ieee80211_regdom=[A-Z]*' "$R/boot/armbianEnv.txt" | wc -l)" -eq 1 ]
+    grep -q 'regdom=SE' "$R/boot/armbianEnv.txt"
+    grep -q '^extraargs=quiet selinux=0 cfg80211' "$R/boot/armbianEnv.txt"
+    [ ! -e "$R/root/.not_logged_in_yet" ]
+    give WIFI_COUNTRY= | "$INSTALLER" configure
+    ! grep -q regdom "$R/boot/armbianEnv.txt"
+    grep -q '^extraargs=quiet selinux=0$' "$R/boot/armbianEnv.txt"
+}
+
+@test "country: rotation does not remove it and it does not remove rotation" {
+    give WIFI_COUNTRY=NO SCREEN_ROTATION=90 | "$INSTALLER" configure
+    give SCREEN_ROTATION=180 | "$INSTALLER" configure
+    grep -q 'regdom=NO' "$R/boot/armbianEnv.txt"
+    grep -q 'fbcon=rotate:2' "$R/boot/armbianEnv.txt"
+}
+
+@test "country: only two capital letters" {
+    run bash -c "printf 'SETTINGS=1\nWIFI_COUNTRY=Norway\n' | '$INSTALLER' configure"
+    [ "$status" -ne 0 ]
+    [[ $output == *"two-letter"* ]]
+}
+
+@test "timezone: set, read back, and put back to UTC by an empty value" {
+    give TIMEZONE=Europe/Oslo | "$INSTALLER" configure
+    [ "$(cat "$R/etc/timezone")" = Europe/Oslo ]
+    [ "$(readlink "$R/etc/localtime")" = /usr/share/zoneinfo/Europe/Oslo ]
+    run "$INSTALLER" settings
+    [[ $output == *"TIMEZONE=Europe/Oslo"* ]]
+    give TIMEZONE= | "$INSTALLER" configure
+    [ "$(cat "$R/etc/timezone")" = Etc/UTC ]
+}
+
+@test "timezone: a name the image does not know, or a path trick, is refused" {
+    run bash -c "printf 'SETTINGS=1\nTIMEZONE=Mars/Olympus\n' | '$INSTALLER' configure"
+    [ "$status" -ne 0 ]
+    run bash -c "printf 'SETTINGS=1\nTIMEZONE=../../etc/passwd\n' | '$INSTALLER' configure"
+    [ "$status" -ne 0 ]
+    [ ! -e "$R/etc/localtime" ]
+}
+
+@test "Wi-Fi mode and hotspot: kept for autohotspot, the password only for Reflash's start" {
+    give WIFI_MODE=client HOTSPOT_SSID=Verkstedet HOTSPOT_PSK=hemmelig-1 | "$INSTALLER" configure
+    [ "$(stat -c %a "$R/etc/default/autohotspot")" = 600 ]
+    grep -q '^WIFI_MODE=client' "$R/etc/default/autohotspot"
+    run "$INSTALLER" settings
+    [[ $output == *"WIFI_MODE=client"* && $output == *"HOTSPOT_SSID=Verkstedet"* ]]
+    [[ $output != *hemmelig-1* ]]
+    run "$INSTALLER" settings secrets
+    [[ $output == *"HOTSPOT_PSK=hemmelig-1"* ]]
+}
+
+@test "Wi-Fi mode: auto and empty values take it all back to the defaults" {
+    give WIFI_MODE=ap HOTSPOT_SSID=Verkstedet HOTSPOT_PSK=hemmelig-1 | "$INSTALLER" configure
+    give WIFI_MODE=auto HOTSPOT_SSID= HOTSPOT_PSK= | "$INSTALLER" configure
+    [ ! -e "$R/etc/default/autohotspot" ]
+    run "$INSTALLER" settings secrets
+    [[ $output == *"WIFI_MODE=auto"* && $output != *HOTSPOT_PSK* ]]
+}
+
+@test "Wi-Fi mode: the log never holds the hotspot's password" {
+    run bash -c "printf 'SETTINGS=1\nHOTSPOT_PSK=hemmelig-1\n' | '$INSTALLER' configure"
+    [ "$status" -eq 0 ]
+    [[ $output != *hemmelig-1* ]]
+}
+
+@test "Wi-Fi mode: a hotspot password that WPA would refuse is refused" {
+    run bash -c "printf 'SETTINGS=1\nHOTSPOT_PSK=short\n' | '$INSTALLER' configure"
+    [ "$status" -ne 0 ]
+    run bash -c "printf 'SETTINGS=1\nWIFI_MODE=both\n' | '$INSTALLER' configure"
+    [ "$status" -ne 0 ]
+}
+
+@test "autohotspot: reads the mode and the hotspot's name and password" {
+    grep -q 'etc/default/autohotspot' "$PKG/rebuild-recore/usr/bin/autohotspot"
+    grep -q 'HOTSPOT_SSID' "$PKG/rebuild-recore/usr/bin/autohotspot"
+    grep -q '"\$WIFI_MODE" = ap' "$PKG/rebuild-recore/usr/bin/autohotspot"
+    bash -n "$PKG/rebuild-recore/usr/bin/autohotspot"
+}
+
+@test "software: listed, installed, read back and removed, as a link into Klipper" {
+    run "$INSTALLER" settings
+    [[ $output == *"SOFTWARE_LIST=led_effect"* && $output == *"SOFTWARE_led_effect=off"* && $output == *"SOFTWARE_led_effect_INFO=LED effects"* ]]
+    give SOFTWARE_led_effect=on | "$INSTALLER" configure
+    [ -L "$R/home/printer/klipper/klippy/extras/led_effect.py" ]
+    run "$INSTALLER" settings
+    [[ $output == *"SOFTWARE_led_effect=on"* ]]
+    give SOFTWARE_led_effect=on | "$INSTALLER" configure
+    give SOFTWARE_led_effect=off | "$INSTALLER" configure
+    [ ! -e "$R/home/printer/klipper/klippy/extras/led_effect.py" ]
+}
+
+@test "software: a copy somebody else put there counts as installed and is left alone" {
+    echo mine > "$R/home/printer/klipper/klippy/extras/led_effect.py"
+    run "$INSTALLER" settings
+    [[ $output == *"SOFTWARE_led_effect=on"* ]]
+    give SOFTWARE_led_effect=off | "$INSTALLER" configure
+    [ "$(cat "$R/home/printer/klipper/klippy/extras/led_effect.py")" = mine ]
+}
+
+@test "software: nothing is offered without Klipper, and an unknown name is refused" {
+    rm -rf "$R/home/printer/klipper"
+    run "$INSTALLER" settings
+    [[ $output != *SOFTWARE* ]]
+    run bash -c "printf 'SETTINGS=1\nSOFTWARE_rm_rf=on\n' | '$INSTALLER' configure"
+    [ "$status" -ne 0 ]
+    run bash -c "printf 'SETTINGS=1\nSOFTWARE_LED_EFFECT=on\n' | '$INSTALLER' configure"
+    [ "$status" -ne 0 ]
+}
+
+@test "software: the vendored module is the author's, with its licence beside it" {
+    head -8 "$PKG/rebuild-printer/usr/share/rebuild/klipper/optional/led_effect.py" | grep -q GPLv3
+    grep -q "GNU GENERAL PUBLIC LICENSE" "$PKG/rebuild-printer/usr/share/rebuild/klipper/optional/led_effect.LICENSE"
+}
+
+# ---- include lists ----
+
+tree_fixture() {
+    local c="$R/home/printer/printer_data/config"
+    mkdir -p "$c/firmware" "$c/peripherals/sensors" "$c/rebuild-reference" "$R/home/printer/printer_data/database"
+    echo p > "$c/printer.cfg"; echo m > "$c/moonraker.conf"; echo f > "$c/firmware/stm32.config"
+    echo r > "$c/firmware/stm32.reference"; echo b > "$c/.moonraker.conf.bkp"; echo x > "$c/rebuild-reference/generic.cfg"
+    echo led > "$c/peripherals/led.cfg"; echo ch > "$c/peripherals/sensors/chamber.cfg"
+    echo db > "$R/home/printer/printer_data/database/moonraker-sql.db"
+}
+
+@test "list: every saved file, a folder the user made included, nothing generated" {
+    tree_fixture
+    run "$INSTALLER" list
+    [ "$status" -eq 0 ]
+    [[ $output == *"home/printer/printer_data/config/peripherals/sensors/chamber.cfg"* ]]
+    [[ $output == *"config/firmware/stm32.config"* && $output == *"database/moonraker-sql.db"* ]]
+    [[ $output != *reference* && $output != *.bkp* ]]
+}
+
+@test "backup --include: only those files, the manifest first" {
+    tree_fixture
+    "$INSTALLER" backup --include home/printer/printer_data/config/printer.cfg --include home/printer/printer_data/config/peripherals > "$R/a.tgz"
+    run tar -tzf "$R/a.tgz"
+    [ "${lines[0]}" = rebuild-backup.manifest ]
+    [[ $output == *"config/printer.cfg"* && $output == *"peripherals/sensors/chamber.cfg"* ]]
+    [[ $output != *moonraker.conf* && $output != *database* ]]
+}
+
+@test "backup --include: a path outside what a backup holds is refused" {
+    run "$INSTALLER" backup --include etc/shadow
+    [ "$status" -ne 0 ]
+    run "$INSTALLER" backup --include home/printer/printer_data/config/../../../../etc/shadow
+    [ "$status" -ne 0 ]
+    run "$INSTALLER" backup --bogus
+    [ "$status" -ne 0 ]
+}
+
+@test "list-archive: what a restore would take, and not the manifest or anything else" {
+    tree_fixture
+    "$INSTALLER" backup > "$R/a.tgz"
+    run "$INSTALLER" list-archive < "$R/a.tgz"
+    [ "$status" -eq 0 ]
+    [[ $output == *"config/printer.cfg"* && $output == *"database/moonraker-sql.db"* ]]
+    [[ $output != *manifest* ]]
+}
+
+@test "restore --include: puts back only those files and leaves the rest of the config" {
+    tree_fixture
+    "$INSTALLER" backup > "$R/a.tgz"
+    c="$R/home/printer/printer_data/config"
+    echo changed > "$c/printer.cfg"; echo mine > "$c/moonraker.conf"; echo extra > "$c/extra.cfg"
+    "$INSTALLER" restore --include home/printer/printer_data/config/printer.cfg < "$R/a.tgz"
+    [ "$(cat "$c/printer.cfg")" = p ]
+    [ "$(cat "$c/moonraker.conf")" = mine ]
+    [ "$(cat "$c/extra.cfg")" = extra ]
+}
+
+@test "restore --include: a folder comes back laid over what is there" {
+    tree_fixture
+    "$INSTALLER" backup > "$R/a.tgz"
+    c="$R/home/printer/printer_data/config"
+    rm "$c/peripherals/led.cfg"; echo keep > "$c/peripherals/other.cfg"
+    "$INSTALLER" restore --include home/printer/printer_data/config/peripherals < "$R/a.tgz"
+    [ "$(cat "$c/peripherals/led.cfg")" = led ]
+    [ "$(cat "$c/peripherals/sensors/chamber.cfg")" = ch ]
+    [ "$(cat "$c/peripherals/other.cfg")" = keep ]
+}
+
+@test "restore without --include still replaces the whole config folder" {
+    tree_fixture
+    "$INSTALLER" backup > "$R/a.tgz"
+    echo extra > "$R/home/printer/printer_data/config/extra.cfg"
+    "$INSTALLER" restore < "$R/a.tgz"
+    [ ! -e "$R/home/printer/printer_data/config/extra.cfg" ]
+}
+
+@test "restore --include: a path the backup does not hold is said, not made up" {
+    tree_fixture
+    "$INSTALLER" backup > "$R/a.tgz"
+    run bash -c "'$INSTALLER' restore --include home/printer/printer_data/config/nothere.cfg < '$R/a.tgz' 2>&1"
+    [[ $output == *"not in the backup"* ]]
+    [ ! -e "$R/home/printer/printer_data/config/nothere.cfg" ]
 }

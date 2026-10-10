@@ -29,6 +29,14 @@ fi
 
 hotspot_SSID="Recore"
 hotspot_PW="12345678"
+# How to behave and what to call the hotspot, when the user chose differently
+# (Reflash#198). WIFI_MODE is auto when absent: join the network, and start the
+# hotspot when it is not found. client: only join, never start the hotspot.
+# ap: always the hotspot. HOTSPOT_SSID and HOTSPOT_PSK replace the two above.
+WIFI_MODE=auto
+[ -f /etc/default/autohotspot ] && . /etc/default/autohotspot
+hotspot_SSID=${HOTSPOT_SSID:-$hotspot_SSID}
+hotspot_PW=${HOTSPOT_PSK:-$hotspot_PW}
 # How long to wait for the configured network at boot before falling back to the
 # hotspot. Only boot-time availability matters here - if the connection later
 # drops, we deliberately do not fall back.
@@ -100,10 +108,30 @@ fi
 
 unbind_profiles
 
+# The name and password, on every boot: a profile made at an earlier boot has
+# the old ones, and changing a setting must change them.
+nmcli con modify Hotspot 802-11-wireless.ssid "$hotspot_SSID" wifi-sec.psk "$hotspot_PW" || true
+
+# Only client-only mode lets NetworkManager retry the network by itself; in
+# the others the choice is made here, once (#65).
+[ "$WIFI_MODE" = client ] || ! [ -f /etc/NetworkManager/system-connections/Client.nmconnection ] ||
+  nmcli con modify Client connection.autoconnect no || true
+
+# Client only with nothing to join would leave the board unreachable; it is
+# treated as the usual behaviour, hotspot included.
+if [ "$WIFI_MODE" = client ] && { [ -z "$WIFI_SSID" ] || [ ! -f "$CLIENT" ]; }; then
+  echo "Client only, but no network is set: using the hotspot"
+  WIFI_MODE=auto
+fi
+
 # Decide which connection to bring up this boot. Both connections have
 # autoconnect disabled, so NetworkManager never arbitrates between them
 # itself - the choice is made explicitly, once, here.
-if [ -n "$WIFI_SSID" ] && [ -f "$CLIENT" ]; then
+if [ "$WIFI_MODE" = ap ]; then
+  echo "Access point only, starting the hotspot"
+  nmcli con down Client 2>/dev/null
+  nmcli con up Hotspot
+elif [ -n "$WIFI_SSID" ] && [ -f "$CLIENT" ]; then
   echo "Trying to connect to $WIFI_SSID for up to ${CLIENT_TIMEOUT}s..."
   # Retry against a wall-clock deadline instead of handing the whole budget to
   # one nmcli call. `nmcli -w` only bounds how long *nmcli* waits; NetworkManager
@@ -141,6 +169,10 @@ if [ -n "$WIFI_SSID" ] && [ -f "$CLIENT" ]; then
 
   if [ "$connected" = yes ]; then
     echo "Connected to $WIFI_SSID"
+  elif [ "$WIFI_MODE" = client ]; then
+    # Never the hotspot. NetworkManager keeps trying the network by itself.
+    echo "Could not connect to $WIFI_SSID within ${CLIENT_TIMEOUT}s; client only, so no hotspot. Still trying."
+    nmcli con modify Client connection.autoconnect yes || true
   else
     echo "Could not connect to $WIFI_SSID within ${CLIENT_TIMEOUT}s, falling back to hotspot"
     nmcli con down Client 2>/dev/null
