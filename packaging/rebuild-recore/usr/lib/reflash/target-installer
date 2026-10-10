@@ -120,6 +120,9 @@ read_settings() {
     # (Reflash's "Default"): no country, UTC, the usual Wi-Fi behaviour.
     [[ ${S[WIFI_COUNTRY]:-} =~ ^([A-Z]{2})?$ ]] || die "country '${S[WIFI_COUNTRY]}' is not a two-letter code like NO"
     case ${S[WIFI_MODE]:-auto} in auto | client | ap) ;; *) die "Wi-Fi mode '${S[WIFI_MODE]}' is not auto, client or ap" ;; esac
+    if [ -n "${S[HOSTNAME]:-}" ]; then
+        [[ ${S[HOSTNAME]} =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?$ ]] && [ "${#S[HOSTNAME]}" -le 63 ] || die "hostname must be 1 to 63 letters, digits or hyphens, starting and ending with a letter or digit (without .local)"
+    fi
     if [ -n "${S[TIMEZONE]:-}" ]; then
         [[ ${S[TIMEZONE]} =~ ^[A-Za-z0-9_+-]+(/[A-Za-z0-9_+-]+)*$ ]] || die "timezone '${S[TIMEZONE]}' is not a name like Europe/Oslo"
     fi
@@ -130,6 +133,23 @@ read_settings() {
         [ "${#S[HOTSPOT_PSK]}" -ge 8 ] && [ "${#S[HOTSPOT_PSK]}" -le 63 ] || die "the hotspot's password must be 8 to 63 characters"
     fi
     return 0
+}
+
+# Set the target's persistent identity, not the kernel hostname shared with
+# Reflash by this chroot. It takes effect when the installed system boots.
+set_hostname() {
+    local name=${1:-recore} tmp
+    name=${name,,}
+    printf '%s\n' "$name" > "$R/etc/hostname"
+    tmp=$(mktemp)
+    if [ -f "$R/etc/hosts" ]; then
+        # Debian's own host entry. Keep localhost, IPv6 and unrelated entries.
+        awk '$1 != "127.0.1.1"' "$R/etc/hosts" > "$tmp"
+    fi
+    printf '127.0.1.1\t%s\n' "$name" >> "$tmp"
+    cat "$tmp" > "$R/etc/hosts"
+    rm -f "$tmp"
+    echo "hostname: $name"
 }
 
 # The account a person logs in with: debian on the printer images, root on
@@ -365,6 +385,10 @@ configure() {
         skip_first_login
     fi
 
+    if [ -n "${S[HOSTNAME]+set}" ]; then
+        set_hostname "${S[HOSTNAME]}"
+    fi
+
     if [ -n "${S[TIMEZONE]+set}" ]; then
         set_timezone "${S[TIMEZONE]}"
         skip_first_login
@@ -415,6 +439,7 @@ settings() {
         "$(ssh_enabled)" "$(current_rotation)" "$ssid"
     printf 'WIFI_COUNTRY=%s\nTIMEZONE=%s\nWIFI_MODE=%s\nHOTSPOT_SSID=%s\n' \
         "$(current_country)" "$(current_timezone)" "$(hotspot_get WIFI_MODE | grep . || echo auto)" "$(hotspot_get HOTSPOT_SSID)"
+    printf 'HOSTNAME=%s\n' "$(cat "$R/etc/hostname" 2>/dev/null || echo recore)"
     if [ "${1:-}" = secrets ]; then
         [ -z "$ssid" ] || printf 'WIFI_PSK=%s\n' "$("$WIFI_CLIENT" psk)"
         [ -z "$(hotspot_get HOTSPOT_PSK)" ] || printf 'HOTSPOT_PSK=%s\n' "$(hotspot_get HOTSPOT_PSK)"
