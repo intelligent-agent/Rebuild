@@ -121,8 +121,9 @@ worse: output discharge behavior, starting voltage, load, detector threshold and
 measurement method differ. No Voron changes were made for these new tests.
 
 Machine-readable summaries, run identities and raw-trace SHA256 values are in
-`power-loss-prototype/bad-a8-results-20261011.json`. Raw UDP capture files are on
-the rig under `/tmp/power-loss-140/`; recovered records remain in Bad-A8's
+`power-loss-prototype/bad-a8-results-20261011.json`. Compressed raw traces are retained under
+`power-loss-prototype/results/bad-a8-20261011/`, with live copies on the rig
+under `/tmp/power-loss-140/`; recovered records remain in Bad-A8's
 `/var/lib/rebuild/power-loss-demo/`. The targeted controller
 `power-loss-prototype/bad-a8-scenario` runs on the rig alongside Recore-CI and
 requires `RECORE_PASS`; it deliberately verifies board 0498 and changes only

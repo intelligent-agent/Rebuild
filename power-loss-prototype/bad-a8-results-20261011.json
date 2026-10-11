@@ -24,7 +24,8 @@
       "last_a64_heartbeat_ms": 5.377,
       "last_stm32_edge_ms": 3.991,
       "persisted_valid": false,
-      "note": "Controlled dip was read back without reboot; first cut reports invalid header in the recovery stderr. Both preceded separate validation event logging."
+      "note": "Controlled dip was read back without reboot; first cut reports invalid header in the recovery stderr. Both preceded separate validation event logging.",
+      "trace_repo_path": "power-loss-prototype/results/bad-a8-20261011/bad-a8-cut-20261011-161907.jsonl.gz"
     },
     {
       "run": "bad-a8-cut-sync-20261011-162333",
@@ -35,7 +36,8 @@
       },
       "last_a64_heartbeat_ms": 4.929,
       "last_stm32_edge_ms": 3.96,
-      "persisted_valid": false
+      "persisted_valid": false,
+      "trace_repo_path": "power-loss-prototype/results/bad-a8-20261011/bad-a8-cut-sync-20261011-162333.jsonl.gz"
     },
     {
       "run": "bad-a8-dip-sync-20261011-161551",
@@ -51,7 +53,8 @@
       "last_stm32_edge_ms": 2295.509,
       "persisted_valid": null,
       "note": "Controlled dip was read back without reboot; first cut reports invalid header in the recovery stderr. Both preceded separate validation event logging.",
-      "detector_note": "Initial single-sample prototype; subsequent cuts use explicit arming and three-sample confirmation."
+      "detector_note": "Initial single-sample prototype; subsequent cuts use explicit arming and three-sample confirmation.",
+      "trace_repo_path": "power-loss-prototype/results/bad-a8-20261011/bad-a8-dip-sync-20261011-161551.jsonl.gz"
     },
     {
       "run": "bad-a8-warning-cut-sync-20261011-162554",
@@ -85,7 +88,8 @@
         "file_size": 0,
         "is_active": false,
         "progress": 0.0
-      }
+      },
+      "trace_repo_path": "power-loss-prototype/results/bad-a8-20261011/bad-a8-warning-cut-sync-20261011-162554.jsonl.gz"
     },
     {
       "run": "bad-a8-warning-cut-sync-20261011-162809",
@@ -119,7 +123,8 @@
         "file_size": 4800,
         "is_active": true,
         "progress": 0.041666666666666664
-      }
+      },
+      "trace_repo_path": "power-loss-prototype/results/bad-a8-20261011/bad-a8-warning-cut-sync-20261011-162809.jsonl.gz"
     }
   ]
 }
