@@ -1,5 +1,5 @@
 #!/bin/bash
-# Keep the packaged updater available after Moonraker checkout updates and
+# Keep packaged extensions available after Moonraker checkout updates and
 # config-archive restores. Runs as the printer user before Moonraker starts.
 set -euo pipefail
 MOONRAKER=${MOONRAKER:-/home/printer/moonraker}
@@ -8,20 +8,25 @@ SOURCE=${MOONRAKER_EXTRAS_SRC:-/usr/share/rebuild/moonraker/components}
 TARGET=$MOONRAKER/moonraker/components
 CONFIG=$DATA/config/moonraker.conf
 [ -d "$TARGET" ] && [ -f "$CONFIG" ] || exit 0
-src=$SOURCE/klipper_firmware.py
-dst=$TARGET/klipper_firmware.py
-# Leave a user's own module alone.
-if [ -L "$dst" ] || [ ! -e "$dst" ]; then
-    ln -sfn "$src" "$dst"
-    exclude=$MOONRAKER/.git/info/exclude
-    if [ -d "$MOONRAKER/.git" ]; then
-        mkdir -p "$(dirname "$exclude")"
-        line=/moonraker/components/klipper_firmware.py
-        grep -qxF "$line" "$exclude" 2>/dev/null || echo "$line" >>"$exclude"
+for module in klipper_firmware recore_sensors; do
+    src=$SOURCE/$module.py
+    dst=$TARGET/$module.py
+    # Leave a user's own module alone.
+    if [ -L "$dst" ] || [ ! -e "$dst" ]; then
+        ln -sfn "$src" "$dst"
+        exclude=$MOONRAKER/.git/info/exclude
+        if [ -d "$MOONRAKER/.git" ]; then
+            mkdir -p "$(dirname "$exclude")"
+            line=/moonraker/components/$module.py
+            grep -qxF "$line" "$exclude" 2>/dev/null || echo "$line" >>"$exclude"
+        fi
     fi
-fi
+done
 if ! grep -qE '^\[klipper_firmware\][[:space:]]*$' "$CONFIG"; then
     printf '\n# Manual firmware update, separate from Update all.\n[klipper_firmware]\n' >>"$CONFIG"
+fi
+if ! grep -qE '^\[recore_sensors\][[:space:]]*$' "$CONFIG"; then
+    printf '\n# Recore input voltage in Fluidd/Mainsail, in volts.\n[recore_sensors]\ntype: Recore\nname: Input voltage\nparameter_voltage: units=V\n' >>"$CONFIG"
 fi
 # Older archives may expose the service. The updater uses its fixed sudo
 # command directly; removing this entry hides the start/stop controls.

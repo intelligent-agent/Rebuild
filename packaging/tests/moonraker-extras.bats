@@ -7,6 +7,7 @@ setup() {
     git -C "$MOONRAKER" init -q
     git -C "$MOONRAKER" -c user.email=t@t -c user.name=t commit -q --allow-empty -m init
     : >"$MOONRAKER_EXTRAS_SRC/klipper_firmware.py"
+    : >"$MOONRAKER_EXTRAS_SRC/recore_sensors.py"
     printf '[server]\n' >"$PRINTER_DATA/config/moonraker.conf"
     printf 'ssh\nrebuild-firmware\nKlipperScreen\n' >"$PRINTER_DATA/moonraker.asvc"
 }
@@ -35,4 +36,23 @@ setup() {
     "$SCRIPT"
     [ ! -L "$MOONRAKER/moonraker/components/klipper_firmware.py" ]
     grep -qx '# user module' "$MOONRAKER/moonraker/components/klipper_firmware.py"
+}
+
+@test "voltage bridge is restored once without replacing user configuration" {
+    "$SCRIPT"
+    "$SCRIPT"
+    [ -L "$MOONRAKER/moonraker/components/recore_sensors.py" ]
+    [ "$(grep -cx '\[recore_sensors\]' "$PRINTER_DATA/config/moonraker.conf")" -eq 1 ]
+    [ "$(grep -cx '/moonraker/components/recore_sensors.py' "$MOONRAKER/.git/info/exclude")" -eq 1 ]
+    sed -i 's/name: Input voltage/name: My supply/' "$PRINTER_DATA/config/moonraker.conf"
+    rm "$MOONRAKER/moonraker/components/recore_sensors.py"
+    "$SCRIPT"
+    grep -qx 'name: My supply' "$PRINTER_DATA/config/moonraker.conf"
+    [ -L "$MOONRAKER/moonraker/components/recore_sensors.py" ]
+}
+@test "a user voltage module is preserved" {
+    echo '# custom voltage module' >"$MOONRAKER/moonraker/components/recore_sensors.py"
+    "$SCRIPT"
+    [ ! -L "$MOONRAKER/moonraker/components/recore_sensors.py" ]
+    grep -qx '# custom voltage module' "$MOONRAKER/moonraker/components/recore_sensors.py"
 }

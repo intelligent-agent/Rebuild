@@ -1,0 +1,35 @@
+{
+  "before_disconnect": {
+    "id": "recore_sensors",
+    "friendly_name": "Input voltage",
+    "type": "Recore",
+    "values": {
+      "voltage": 20.6
+    },
+    "parameter_info": [
+      {
+        "units": "V",
+        "name": "voltage"
+      }
+    ],
+    "history_fields": []
+  },
+  "new_hidden_source": {
+    "id": "recore_sensors",
+    "friendly_name": "Input voltage",
+    "type": "Recore",
+    "values": {
+      "voltage": 20.59
+    },
+    "parameter_info": [
+      {
+        "units": "V",
+        "name": "voltage"
+      }
+    ],
+    "history_fields": []
+  },
+  "disconnect_cleared": true,
+  "history_cleared": true,
+  "ready_idle": true
+}
