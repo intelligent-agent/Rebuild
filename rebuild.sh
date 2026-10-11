@@ -121,7 +121,14 @@ cd "$BUILD_DIR"
 # DOCKER_EXTRA_ARGS arrives from the environment as one scalar array member,
 # so it must contain exactly one Docker argument here.
 DOCKER_EXTRA_ARGS="--cpus=${cores}" ./compile.sh rebuild
-IMG=$(ls -1 output/images/ | grep "img.xz$")
-
-mv "$BUILD_DIR"/output/images/"$IMG" "${IMG_DIR}/${NAME}.img.xz"
+# This build tree is reused. An image left by an earlier failed staging step
+# must not be selected together with (or instead of) the new image.
+shopt -s nullglob
+images=(output/images/*"$(cat userpatches/VERSION)"_Recore_*.img.xz)
+shopt -u nullglob
+if [ "${#images[@]}" -ne 1 ]; then
+    echo "Expected one image for $(cat userpatches/VERSION), found ${#images[@]}" >&2
+    exit 1
+fi
+mv -- "${images[0]}" "${IMG_DIR}/${NAME}.img.xz"
 echo "🍰 Finished building ${NAME}"
