@@ -55,6 +55,22 @@ jobs:
         docker run --rm -v "$PWD:/w" -w /w debian:trixie sh -c \
           'apt-get update -qq && apt-get install -y -qq --no-install-recommends bats git >/dev/null && bats packaging/tests'
 
+    - name: Test Moonraker database migration
+      run: |
+        docker run --rm -v "$PWD:/w" -w /w debian:trixie sh -ec '
+          apt-get update -qq
+          apt-get install -y -qq --no-install-recommends git ca-certificates python3-venv libsodium23 >/dev/null
+          python3 -m venv /tmp/database-test-env
+          /tmp/database-test-env/bin/pip -q install tornado==6.5.2 libnacl==2.1.0
+          git clone -q https://github.com/Arksine/moonraker /tmp/moonraker
+          export MOONRAKER_TEST_SOURCE=/tmp/moonraker
+          export MOONRAKER_TEST_PYTHON=/tmp/database-test-env/bin/python
+          . userpatches/overlay/install_components/software_versions.sh
+          for revision in "$MOONRAKER_VERSION" 9e676eba6b02661a4dfa3ec6e7ac3f3504498e6d; do
+            git -C /tmp/moonraker checkout -q "$revision"
+            python3 -B -m unittest discover -s packaging/tests -p test_moonraker_database.py -v
+          done'
+
     - name: Build packages
       run: packaging/build-debs "$RUNNER_TEMP/debs"
 
