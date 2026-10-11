@@ -900,3 +900,31 @@ tree_fixture() {
     [[ $output == *"WARNING: restored config files use led_effect"* ]]
     [ ! -e "$R/home/printer/klipper-led_effect" ]
 }
+
+@test "hostname applies only to the target, is reported, and can return to Default" {
+    printf 'recore\n' > "$R/etc/hostname"
+    printf '127.0.0.1 localhost\n127.0.1.1 recore\n::1 localhost ip6-localhost\n192.0.2.1 another-host\n' > "$R/etc/hosts"
+    give HOSTNAME=A5-Printer | "$INSTALLER" configure
+    [ "$(cat "$R/etc/hostname")" = a5-printer ]
+    grep -q $'^127.0.1.1\ta5-printer$' "$R/etc/hosts"
+    grep -q '^192.0.2.1 another-host$' "$R/etc/hosts"
+    grep -q '^::1 localhost ip6-localhost$' "$R/etc/hosts"
+    run "$INSTALLER" settings
+    [ "$status" -eq 0 ]; [[ $output == *HOSTNAME=a5-printer* ]]
+    give SCREEN_ROTATION=0 | "$INSTALLER" configure
+    [ "$(cat "$R/etc/hostname")" = a5-printer ]
+    give HOSTNAME= | "$INSTALLER" configure
+    [ "$(cat "$R/etc/hostname")" = recore ]
+    [ "$(grep -c '^127.0.1.1' "$R/etc/hosts")" -eq 1 ]
+    ! grep -q 'hostnamectl' "$CALLS"
+}
+
+@test "invalid hostnames fail before changing any settings" {
+    echo recore > "$R/etc/hostname"
+    for name in 'bad.local' '-bad' 'bad-' 'two words' "$(printf '%064d' 0)"; do
+        run bash -c 'printf "SETTINGS=1\nHOSTNAME=%s\nSCREEN_ROTATION=90\n" "$1" | "$2" configure' _ "$name" "$INSTALLER"
+        [ "$status" -ne 0 ]
+        [[ "$output" == *'hostname must be'* ]]
+        [ "$(cat "$R/etc/hostname")" = recore ]
+    done
+}
