@@ -1,0 +1,104 @@
+#!/usr/bin/env python3
+import argparse,contextlib,fcntl,importlib.machinery,json,os,shlex,subprocess,time,urllib.parse
+from pathlib import Path
+ROOT=Path('/home/nvidia/workspace/Recore-CI')
+parser=argparse.ArgumentParser();parser.add_argument('--print-cut',action='store_true');args=parser.parse_args()
+run='stm32-recovery-'+time.strftime('%Y%m%d-%H%M%S')
+folder=Path('/tmp/recovery-prototype-results');folder.mkdir(exist_ok=True)
+log=(folder/(run+'.jsonl')).open('w',buffering=1)
+def event(kind,**data):
+    entry=dict(event=kind,time=time.time(),**data);line=json.dumps(entry)
+    log.write(line+'\n');print(line,flush=True)
+ssh=['sshpass','-e','ssh','-F','/dev/null','-o','StrictHostKeyChecking=yes','-o','UserKnownHostsFile=/tmp/bad-a8-power-test-rebuild-hosts','-o','ConnectTimeout=3','debian@192.168.32.108']
+env=dict(os.environ,SSHPASS='rebuildtest')
+def remote(command,timeout=12):
+    r=subprocess.run(ssh+[command],env=env,capture_output=True,text=True,timeout=timeout)
+    if r.returncode:raise RuntimeError((r.stderr+r.stdout)[-1500:])
+    return r.stdout
+
+def query():
+    return json.loads(remote('curl -fsS '+shlex.quote('http://127.0.0.1:7125/printer/objects/query?webhooks&print_stats&stepper_enable&heater_bed&extruder&extruder1&extruder2&power_monitor&_power_loss_high_power')))['result']['status']
+def gcode(script):
+    body=json.dumps(dict(script=script))
+    result=json.loads(remote('curl -fsS -H '+shlex.quote('Content-Type: application/json')+' -d '+shlex.quote(body)+' http://127.0.0.1:7125/printer/gcode/script',25))
+    if 'error' in result:raise RuntimeError(str(result))
+def ready():
+    deadline=time.monotonic()+100
+    last=None
+    while time.monotonic()<deadline:
+        try:
+            last=query()
+            if last['webhooks']['state']=='ready':return last
+        except Exception as e:last=str(e)
+        time.sleep(2)
+    raise RuntimeError('not ready: '+str(last))
+def read_record():
+    gcode('RECOVERY_DEMO_QUERY');return query()['power_monitor']['recovery']
+def validate(record,runid):
+    assert record['pending'] and record['run']==runid,record
+    seq=record['sequence'];assert record['xyze_um']==[seq%200*100,-(seq%1000)*17,10000+seq%100,seq%1000*5],record
+    age=((record['trip_clock']-record['sample_clock'])&0xffffffff)/48000
+    assert age<20,(age,record)
+    return age
+identity=remote('sudo get-serial-number').strip();assert identity=='0498'
+s=ready();assert not s['power_monitor']['recovery']['pending'],'Pending record must be handed off first'
+assert s['print_stats']['state'] not in ('printing','paused') and not any(s['stepper_enable']['steppers'].values())
+assert all(s[name]['target']==0 for name in ('heater_bed','extruder','extruder1','extruder2'))
+event('PREFLIGHT',serial=identity,state=s)
+lock=(ROOT/'.n6700-power.lock').open('a');fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+module=importlib.machinery.SourceFileLoader('psu',str(ROOT/'scripts/n6700-power')).load_module()
+cfg=json.loads((ROOT/'n6700.json').read_text())
+with contextlib.closing(module.Supply(cfg)) as supply:
+    supply.check_settings(cfg['boards']['Bad-A8']);before=supply.outputs();assert before[1]
+    try:
+        for index,mode in enumerate(('print-cut',) if args.print_cut else ('dip','cut','warning-cut'),1):
+            runid=int(time.time())%0x70000000+index
+            filename=''
+            if mode=='print-cut':
+                filename='recovery-demo-%08x.gcode'%runid
+                code="from pathlib import Path; Path('/home/printer/printer_data/gcodes/"+filename+"').write_text('G4 P100\\n'*600)"
+                remote('sudo -u printer python3 -c '+shlex.quote(code))
+                gcode('SDCARD_PRINT_FILE FILENAME='+filename)
+                assert query()['print_stats']['state']=='printing'
+                event('WAIT_ONLY_PRINT',filename=filename)
+            gcode('RECOVERY_DEMO_START RUN=%d INTERVAL_MS=1'%runid+(' FILENAME='+filename if filename else ''))
+            time.sleep(2)
+            pre=read_record();event('STREAM',mode=mode,run=runid,record=pre)
+            assert pre['applied']>1000 and pre['dropped']==0,pre
+            event('CUT_BEGIN',mode=mode)
+            if mode in ('dip','warning-cut'):
+                supply.write('VOLT 18.5,(@2)')
+                time.sleep(.03 if mode=='warning-cut' else .15)
+            if mode!='dip':
+                supply.set_output(2,False);time.sleep(8)
+            supply.write('VOLT 20.4,(@2)')
+            if mode!='dip':supply.set_output(2,True)
+            else:gcode('FIRMWARE_RESTART')
+            ready();record=read_record();age=validate(record,runid)
+            event('RECOVERED',mode=mode,record=record,sample_age_ms=age)
+            # A host/MCU restart must retain a pending record, not silently erase it.
+            gcode('FIRMWARE_RESTART');ready();again=read_record();assert again['run']==runid and again['crc']==record['crc']
+            event('SECOND_BOOT_PENDING',mode=mode,record=again)
+            # Consuming before durable handoff must fail and retain the record.
+            try:
+                gcode('RECOVERY_DEMO_CONSUME')
+            except RuntimeError:
+                assert read_record()['pending']
+                event('EARLY_CONSUME_REFUSED',mode=mode)
+            else:
+                raise AssertionError('Consume succeeded before handoff')
+            gcode('RECOVERY_DEMO_HANDOFF')
+            assert read_record()['pending']
+            handoff=json.loads(remote('cat /home/printer/printer_data/recovery-demo/%08x-handoff.json'%runid))
+            event('HANDOFF',mode=mode,data=handoff)
+            gcode('RECOVERY_DEMO_CONSUME');assert not read_record()['pending']
+            gcode('FIRMWARE_RESTART');ready();assert not read_record()['pending']
+            event('CONSUMED_AFTER_RESTART',mode=mode)
+            if filename:
+                remote('sudo -u printer rm -- '+shlex.quote('/home/printer/printer_data/gcodes/'+filename))
+    finally:
+        supply.write('VOLT 20.4,(@2)')
+        if not supply.outputs()[1]:supply.set_output(2,True)
+        assert all(a==b for i,(a,b) in enumerate(zip(before,supply.outputs())) if i!=1)
+        event('PSU_RESTORED',error=supply.query('SYST:ERR?'))
+event('RESULT',status='pass',file=str(folder/(run+'.jsonl')))

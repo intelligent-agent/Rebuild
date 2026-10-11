@@ -16,6 +16,29 @@
 #include "board/misc.h" // timer_read_time
 #include "command.h" // DECL_COMMAND
 #include "sched.h" // DECL_TASK
+#include "recovery_store.h"
+
+#define RECOVERY_QUEUE 32
+struct recovery_sample {
+    uint32_t clock, sequence;
+    int32_t position[4];
+};
+static struct recovery_sample recovery_queue[RECOVERY_QUEUE], recovery_latest;
+static uint8_t recovery_head, recovery_count, recovery_have_sample;
+static uint32_t recovery_run, recovery_applied, recovery_dropped;
+static struct recovery_record recovery_snapshot;
+static uint8_t recovery_saved;
+static void
+recovery_apply(uint32_t now)
+{
+    while (recovery_count && !timer_is_before(now, recovery_queue[recovery_head].clock)) {
+        recovery_latest = recovery_queue[recovery_head];
+        recovery_have_sample = 1;
+        recovery_applied++;
+        recovery_head = (recovery_head+1) % RECOVERY_QUEUE;
+        recovery_count--;
+    }
+}
 
 struct power_monitor {
     struct timer timer;
@@ -41,6 +64,7 @@ power_monitor_event(struct timer *timer)
     }
     // The ADC is shared with analog_in: gpio_adc_sample() starts this pin's
     // conversion when the converter is free and says how long to wait.
+    recovery_apply(timer_read_time());
     uint32_t sample_delay = gpio_adc_sample(p->adc);
     if (sample_delay) {
         p->timer.waketime = timer_read_time() + sample_delay;
@@ -59,6 +83,14 @@ power_monitor_event(struct timer *timer)
         gpio_out_write(p->out, 1);
         p->trip_clock = timer_read_time();
         p->trip_value = value;
+        if (recovery_have_sample) {
+            recovery_snapshot.run = recovery_run;
+            recovery_snapshot.sequence = recovery_latest.sequence;
+            recovery_snapshot.sample_clock = recovery_latest.clock;
+            recovery_snapshot.trip_clock = p->trip_clock;
+            memcpy(recovery_snapshot.position, recovery_latest.position,
+                   sizeof(recovery_snapshot.position));
+        }
         sched_wake_task(&power_monitor_wake);
         p->timer.waketime = p->trip_clock + p->heartbeat_ticks;
         return SF_RESCHEDULE;
@@ -95,6 +127,12 @@ command_power_monitor_arm(uint32_t *args)
 {
     struct power_monitor *p = oid_lookup(
         args[0], command_config_power_monitor);
+    if (recovery_valid())
+        shutdown("Pending recovery must be handed off before arming");
+    const volatile uint16_t *page = (void *)RECOVERY_FLASH_ADDRESS;
+    for (uint16_t i=0; i<512; i++)
+        if (page[i] != 0xffff)
+            shutdown("Recovery page requires MCU reboot before arming");
     p->armed = 1;
 }
 DECL_COMMAND(command_power_monitor_arm, "power_monitor_arm oid=%c");
@@ -126,6 +164,11 @@ power_monitor_task(void)
         if (!p->tripped || p->reported)
             continue;
         p->reported = 1;
+        if (recovery_have_sample) {
+            irq_disable();
+            recovery_saved = recovery_write(&recovery_snapshot);
+            irq_enable();
+        }
         sendf("power_monitor_tripped oid=%c clock=%u value=%hu"
               , oid, p->trip_clock, p->trip_value);
     }
@@ -148,3 +191,68 @@ power_monitor_shutdown(void)
     }
 }
 DECL_SHUTDOWN(power_monitor_shutdown);
+
+// Batches carry four or fewer int16 XYZE samples. Clock/sequence are implicit
+// from first_clock, period and first_sequence; this fits the 250kbaud UART.
+void
+command_recovery_batch(uint32_t *args)
+{
+    uint32_t clock = args[0], period = args[1], sequence = args[2];
+    uint8_t length = args[3];
+    const uint8_t *data = command_decode_ptr(args[4]);
+    if (!period || length % 8 || length > 32)
+        shutdown("Invalid recovery batch");
+    irq_disable();
+    if (recovery_count + length/8 > RECOVERY_QUEUE) {
+        recovery_dropped++;
+        irq_enable();
+        return;
+    }
+    for (uint8_t offset=0; offset<length; offset+=8) {
+        struct recovery_sample *sample = &recovery_queue[
+            (recovery_head + recovery_count) % RECOVERY_QUEUE];
+        sample->clock = clock;
+        sample->sequence = sequence++;
+        int16_t position[4];
+        memcpy(position, data+offset, 8);
+        for (uint8_t axis=0; axis<4; axis++)
+            sample->position[axis] = position[axis];
+        recovery_count++;
+        clock += period;
+    }
+    irq_enable();
+}
+DECL_COMMAND(command_recovery_batch,
+             "recovery_batch clock=%u period=%u sequence=%u data=%*s");
+void
+command_recovery_run(uint32_t *args)
+{
+    recovery_run = args[0];
+    recovery_head = recovery_count = recovery_have_sample = 0;
+    recovery_applied = recovery_dropped = 0;
+}
+DECL_COMMAND(command_recovery_run, "recovery_run run=%u");
+void
+command_recovery_query(uint32_t *args)
+{
+    sendf("recovery_record pending=%c saved=%c applied=%u dropped=%u data=%*s",
+          recovery_valid(), recovery_saved, recovery_applied, recovery_dropped,
+          sizeof(*stored), (void *)stored);
+}
+DECL_COMMAND_FLAGS(command_recovery_query, HF_IN_SHUTDOWN, "recovery_query");
+void
+command_recovery_consume(uint32_t *args)
+{
+    if (!recovery_valid() || stored->run != args[0])
+        shutdown("Recovery consume identity mismatch");
+    irq_disable();
+    flash_unlock();
+    uint8_t ok = flash_halfword(RECOVERY_FLASH_ADDRESS
+                     + offsetof(struct recovery_record, consumed), 0);
+    FLASH->CR = FLASH_CR_LOCK;
+    irq_enable();
+    if (!ok)
+        shutdown("Recovery consume write failed");
+}
+DECL_COMMAND_FLAGS(command_recovery_consume, HF_IN_SHUTDOWN,
+                   "recovery_consume run=%u");

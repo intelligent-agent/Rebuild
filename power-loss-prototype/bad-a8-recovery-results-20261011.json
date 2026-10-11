@@ -1,0 +1,135 @@
+{
+  "board": "Bad-A8",
+  "serial": "0498",
+  "date": "2026-10-11",
+  "image": "rebuild-fluidd-v1.1.0-93-gdc43e37",
+  "klipper": "v0.13.0-786-g461c4e37",
+  "tested_firmware_sha256": "24b4aada16400c3ee5ee62eaac3a3ef81e7e2171bdb6b32d575eda4e1643ad34",
+  "sample_interval_ms": 1,
+  "record_bytes": 44,
+  "records": [
+    {
+      "log": "stm32-recovery-20261011-182050.jsonl.gz",
+      "mode": "dip",
+      "run": 1791735739,
+      "record": {
+        "pending": 1,
+        "saved": 0,
+        "applied": 0,
+        "dropped": 0,
+        "run": 1791735739,
+        "sequence": 3699,
+        "sample_clock": 551802309,
+        "trip_clock": 551805387,
+        "xyze_um": [
+          9900,
+          -11883,
+          10099,
+          3495
+        ],
+        "crc": 2913154873
+      },
+      "sample_age_ms": 0.064125,
+      "suite_pass": true
+    },
+    {
+      "log": "stm32-recovery-20261011-182050.jsonl.gz",
+      "mode": "cut",
+      "run": 1791735776,
+      "record": {
+        "pending": 1,
+        "saved": 0,
+        "applied": 0,
+        "dropped": 0,
+        "run": 1791735776,
+        "sequence": 4047,
+        "sample_clock": 600673346,
+        "trip_clock": 600721164,
+        "xyze_um": [
+          4700,
+          -799,
+          10047,
+          235
+        ],
+        "crc": 3451990864
+      },
+      "sample_age_ms": 0.9962083333333334,
+      "suite_pass": true
+    },
+    {
+      "log": "stm32-recovery-20261011-182050.jsonl.gz",
+      "mode": "warning-cut",
+      "run": 1791735854,
+      "record": {
+        "pending": 1,
+        "saved": 0,
+        "applied": 0,
+        "dropped": 0,
+        "run": 1791735854,
+        "sequence": 3545,
+        "sample_clock": 580245205,
+        "trip_clock": 580287282,
+        "xyze_um": [
+          14500,
+          -9265,
+          10045,
+          2725
+        ],
+        "crc": 2360512197
+      },
+      "sample_age_ms": 0.8766041666666666,
+      "suite_pass": true
+    },
+    {
+      "log": "stm32-recovery-20261011-182622.jsonl.gz",
+      "mode": "print-cut",
+      "run": 1791735989,
+      "record": {
+        "pending": 1,
+        "saved": 0,
+        "applied": 0,
+        "dropped": 0,
+        "run": 1791735989,
+        "sequence": 3716,
+        "sample_clock": 645262075,
+        "trip_clock": 645286009,
+        "xyze_um": [
+          11600,
+          -12172,
+          10016,
+          3580
+        ],
+        "crc": 3881254728
+      },
+      "sample_age_ms": 0.498625,
+      "suite_pass": false
+    },
+    {
+      "log": "stm32-recovery-20261011-183013.jsonl.gz",
+      "mode": "print-cut",
+      "run": 1791736219,
+      "record": {
+        "pending": 1,
+        "saved": 0,
+        "applied": 0,
+        "dropped": 0,
+        "run": 1791736219,
+        "sequence": 3747,
+        "sample_clock": 588621741,
+        "trip_clock": 588650358,
+        "xyze_um": [
+          14700,
+          -12699,
+          10047,
+          3735
+        ],
+        "crc": 956781551
+      },
+      "sample_age_ms": 0.5961875,
+      "suite_pass": true
+    }
+  ],
+  "scope": "Synthetic samples; no motion accuracy or automatic resume claimed",
+  "negative_case": "First print-cut fixture was not fsynced and recovered empty; hash check refused handoff. Evidence retained; only the known synthetic fixture was recreated to retire its record. Startup now fsyncs file and directory.",
+  "restoration": "Original configuration and firmware restored after experiments"
+}

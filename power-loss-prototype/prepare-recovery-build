@@ -1,0 +1,31 @@
+#!/usr/bin/env python3
+"""Patch an ISOLATED Klipper checkout for the STM32F031/32KB demo."""
+import argparse
+from pathlib import Path
+import shutil
+import subprocess
+parser=argparse.ArgumentParser(description=__doc__)
+parser.add_argument('checkout',type=Path)
+args=parser.parse_args()
+root=args.checkout.resolve();sources=Path(__file__).resolve().parent/'src'
+config=(root/'.config').read_text()
+if 'CONFIG_MACH_STM32F031=y' not in config or 'CONFIG_FLASH_SIZE=0x8000' not in config:
+    raise SystemExit('Requires the STM32F031 32KB configuration; do not use a 16KB chip')
+for name in ('power_monitor.c','recovery_store.h'):
+    shutil.copy2(sources/name,root/'src'/name)
+p=root/'src/Makefile';s=p.read_text()
+if 'power_monitor.c' not in s:s+='\nsrc-y += power_monitor.c\n'
+p.write_text(s)
+p=root/'src/generic/armcm_link.lds.S';s=p.read_text()
+s=s.replace('LENGTH = CONFIG_FLASH_SIZE','LENGTH = (CONFIG_FLASH_SIZE - 0x400)')
+assert 'LENGTH = (CONFIG_FLASH_SIZE - 0x400)' in s
+p.write_text(s)
+# The test board has no accelerometers; exclude unused drivers for flash space.
+for name in ('LIS2DW','BMI160','MPU9250','ICM20948'):
+    config=config.replace('CONFIG_WANT_'+name+'=y','CONFIG_WANT_'+name+'=n')
+(root/'.config').write_text(config)
+subprocess.run(['make','olddefconfig'],cwd=root,check=True)
+subprocess.run(['make','-j4'],cwd=root,check=True)
+size=(root/'out/klipper.bin').stat().st_size
+if size>0x7c00:raise SystemExit('Firmware overlaps recovery page')
+print('Firmware:',size,'bytes; last 1KB excluded from linker ROM')
