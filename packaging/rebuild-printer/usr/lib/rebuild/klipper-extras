@@ -22,7 +22,7 @@ CONFIG=${PRINTER_DATA:-/home/printer/printer_data}/config
 # changes. So each one is listed in the checkout's own ignore file, which is
 # not part of the repository and survives updates; Moonraker's
 # `git status --porcelain` then leaves it out. (Klipper still calls itself
-# -dirty: its own check counts ignored files too - see rebuild_firmware.py.)
+# -dirty: its own check counts ignored files too - the firmware updater normalizes this suffix.)
 # Rewritten in place, never replaced, so the file keeps its owner.
 EXCLUDE=${KLIPPER:-/home/printer/klipper}/.git/info/exclude
 exclude() {    # NAME add|remove
