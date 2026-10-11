@@ -495,6 +495,7 @@ manifest() {
     printf 'reflash_version=%s\n' "${REFLASH_VERSION:-}"
     printf 'klipper_version=%s\n' "$(version_of home/printer/klipper)"
     printf 'moonraker_version=%s\n' "$(version_of home/printer/moonraker)"
+    printf 'database_restore_policy=preferences-webcams-accounts-v1\n'
     printf 'paths=%s\n' "$*"
 }
 
@@ -580,7 +581,7 @@ backup() {
 # the config stays as it is. Without, each saved folder is replaced whole, as
 # it always was.
 restore() {
-    local t p n=0
+    local t p n=0 database=home/printer/printer_data/database migrate_database
     parse_includes "$@"
     # Everything the archive holds, merged: each saved folder in turn, and a
     # folder the archive does not have is simply not there to merge.
@@ -590,8 +591,26 @@ restore() {
     t=$(mktemp -d)
     trap 'rm -rf "$t"' RETURN
     tar -C "$t" -xzf - --no-same-permissions --same-owner 2>&1 | sed 's/^/tar: /' >&2 || true
+    migrate_database="$R/usr/lib/rebuild/migrate-moonraker-database"
+    # A database is one coherent unit, even when a file was selected in the
+    # archive tree. Rebuild's helper validates/migrates it before any config
+    # is replaced. It never starts a service in the Reflash host.
+    if [ -x "$migrate_database" ] && [ -d "$t/$database" ]; then
+        local selected="" selection
+        [ ${#INCLUDES[@]} -gt 0 ] || selected=1
+        for selection in "${INCLUDES[@]}"; do
+            [[ $selection == "$database" || $selection == "$database"/* ]] && selected=1
+        done
+        if [ -n "$selected" ]; then
+            "$migrate_database" --root "${R:-/}" --source "$t/$database" --target "$R/$database" >&2 || return 1
+            n=$((n + 1))
+        fi
+    fi
     if [ ${#INCLUDES[@]} -gt 0 ]; then
         for p in "${INCLUDES[@]}"; do
+            if [ -x "$migrate_database" ] && [[ $p == "$database" || $p == "$database"/* ]]; then
+                continue
+            fi
             if [ ! -e "$t/$p" ]; then
                 [ -n "$MERGE" ] || echo "not in the backup: $p" >&2
                 continue
@@ -608,6 +627,7 @@ restore() {
         done
     else
         for p in "${BACKUP_PATHS[@]}"; do
+            [ ! -x "$migrate_database" ] || [ "$p" != "$database" ] || continue
             [ -e "$t/$p" ] || continue
             mkdir -p "$R/$(dirname "$p")"
             # Not ${R:?}: R is empty under Reflash - the real root - and that

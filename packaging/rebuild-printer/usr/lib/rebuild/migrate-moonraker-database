@@ -1,0 +1,270 @@
+#!/usr/bin/python3
+"""Offline, best-effort Moonraker database restore for the target chroot.
+
+No services, ports or Klipper connections are started. Migration code is
+imported from the installed Moonraker, using its own virtual environment.
+"""
+import argparse
+import asyncio
+import contextlib
+import fcntl
+import os
+from pathlib import Path
+import shutil
+import sqlite3
+import subprocess
+import sys
+import tempfile
+import time
+from types import SimpleNamespace
+
+DB_NAME = 'moonraker-sql.db'
+KEEP = ('fluidd', 'mainsail', 'webcams')
+BAD_DATABASE = 20
+
+
+class DatabaseError(Exception):
+    pass
+
+
+class OfflineServer:
+    """Only the logging/event-loop surface used by Moonraker's SQL provider."""
+    def __init__(self, loop):
+        self.loop = loop
+
+    def get_event_loop(self):
+        return SimpleNamespace(asyncio_loop=self.loop)
+
+    def get_server(self):
+        return self
+
+    def add_log_rollover_item(self, *args, **kwargs):
+        pass
+
+    def add_warning(self, message, *args, **kwargs):
+        raise DatabaseError(message)
+
+    def is_verbose_enabled(self):
+        return False
+
+    error = DatabaseError
+
+    def lookup_component(self, name):
+        if name != 'database':
+            raise RuntimeError('offline database migration requested another component')
+        return self
+
+    def unregister_local_namespace(self, namespace):
+        # The provider already removed the records. The running server's
+        # endpoint access bookkeeping is unnecessary in this offline process.
+        pass
+
+
+def worker(source, destination):
+    # Imports happen before handling data errors: missing dependencies and
+    # incompatible runner APIs must fail the restore, never erase user data.
+    from moonraker.components.database import SqliteProvider
+    from moonraker.components.authorization import UserSqlDefinition
+    from moonraker.components.history import HistorySqlDefinition, TotalsSqlDefinition
+    from moonraker.common import UserInfo
+
+    loop = asyncio.new_event_loop()
+    config = OfflineServer(loop)
+    providers = []
+
+    def open_provider(path):
+        provider = SqliteProvider(config, path)
+        providers.append(provider)
+        return provider
+
+    def register(provider, definition):
+        # Upstream does not provide downgrade migration. Reject a newer
+        # account schema instead of accepting incompatible account records.
+        if definition.name in provider.tables:
+            _, version = provider._lookup_registered_table(definition.name)
+            if version > definition.version:
+                raise DatabaseError('account database schema is newer than this Moonraker')
+        provider.register_table(definition)
+
+    try:
+        result = open_provider(destination)
+        for definition in (UserSqlDefinition(), HistorySqlDefinition(), TotalsSqlDefinition()):
+            register(result, definition)
+        if source is not None:
+            with contextlib.closing(sqlite3.connect(source)) as source_check:
+                if not source_check.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='namespace_store'").fetchone():
+                    raise DatabaseError('not a Moonraker SQLite database')
+            original = open_provider(source)
+            if original.sync_conn.execute('PRAGMA integrity_check').fetchone()[0] != 'ok':
+                raise DatabaseError('SQLite integrity check failed')
+            register(original, UserSqlDefinition())
+            for namespace in KEEP:
+                values = original.get_namespace(original.sync_conn, namespace, must_exist=False)
+                for key, value in values.items():
+                    if not result._insert_record(result.sync_conn, namespace, key, value):
+                        raise DatabaseError('failed to transfer preference or webcam record')
+            # Use the target's account definition and serializer, not a copy
+            # of a particular historical schema. This includes API/JWT keys.
+            rows = original.sync_conn.execute('SELECT * FROM authorized_users').fetchall()
+            columns = [row[1] for row in result.sync_conn.execute('PRAGMA table_info(authorized_users)')]
+            with result.sync_conn:
+                for row in rows:
+                    account = UserInfo(**dict(row))
+                    values = account.as_dict()
+                    result.sync_conn.execute(
+                        'INSERT OR REPLACE INTO authorized_users (' + ','.join(columns) + ') VALUES ('
+                        + ','.join('?' for _ in columns) + ')',
+                        [values[column] for column in columns])
+        result.sync_conn.commit()
+        # Reopen through the installed provider and decode the retained data.
+        for provider in providers:
+            provider.sync_conn.close()
+        providers.clear()
+        check = open_provider(destination)
+        for definition in (UserSqlDefinition(), HistorySqlDefinition(), TotalsSqlDefinition()):
+            register(check, definition)
+        for namespace in KEEP:
+            check.get_namespace(check.sync_conn, namespace, must_exist=False)
+        for row in check.sync_conn.execute('SELECT * FROM authorized_users'):
+            UserInfo(**dict(row))
+        if check.sync_conn.execute('PRAGMA integrity_check').fetchone()[0] != 'ok':
+            raise DatabaseError('resulting database failed integrity check')
+    except (DatabaseError, sqlite3.DatabaseError, TypeError, ValueError, KeyError) as error:
+        # Do not log record values, which can contain passwords or tokens.
+        print('Database migration failed (' + type(error).__name__ + ')', file=sys.stderr)
+        return BAD_DATABASE
+    finally:
+        for provider in providers:
+            provider.sync_conn.close()
+        loop.close()
+    return 0
+
+
+def snapshot(source, destination, timeout=60):
+    """Include committed WAL transactions in a self-contained database."""
+    deadline = time.monotonic() + timeout
+
+    def progress(*args):
+        if time.monotonic() > deadline:
+            raise TimeoutError('database snapshot timed out')
+
+    with contextlib.closing(sqlite3.connect(source.as_uri() + '?mode=ro', uri=True)) as src:
+        with contextlib.closing(sqlite3.connect(destination)) as dst:
+            src.backup(dst, pages=128, progress=progress)
+
+
+def restore(source, target, root, timeout=60):
+    printer = root / 'home/printer'
+    python = printer / 'moonraker-env/bin/python'
+    checkout = printer / 'moonraker'
+    if not python.exists() or not checkout.is_dir():
+        raise RuntimeError('installed Moonraker environment is missing')
+    # Refuse a direct invocation against a running target. In Reflash's
+    # chroot the mounted image is offline; never call host systemctl here.
+    if root == Path('/'):
+        for process in Path('/proc').glob('[0-9]*/cmdline'):
+            with contextlib.suppress(OSError):
+                command = process.read_bytes()
+                if b'/home/printer/moonraker/' in command and os.path.samefile(process.parent / 'root', '/'):
+                    raise RuntimeError('stop target Moonraker before restoring its database')
+    target.parent.mkdir(parents=True, exist_ok=True)
+    recovery = target.parent / 'database-restore-recovery'
+    recovery.mkdir(mode=0o700, exist_ok=True)
+    os.chmod(recovery, 0o700)
+    with (recovery / 'restore.lock').open('w') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        saved = Path(tempfile.mkdtemp(prefix='restore-', dir=recovery))
+        shutil.copytree(source, saved / 'archive')
+        if target.exists():
+            shutil.copytree(target, saved / 'previous')
+        with tempfile.TemporaryDirectory(prefix='.database-restore-', dir=target.parent) as temporary:
+            stage = Path(temporary)
+            fresh = stage / 'fresh'
+            fresh.mkdir()
+            env = dict(os.environ, PYTHONPATH=str(checkout), PYTHONDONTWRITEBYTECODE='1')
+
+            def run(source_db, destination):
+                command = [str(python), '-B', str(Path(__file__).resolve()), '--worker', str(destination)]
+                if source_db:
+                    command.extend(['--source', str(source_db)])
+                return subprocess.run(command, env=env, timeout=timeout, check=False).returncode
+
+            # Verify target initialization first. Failure here is an image or
+            # runner problem, not permission to discard the restored settings.
+            if run(None, fresh / DB_NAME) != 0:
+                raise RuntimeError('target Moonraker cannot initialize a fresh database')
+            # Even read-only SQLite connections may create/update SHM files
+            # beside a WAL database. Keep the recovery directory untouched.
+            working_input = stage / 'input'
+            shutil.copytree(saved / 'archive', working_input)
+            incoming = working_input / DB_NAME
+            candidate = stage / 'candidate'
+            candidate.mkdir()
+            migrated = False
+            if incoming.is_file():
+                try:
+                    snapshot(incoming, stage / DB_NAME, timeout)
+                    status = run(stage / DB_NAME, candidate / DB_NAME)
+                    if status not in (0, BAD_DATABASE):
+                        raise RuntimeError('Moonraker migration runner failed; database left unchanged')
+                    migrated = status == 0
+                except (sqlite3.DatabaseError, subprocess.TimeoutExpired, TimeoutError):
+                    migrated = False
+            # Legacy-only or unrecognized databases deliberately reset rather
+            # than attempting a network-dependent LMDB conversion in chroot.
+            if not migrated:
+                # A failed or killed migration may leave journal/WAL files.
+                # Never copy the fresh main file beside those sidecars.
+                shutil.rmtree(candidate)
+                candidate.mkdir()
+                shutil.copy2(fresh / DB_NAME, candidate / DB_NAME)
+                print('WARNING: Moonraker database could not be migrated; preferences, webcams and accounts reset.', file=sys.stderr)
+            else:
+                print('Moonraker database: preferences, webcams and accounts kept; history, totals and caches discarded.', file=sys.stderr)
+            if target.exists():
+                shutil.copystat(target, candidate)
+                if os.geteuid() == 0:
+                    owner = target.stat()
+                    os.chown(candidate, owner.st_uid, owner.st_gid)
+            else:
+                owner = target.parent.stat()
+                os.chmod(candidate, 0o700)
+                if os.geteuid() == 0:
+                    os.chown(candidate, owner.st_uid, owner.st_gid)
+            os.chmod(candidate / DB_NAME, 0o600)
+            if os.geteuid() == 0:
+                owner = candidate.stat()
+                os.chown(candidate / DB_NAME, owner.st_uid, owner.st_gid)
+            displaced = stage / 'displaced'
+            if target.exists():
+                target.rename(displaced)
+            try:
+                candidate.rename(target)
+            except BaseException:
+                if displaced.exists():
+                    displaced.rename(target)
+                raise
+            print('Moonraker database recovery copy: ' + str(saved), file=sys.stderr)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--worker', type=Path)
+    parser.add_argument('--source', type=Path)
+    parser.add_argument('--target', type=Path)
+    parser.add_argument('--root', type=Path, default=Path('/'))
+    args = parser.parse_args()
+    if args.worker:
+        return worker(args.source, args.worker)
+    if not args.source or not args.target:
+        parser.error('--source and --target are required')
+    try:
+        restore(args.source.resolve(), args.target.resolve(), args.root.resolve())
+    except (RuntimeError, OSError, subprocess.TimeoutExpired) as error:
+        print('ERROR: Moonraker database restore: ' + str(error), file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

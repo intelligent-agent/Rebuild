@@ -90,6 +90,47 @@ EOF
 
 teardown() { rm -rf "$R"; }
 
+database_helper_fixture() {
+    cat > "$R/usr/lib/rebuild/migrate-moonraker-database" <<'EOF'
+#!/bin/bash
+echo "database-helper $*" >> "$CALLS"
+[ ! -e "$REFLASH_TEST_ROOT/.database-fails" ] || exit 1
+echo "WARNING: Moonraker database settings reset" >&2
+EOF
+    chmod +x "$R/usr/lib/rebuild/migrate-moonraker-database"
+}
+
+@test "restore: selected database uses migration once and never raw-copies its files" {
+    tree_fixture
+    "$INSTALLER" backup > "$R/archive.tgz"
+    echo current > "$R/home/printer/printer_data/database/moonraker-sql.db"
+    database_helper_fixture
+    run bash -c "'$INSTALLER' restore --include home/printer/printer_data/database/moonraker-sql.db < '$R/archive.tgz'"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"database settings reset"* ]]
+    [ "$(grep -c '^database-helper ' "$CALLS")" -eq 1 ]
+    [ "$(cat "$R/home/printer/printer_data/database/moonraker-sql.db")" = current ]
+}
+
+@test "restore: database initialization failure leaves config unchanged" {
+    tree_fixture
+    "$INSTALLER" backup > "$R/archive.tgz"
+    echo current > "$R/home/printer/printer_data/config/printer.cfg"
+    database_helper_fixture
+    touch "$R/.database-fails"
+    run bash -c "'$INSTALLER' restore < '$R/archive.tgz'"
+    [ "$status" -ne 0 ]
+    [ "$(cat "$R/home/printer/printer_data/config/printer.cfg")" = current ]
+}
+
+@test "restore: config-only selection does not touch database" {
+    tree_fixture
+    "$INSTALLER" backup > "$R/archive.tgz"
+    database_helper_fixture
+    "$INSTALLER" restore --include home/printer/printer_data/config/printer.cfg < "$R/archive.tgz"
+    ! grep -q '^database-helper ' "$CALLS"
+}
+
 settings() {
     printf 'SETTINGS=1\nSSH_ENABLED=true\nSCREEN_ROTATION=%s\nWIFI_SSID=%s\nWIFI_PSK=%s\nFUTURE_KEY=x\n' "$@"
 }
