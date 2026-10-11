@@ -46,6 +46,7 @@ if [ "${#DEVICES[@]}" -eq 0 ]; then
     exit 0
 fi
 
+failed=0
 for dev in "${DEVICES[@]}"; do
     name=$(basename "$dev")
     if [ -z "${FORCE:-}" ] && grep -qxF "$name $SHA" "$MARKER" 2>/dev/null; then
@@ -62,6 +63,7 @@ for dev in "${DEVICES[@]}"; do
     ( cd "$KLIPPER/scripts" && python3 -c \
         "import flash_usb as u; u.enter_bootloader('$dev')" ) || {
         log "  could not reset $dev into the bootloader"
+        failed=1
         continue
     }
 
@@ -72,6 +74,7 @@ for dev in "${DEVICES[@]}"; do
     done
     if ! lsusb | grep -q "$BOOTLOADER_ID"; then
         log "  never appeared as $BOOTLOADER_ID"
+        failed=1
         continue
     fi
 
@@ -81,6 +84,7 @@ for dev in "${DEVICES[@]}"; do
         mv "$MARKER.new" "$MARKER"
     else
         log "  rp2040_flash failed (running as $(id -un); this needs root)"
+        failed=1
     fi
 
     # Back as a Klipper device, so the next iteration is not confused by it.
@@ -89,3 +93,4 @@ for dev in "${DEVICES[@]}"; do
         sleep 0.5
     done
 done
+exit "$failed"

@@ -34,6 +34,8 @@ install_moonraker(){
     chown ${USER}:${USER} moonraker ${HOMEDIR}/printer_data/moonraker.asvc
 
     
+    su -c "/usr/lib/rebuild/moonraker-extras" ${USER}
+
     # Start moonraker only after armbian-firstrun
     sed -i 's/After=.*/After=network-online.target armbian-firstrun.service/' /etc/systemd/system/moonraker.service
 }

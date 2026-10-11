@@ -23,7 +23,7 @@
 # fails or does not fit leaves the installed firmware as it was. Flashing is
 # refused while the printer prints.
 #
-# Started from Fluidd and Mainsail as the rebuild-firmware service; the log is
+# Started by the Klipper firmware updater through rebuild-firmware.service; the log is
 # printer_data/logs/rebuild-firmware.log.
 set -euo pipefail
 
@@ -82,8 +82,40 @@ klipper_version() {
 }
 
 printing() {
-    curl -s -m 5 "http://localhost:7125/printer/objects/query?print_stats" 2>/dev/null |
-        python3 -c 'import json,sys; s=json.load(sys.stdin)["result"]["status"]["print_stats"]["state"]; sys.exit(0 if s in ("printing","paused") else 1)' 2>/dev/null
+    # Fail closed if the printer's idle state cannot be read.
+    curl -fsS -m 5 "http://localhost:7125/printer/objects/query?print_stats&virtual_sdcard&idle_timeout" 2>/dev/null |
+        python3 -c 'import json,sys
+try:
+    s=json.load(sys.stdin)["result"]["status"]
+    busy=s["print_stats"]["state"] in ("printing","paused") or s["virtual_sdcard"]["is_active"] or s["idle_timeout"]["state"] == "Printing"
+    sys.exit(0 if busy else 1)
+except Exception:
+    sys.exit(0)' 2>/dev/null
+}
+
+# A cached binary may be current even when a previous flash failed. In that
+# case retry flashing it instead of treating the running MCU as current.
+needs_flash() {
+    python3 - "$1" "$(klipper_version)" <<'PYFLASH'
+import json,re,sys,urllib.request,urllib.parse
+variant,target=sys.argv[1:]
+def rev(s):
+    return re.sub(r'-\d{8}_\d{6}-[^-]+$', '', s).removesuffix('-dirty')
+def api(path):
+    with urllib.request.urlopen('http://127.0.0.1:7125'+path,timeout=5) as f:
+        return json.load(f)['result']
+try:
+    names=[n for n in api('/printer/objects/list')['objects'] if n=='mcu' or n.startswith('mcu ')]
+    status=api('/printer/objects/query?'+'&'.join(urllib.parse.quote(n) for n in names))['status']
+    for mcu in status.values():
+        chip=mcu.get('mcu_constants',{}).get('MCU','')
+        matches=(chip=='ar100' and variant=='ar100') or (chip.startswith('stm32f031') and variant.startswith('stm32f031')) or (chip=='rp2040' and variant=='rp2040')
+        if matches and rev(mcu.get('mcu_version','')) != rev(target):
+            sys.exit(0)
+    sys.exit(1)
+except Exception:
+    sys.exit(2)
+PYFLASH
 }
 
 user_folder() {
@@ -101,8 +133,8 @@ Firmware for the Recore's MCUs, built on the printer by rebuild-firmware.
 Roles: ar100, stm32 (whichever STM32 this board has), rp2040 (toolhead).
 A missing <role>.config means Rebuild's stock config.
 
-To build and flash: start the rebuild-firmware service from the services
-menu in Fluidd or Mainsail. The log is logs/rebuild-firmware.log. A build
+To build and flash: use the Klipper firmware Update button in Fluidd or
+Mainsail. The log is logs/rebuild-firmware.log. A build
 that fails or does not fit leaves the installed firmware as it was, and
 nothing is flashed while the printer prints.
 EOF
@@ -236,7 +268,7 @@ cmd_build() {
         fi
     done
     if [ -z "$NOFLASH" ] && printing; then
-        die "the printer is printing - not building or flashing now"
+        die "printer idle state could not be confirmed - not building or flashing now"
     fi
     say "== $(date '+%F %T') rebuild-firmware: ${variants[*]}"
     prepare_tree
@@ -244,13 +276,27 @@ cmd_build() {
     for v in "${variants[@]}"; do
         config_for "$v"
         rc=0; build "$v" || rc=$?
-        case $rc in 0) changed+=("$v") ;; 1) failed=1 ;; esac
+        case $rc in
+            0) changed+=("$v") ;;
+            1) failed=1 ;;
+            2) if [ -z "$NOFLASH" ]; then
+                   rc=0; needs_flash "$v" || rc=$?
+                   case $rc in
+                       0) say "$v: cached build is current, but running firmware differs - retrying flash"
+                          changed+=("$v") ;;
+                       1) ;; # Already running this version, or no such MCU attached.
+                       *) say "$v: cannot read running firmware - not flashing"
+                          failed=1 ;;
+                   esac
+               fi ;;
+        esac
         [ -n "$ALL" ] || write_reference "$v"
     done
     [ -n "$NOFLASH" ] && { say "not flashing (--no-flash)"; exit $failed; }
-    [ ${#changed[@]} -gt 0 ] || { say "nothing to flash"; exit $failed; }
+    [ "$failed" -eq 0 ] || { say "build failed - not flashing"; exit 1; }
+    [ ${#changed[@]} -gt 0 ] || { say "nothing to flash"; exit 0; }
     if printing; then
-        say "the printer started printing - built, but not flashed; run again when it is idle"
+        say "printer idle state could not be confirmed - built, but not flashed; run again when it is idle"
         exit 1
     fi
     # flash-stm32 restarts Klipper, which loads the AR100 image; otherwise a
@@ -259,7 +305,7 @@ cmd_build() {
     for v in "${changed[@]}"; do
         case $v in
             stm32*) say "flashing the STM32"; flash-stm32 ;;
-            rp2040) say "flashing the RP2040"; flash-rp2040 || say "flash-rp2040 failed" ;;
+            rp2040) say "flashing the RP2040"; flash-rp2040 || { say "flash-rp2040 failed"; failed=1; } ;;
             ar100) restart=1 ;;
         esac
     done
@@ -267,7 +313,7 @@ cmd_build() {
         say "restarting Klipper to load the AR100 firmware"
         systemctl restart klipper
     fi
-    say "done"
+    say "build and flash steps finished"
     exit $failed
 }
 
@@ -323,11 +369,13 @@ cmd_menuconfig() {
     chown "$OWNER:$OWNER" "$USERDIR/$r.config"
     say "saved your changes to $USERDIR/$r.config:"
     grep -v '^#' "$USERDIR/$r.config" | sed 's/^/  /' || say "  (none - stock config)"
-    say "start the rebuild-firmware service, or run: sudo rebuild-firmware build $r"
+    say "use the Klipper firmware Update button, or run: sudo rebuild-firmware build $r"
 }
 
 [ "$(id -u)" = 0 ] || die "run it as root (sudo)"
 mkdir -p "$WORK"
+exec 9>"$WORK/rebuild.lock"
+flock -n 9 || die "another firmware build/reference operation is running"
 cmd=${1:-}; shift || true
 case $cmd in
     build)
