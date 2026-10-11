@@ -1,0 +1,81 @@
+#!/usr/bin/env python3
+import argparse,contextlib,fcntl,importlib.machinery,json,os,pathlib,shlex,socket,subprocess,time,uuid
+ROOT=pathlib.Path('/home/nvidia/workspace/Recore-CI')
+p=argparse.ArgumentParser();p.add_argument('scenario',choices=['dip','cut','ramp','warning-cut']);p.add_argument('--sync',action='store_true');p.add_argument('--dirty-mib',type=int,default=0);p.add_argument('--simulate-job',action='store_true');args=p.parse_args()
+run='bad-a8-'+args.scenario+'-'+('sync-' if args.sync else '')+time.strftime('%Y%m%d-%H%M%S')
+folder=pathlib.Path('/tmp/power-loss-140');folder.mkdir(exist_ok=True)
+log=open(folder/(run+'.jsonl'),'w',buffering=1)
+def record(event,**kw):
+ d=dict(event=event,rig_mono=time.monotonic(),run=run,**kw);line=json.dumps(d);log.write(line+'\n');print(line,flush=True)
+sshargv=['sshpass','-e','ssh','-F','/dev/null','-o','ConnectTimeout=3','-o','StrictHostKeyChecking=accept-new','-o','UserKnownHostsFile=/tmp/bad-a8-power-test-rebuild-hosts','debian@192.168.32.108']
+env=dict(os.environ,SSHPASS=os.environ['RECORE_PASS'])
+def ssh(cmd,timeout=15):
+ return subprocess.run(sshargv+[cmd],env=env,text=True,capture_output=True,timeout=timeout)
+board=ssh('sudo get-serial-number; curl -fsS "http://127.0.0.1:7125/printer/objects/query?webhooks&print_stats&stepper_enable"')
+if board.returncode or not board.stdout.startswith('0498\n'):raise RuntimeError(board.stderr+board.stdout)
+state=json.loads(board.stdout.split('\n',1)[1])['result']['status']
+if state['webhooks']['state']!='ready' or state['print_stats']['state'] in ('printing','paused') or any(state['stepper_enable']['steppers'].values()):raise RuntimeError('board not idle')
+record('PREFLIGHT',status=state)
+if args.simulate_job:
+ filename='power-loss-'+run+'.gcode'
+ code="from pathlib import Path; Path('/home/printer/printer_data/gcodes/"+filename+"').write_text(('G4 P100\\n'*600))"
+ job=ssh('sudo -u printer python3 -c '+shlex.quote(code)+' && curl -fsS -X POST http://127.0.0.1:7125/printer/print/start?filename='+filename)
+ if job.returncode:raise RuntimeError(job.stderr)
+ record('JOB_STARTED',filename=filename)
+sock=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);sock.bind(('0.0.0.0',47123));sock.settimeout(.1)
+lock=open(ROOT/'.n6700-power.lock','a');fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+module=importlib.machinery.SourceFileLoader('psu',str(ROOT/'scripts/n6700-power')).load_module();cfg=json.loads((ROOT/'n6700.json').read_text())
+with contextlib.closing(module.Supply(cfg)) as supply:
+ before=supply.outputs();supply.check_settings(cfg['boards']['Bad-A8']);assert before[1]
+ record('PSU',outputs=before,voltage=supply.query('MEAS:VOLT? (@2)'),current=supply.query('MEAS:CURR? (@2)'))
+ unit='power-loss-demo'
+ path='/var/lib/rebuild/power-loss-demo/'+run+'.state'
+ started=ssh('sudo systemd-run --unit='+unit+' --property=KillMode=control-group /usr/bin/python3 /var/lib/rebuild/power-loss-demo/power-loss-save --file '+path+' --run-id '+run+(' --sync' if args.sync else '')+' --dirty-mib '+str(args.dirty_mib))
+ if started.returncode:raise RuntimeError(started.stderr)
+ def collect(seconds,armed=False):
+  until=time.monotonic()+seconds
+  while time.monotonic()<until:
+   try:data,addr=sock.recvfrom(8192)
+   except socket.timeout:continue
+   msg=json.loads(data)
+   if msg.get('run')!=run:continue
+   record('BOARD',message=msg)
+   if armed and msg['event']=='ARMED':return True
+  return False
+ try:
+  if not collect(10,True):raise RuntimeError('probe did not arm: '+ssh('sudo journalctl -u '+unit+' -n 20 --no-pager').stdout)
+  collect(.25)
+  record('COMMAND_BEGIN',command=args.scenario)
+  if args.scenario in ('dip','ramp'):
+   
+   if args.scenario=='ramp':
+    for voltage in (20,19.8,19.6,19.4,19.2):
+     supply.write('VOLT %s,(@2)'%voltage);record('RAMP_STEP',voltage=voltage);collect(.1)
+   supply.write('VOLT 18.5,(@2)');record('COMMAND_ACK',readback=supply.query('VOLT? (@2)'))
+   collect(.3);supply.write('VOLT 20.4,(@2)');record('RESTORED',readback=supply.query('VOLT? (@2)'));collect(2)
+  else:
+   
+   if args.scenario=='warning-cut':
+    supply.write('VOLT 18.5,(@2)');record('WARNING_VOLTAGE',readback=supply.query('VOLT? (@2)'));collect(.025)
+   supply.set_output(2,False);record('COMMAND_ACK',output=False);collect(5)
+   record('POWER_OFF_CHECK',ssh_alive=ssh('cat /proc/uptime').returncode==0)
+   supply.write('VOLT 20.4,(@2)');supply.set_output(2,True);record('POWER_ON')
+ finally:
+  supply.write('VOLT 20.4,(@2)')
+  if not supply.outputs()[1]:supply.set_output(2,True)
+  assert all(a==b for i,(a,b) in enumerate(zip(before,supply.outputs())) if i!=1)
+  record('PSU_RESTORED',error=supply.query('SYST:ERR?'))
+ deadline=time.monotonic()+150
+ while True:
+  recovered=ssh('curl -fsS "http://127.0.0.1:7125/printer/objects/query?webhooks&power_monitor&_power_loss_high_power"')
+  if recovered.returncode==0:break
+  if time.monotonic()>deadline:raise RuntimeError('board did not recover: '+recovered.stderr)
+  time.sleep(5)
+ record('RECOVERED',output=recovered.stdout,stderr=recovered.stderr)
+ saved=ssh('sudo python3 /var/lib/rebuild/power-loss-demo/power-loss-save --read --file '+path)
+ record('STATE_VALIDATION',valid=saved.returncode==0,output=saved.stdout,error=saved.stderr)
+ stopped=ssh('sudo systemctl stop '+unit+'; sudo systemctl reset-failed '+unit+'; sudo systemctl restart klipper')
+ record('CLEANUP',returncode=stopped.returncode,stderr=stopped.stderr)
+ if args.simulate_job:
+  ssh('sudo -u printer rm -- '+shlex.quote('/home/printer/printer_data/gcodes/'+filename))
+print('RESULT '+str(folder/(run+'.jsonl')),flush=True)

@@ -1,0 +1,125 @@
+{
+  "board": "Bad-A8",
+  "serial": "0498",
+  "revision": "A8",
+  "image": "rebuild-fluidd-v1.1.0-93-gdc43e37",
+  "klipper": "461c4e3722c3a897fba1c6b3f0780a5315043842",
+  "psu": {
+    "instrument": "N6700B",
+    "module": "N6733B",
+    "channel": 2,
+    "baseline_volts": 20.4,
+    "current_limit_amps": 2.25
+  },
+  "trip_threshold_volts": 19,
+  "timing_note": "Last heartbeats/edges are lower bounds; 25 ms is requested controller warning interval, not a measured rail ramp.",
+  "runs": [
+    {
+      "run": "bad-a8-cut-20261011-161907",
+      "trace_sha256": "6c978bf12a057d38db93451fde8207839292f82de0834737a94e15300039dbf3",
+      "trace_rig_path": "/tmp/power-loss-140/bad-a8-cut-20261011-161907.jsonl",
+      "events_ms_after_gpio": {
+        "SAVE_START": 2.205
+      },
+      "last_a64_heartbeat_ms": 5.377,
+      "last_stm32_edge_ms": 3.991,
+      "persisted_valid": false,
+      "note": "Controlled dip was read back without reboot; first cut reports invalid header in the recovery stderr. Both preceded separate validation event logging."
+    },
+    {
+      "run": "bad-a8-cut-sync-20261011-162333",
+      "trace_sha256": "dcca9dfb807ef92e708fa62e55e408177e62f17b61e73697243ecee6455e9881",
+      "trace_rig_path": "/tmp/power-loss-140/bad-a8-cut-sync-20261011-162333.jsonl",
+      "events_ms_after_gpio": {
+        "SAVE_START": 2.767
+      },
+      "last_a64_heartbeat_ms": 4.929,
+      "last_stm32_edge_ms": 3.96,
+      "persisted_valid": false
+    },
+    {
+      "run": "bad-a8-dip-sync-20261011-161551",
+      "trace_sha256": "94a239f6e29e105216933fe8a707cd26df8c6955e09e328d65720546783e4289",
+      "trace_rig_path": "/tmp/power-loss-140/bad-a8-dip-sync-20261011-161551.jsonl",
+      "events_ms_after_gpio": {
+        "SAVE_START": 2.398,
+        "SAVE_OK": 8.973,
+        "SYNC_START": 9.324,
+        "SYNC_OK": 43.738
+      },
+      "last_a64_heartbeat_ms": 2296.338,
+      "last_stm32_edge_ms": 2295.509,
+      "persisted_valid": null,
+      "note": "Controlled dip was read back without reboot; first cut reports invalid header in the recovery stderr. Both preceded separate validation event logging.",
+      "detector_note": "Initial single-sample prototype; subsequent cuts use explicit arming and three-sample confirmation."
+    },
+    {
+      "run": "bad-a8-warning-cut-sync-20261011-162554",
+      "trace_sha256": "7705d38b75433009b8abc2221b6d87e8a7db3a837248b202a9aa5e8ef5aee36a",
+      "trace_rig_path": "/tmp/power-loss-140/bad-a8-warning-cut-sync-20261011-162554.jsonl",
+      "events_ms_after_gpio": {
+        "SAVE_START": 2.458,
+        "SAVE_OK": 6.683,
+        "SYNC_START": 7.178
+      },
+      "last_a64_heartbeat_ms": 24.883,
+      "last_stm32_edge_ms": 24.283,
+      "persisted_valid": true,
+      "saved_run_matches": true,
+      "cached_state_age_ms": 428.593,
+      "cached_print_stats": {
+        "filament_used": 0.0,
+        "filename": "",
+        "info": {
+          "current_layer": null,
+          "total_layer": null
+        },
+        "message": "",
+        "print_duration": 0.0,
+        "state": "standby",
+        "total_duration": 0.0
+      },
+      "cached_virtual_sdcard": {
+        "file_path": null,
+        "file_position": 0,
+        "file_size": 0,
+        "is_active": false,
+        "progress": 0.0
+      }
+    },
+    {
+      "run": "bad-a8-warning-cut-sync-20261011-162809",
+      "trace_sha256": "1428ca03514be8050c64b25d90901483608119dd4031e71ebd1a6bba96851b1f",
+      "trace_rig_path": "/tmp/power-loss-140/bad-a8-warning-cut-sync-20261011-162809.jsonl",
+      "events_ms_after_gpio": {
+        "SAVE_START": 2.129,
+        "SAVE_OK": 6.853,
+        "SYNC_START": 7.333
+      },
+      "last_a64_heartbeat_ms": 28.541,
+      "last_stm32_edge_ms": 27.633,
+      "persisted_valid": true,
+      "saved_run_matches": true,
+      "cached_state_age_ms": 428.032,
+      "cached_print_stats": {
+        "filament_used": 0.0,
+        "filename": "power-loss-bad-a8-warning-cut-sync-20261011-162809.gcode",
+        "info": {
+          "current_layer": null,
+          "total_layer": null
+        },
+        "message": "",
+        "print_duration": 0.0,
+        "state": "printing",
+        "total_duration": 1.7593095430000005
+      },
+      "cached_virtual_sdcard": {
+        "file_path": "/home/printer/printer_data/gcodes/power-loss-bad-a8-warning-cut-sync-20261011-162809.gcode",
+        "file_position": 200,
+        "file_size": 4800,
+        "is_active": true,
+        "progress": 0.041666666666666664
+      }
+    }
+  ]
+}

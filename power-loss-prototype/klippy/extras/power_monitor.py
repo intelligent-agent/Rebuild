@@ -19,7 +19,7 @@ class PowerMonitor:
         self.printer = config.get_printer()
         ppins = self.printer.lookup_object('pins')
         sensor = ppins.parse_pin(config.get('sensor_pin'))
-        intpin = ppins.parse_pin(config.get('int_pin'))
+        intpin = ppins.lookup_pin(config.get('int_pin'))
         if sensor['chip_name'] != intpin['chip_name']:
             raise config.error("power_monitor: sensor_pin and int_pin must be"
                                " on the same MCU")
@@ -32,12 +32,17 @@ class PowerMonitor:
         self.offset = config.getfloat('offset', 0.35)
         self.adc_voltage = config.getfloat('adc_voltage', 3.3, above=0.)
         self.sample_us = config.getint('sample_us', 100, minval=20)
+        self.required_samples = config.getint('required_samples', 3, minval=1,
+                                              maxval=255)
         self.heartbeat_ms = config.getfloat('heartbeat_ms', 1., above=0.)
         self.adc_max = None
         self.trip = None
+        self.emergency_shutdown = config.getboolean('emergency_shutdown', False)
         self.oid = self.mcu.create_oid()
         self.mcu.register_config_callback(self._build_config)
         self.query_cmd = None
+        self.arm_cmd = None
+        self.printer.register_event_handler('klippy:ready', self._arm)
         self.printer.lookup_object('gcode').register_command(
             'POWER_MONITOR_QUERY', self.cmd_QUERY,
             desc="What the power monitor last sampled")
@@ -52,10 +57,12 @@ class PowerMonitor:
                          int(self.adc_max)))
         self.mcu.add_config_cmd(
             "config_power_monitor oid=%d adc_pin=%s int_pin=%s threshold=%d"
-            " rest_ticks=%d heartbeat_ticks=%d" % (
+            " rest_ticks=%d heartbeat_ticks=%d required_samples=%d" % (
                 self.oid, self.sensor_pin, self.int_pin, raw,
                 self.mcu.seconds_to_clock(self.sample_us / 1000000.),
-                self.mcu.seconds_to_clock(self.heartbeat_ms / 1000.)))
+                self.mcu.seconds_to_clock(self.heartbeat_ms / 1000.),
+                self.required_samples))
+        self.arm_cmd = self.mcu.lookup_command("power_monitor_arm oid=%c")
         self.query_cmd = self.mcu.lookup_query_command(
             "power_monitor_query oid=%c",
             "power_monitor_state oid=%c value=%hu samples=%u tripped=%c",
@@ -74,6 +81,13 @@ class PowerMonitor:
                % (volts, self.threshold, print_time))
         logging.warning(msg)
         self.printer.lookup_object('gcode').respond_info(msg)
+        if self.emergency_shutdown:
+            self.printer.invoke_async_shutdown(msg)
+
+    def _arm(self):
+        # Config/driver initialization can briefly disturb the rail. Begin
+        # protection once Klipper is ready, before accepting a print job.
+        self.arm_cmd.send([self.oid])
 
     def cmd_QUERY(self, gcmd):
         r = self.query_cmd.send([self.oid])

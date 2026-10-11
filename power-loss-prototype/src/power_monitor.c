@@ -24,7 +24,7 @@ struct power_monitor {
     struct gpio_out out;
     uint16_t threshold, trip_value, last_value;
     uint32_t samples;
-    uint8_t tripped, reported, level;
+    uint8_t tripped, reported, level, armed, below_count, required_samples;
 };
 
 static struct task_wake power_monitor_wake;
@@ -49,7 +49,11 @@ power_monitor_event(struct timer *timer)
     uint16_t value = gpio_adc_read(p->adc);
     p->last_value = value;
     p->samples++;
-    if (value < p->threshold) {
+    if (value < p->threshold && p->armed)
+        p->below_count++;
+    else
+        p->below_count = 0;
+    if (p->below_count >= p->required_samples) {
         p->tripped = 1;
         p->level = 1;
         gpio_out_write(p->out, 1);
@@ -73,6 +77,9 @@ command_config_power_monitor(uint32_t *args)
     p->threshold = args[3];
     p->rest_ticks = args[4];
     p->heartbeat_ticks = args[5];
+    p->required_samples = args[6];
+    if (!p->required_samples)
+        shutdown("power_monitor requires nonzero confirmation count");
     p->timer.func = power_monitor_event;
     irq_disable();
     p->timer.waketime = timer_read_time() + p->rest_ticks;
@@ -81,7 +88,16 @@ command_config_power_monitor(uint32_t *args)
 }
 DECL_COMMAND(command_config_power_monitor,
              "config_power_monitor oid=%c adc_pin=%u int_pin=%u threshold=%hu"
-             " rest_ticks=%u heartbeat_ticks=%u");
+             " rest_ticks=%u heartbeat_ticks=%u required_samples=%c");
+
+void
+command_power_monitor_arm(uint32_t *args)
+{
+    struct power_monitor *p = oid_lookup(
+        args[0], command_config_power_monitor);
+    p->armed = 1;
+}
+DECL_COMMAND(command_power_monitor_arm, "power_monitor_arm oid=%c");
 
 // What the monitor last saw - for checking the prototype without a power cut.
 void

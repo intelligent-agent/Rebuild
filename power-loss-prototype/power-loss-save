@@ -1,0 +1,160 @@
+#!/usr/bin/env python3
+"""Experimental GPIO-triggered A64 state save; not a print-resume implementation.
+
+Preallocates a 4 KiB file, caches Moonraker state, then saves on UC-INT-1.
+The saved CRC proves integrity; SAVE_OK on the external rig proves fsync
+returned. A timestamp in the file alone cannot prove when persistence finished.
+"""
+import argparse
+import json
+import os
+import socket
+import struct
+import subprocess
+import threading
+import time
+import urllib.request
+import uuid
+import zlib
+
+SIZE = 4096
+HEADER = struct.Struct('!8sII')
+MAGIC = b'PLSAVE01'
+
+
+def encode(record):
+    payload = json.dumps(record, separators=(',', ':'), sort_keys=True).encode()
+    if len(payload) > SIZE - HEADER.size:
+        raise ValueError('state exceeds preallocated slot')
+    return (HEADER.pack(MAGIC, len(payload), zlib.crc32(payload)) + payload).ljust(SIZE, b'\0')
+
+
+def decode(data):
+    if len(data) != SIZE:
+        raise ValueError('truncated slot')
+    magic, size, crc = HEADER.unpack_from(data)
+    if magic != MAGIC or not 0 < size <= SIZE - HEADER.size:
+        raise ValueError('invalid header')
+    payload = data[HEADER.size:HEADER.size + size]
+    if zlib.crc32(payload) != crc:
+        raise ValueError('CRC mismatch')
+    return json.loads(payload)
+
+
+def main():
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument('--file', required=True)
+    p.add_argument('--read', action='store_true')
+    p.add_argument('--udp', default='192.168.32.125:47123')
+    p.add_argument('--sync', action='store_true', help='also sync all filesystems after saving')
+    p.add_argument('--dirty-mib', type=int, choices=range(0, 9), default=0,
+                   help='prepare up to 8 MiB of unsynced test data before arming')
+    p.add_argument('--run-id', default=str(uuid.uuid4()))
+    args = p.parse_args()
+    if args.read:
+        with open(args.file, 'rb') as f:
+            print(json.dumps(decode(f.read()), indent=2))
+        return
+    chip = next(line.split()[0] for line in subprocess.check_output(
+        ['gpiodetect'], text=True).splitlines() if '1c20800.pinctrl' in line)
+    host, port = args.udp.rsplit(':', 1)
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.setblocking(False)
+    console = os.open('/dev/ttyS0', os.O_WRONLY | os.O_NOCTTY | os.O_NONBLOCK)
+    lock = threading.Lock()
+    start = time.monotonic()
+    def emit(kind, **values):
+        msg = json.dumps(dict(run=args.run_id, event=kind, mono=time.monotonic(),
+                              elapsed=time.monotonic()-start, **values), separators=(',', ':'))+'\n'
+        with lock:
+            try:
+                sock.sendto(msg.encode(), (host, int(port)))
+            except OSError:
+                pass  # losing telemetry must not prevent the state save
+            if kind not in ('HEARTBEAT', 'EDGES'):
+                try:
+                    os.write(console, ('PLSAVE '+msg).encode())
+                except OSError:
+                    pass
+    # Exclusive creation protects previously saved evidence. Persist directory
+    # entry now, not during the short hold-up interval.
+    fd = os.open(args.file, os.O_CREAT | os.O_EXCL | os.O_RDWR, 0o600)
+    os.posix_fallocate(fd, 0, SIZE)
+    os.fsync(fd)
+    dfd = os.open(os.path.dirname(os.path.abspath(args.file)), os.O_DIRECTORY)
+    os.fsync(dfd)
+    os.close(dfd)
+    with urllib.request.urlopen('http://127.0.0.1:7125/printer/objects/query?gcode_move&virtual_sdcard&print_stats&toolhead', timeout=5) as r:
+        snapshot = json.load(r)['result']
+    record = dict(format=1, run=args.run_id, boot_id=open('/proc/sys/kernel/random/boot_id').read().strip(),
+                  snapshot_monotonic=time.monotonic(), state=snapshot,
+                  note='Cached Klipper state; persistence test only, not safe resume data')
+    # Cache updates stop at the first edge; no HTTP call on the critical path.
+    tripped = threading.Event()
+    def refresh():
+        while not tripped.wait(0.25):
+            try:
+                with urllib.request.urlopen('http://127.0.0.1:7125/printer/objects/query?gcode_move&virtual_sdcard&print_stats&toolhead', timeout=1) as r:
+                    state = json.load(r)['result']
+                if not tripped.is_set():
+                    record.update(state=state, snapshot_monotonic=time.monotonic())
+            except Exception:
+                pass
+    edges = dict(count=0, last=None)
+    def save(edge_time):
+        try:
+            saved = dict(record, trip_monotonic=edge_time, write_started_monotonic=time.monotonic())
+            data = encode(saved)
+            emit('SAVE_START', kernel_trip=edge_time, cache_age_ms=(time.monotonic()-record['snapshot_monotonic'])*1000)
+            if os.pwrite(fd, data, 0) != len(data):
+                raise OSError('short state write')
+            os.fsync(fd)
+            emit('SAVE_OK', kernel_trip=edge_time, duration_ms=(time.monotonic()-saved['write_started_monotonic'])*1000)
+            if args.sync:
+                before = time.monotonic()
+                emit('SYNC_START')
+                os.sync()
+                emit('SYNC_OK', duration_ms=(time.monotonic()-before)*1000)
+        except Exception as e:
+            emit('SAVE_ERROR', error=str(e))
+    mon = subprocess.Popen(['gpiomon', '-c', chip, '-e', 'both', '--event-clock', 'monotonic',
+                            '--format', '%S %E', '195'], stdout=subprocess.PIPE, text=True, bufsize=1)
+    def watch():
+        for line in mon.stdout:
+            stamp, edge = line.split()
+            stamp = float(stamp)
+            edges.update(count=edges['count']+1, last=stamp)
+            if not tripped.is_set():
+                tripped.set()
+                emit('TRIP', kernel_trip=stamp, edge=edge, delivery_ms=(time.monotonic()-stamp)*1000)
+                threading.Thread(target=save, args=(stamp,), daemon=True).start()
+    threading.Thread(target=refresh, daemon=True).start()
+    threading.Thread(target=watch, daemon=True).start()
+    # GPIO watcher is ready before the external controller is told to cut power.
+    time.sleep(0.15)
+    if mon.poll() is not None:
+        raise RuntimeError('gpiomon failed')
+    if args.dirty_mib:
+        dirty = os.open(args.file+'.dirty', os.O_CREAT | os.O_EXCL | os.O_RDWR, 0o600)
+        size = args.dirty_mib * 1024 * 1024
+        os.posix_fallocate(dirty, 0, size)
+        os.fsync(dirty)
+        while size:
+            size -= os.write(dirty, b'\xa5' * min(size, 65536))
+        os.close(dirty)  # deliberately no fsync on the test payload
+        emit('DIRTY_READY', bytes=args.dirty_mib*1024*1024)
+    emit('ARMED', file=args.file, sync=args.sync)
+    try:
+        deadline = time.monotonic()
+        while True:
+            emit('HEARTBEAT', edges=edges['count'], last_edge=edges['last'])
+            deadline += 0.002
+            time.sleep(max(0, deadline-time.monotonic()))
+    finally:
+        mon.terminate()
+        mon.wait()
+        os.close(fd)
+
+
+if __name__ == '__main__':
+    main()
