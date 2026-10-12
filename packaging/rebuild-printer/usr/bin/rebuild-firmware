@@ -100,7 +100,7 @@ needs_flash() {
 import json,re,sys,urllib.request,urllib.parse
 variant,target=sys.argv[1:]
 def rev(s):
-    return re.sub(r'-\d{8}_\d{6}-[^-]+$', '', s).removesuffix('-dirty')
+    return re.sub(r'-\d{8}_\d{6}-[A-Za-z0-9][A-Za-z0-9.-]*$', '', s).removesuffix('-dirty')
 def api(path):
     with urllib.request.urlopen('http://127.0.0.1:7125'+path,timeout=5) as f:
         return json.load(f)['result']

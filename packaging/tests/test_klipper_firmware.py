@@ -56,6 +56,27 @@ class Tests(unittest.IsolatedAsyncioTestCase):
     def test_revision(self):
         self.assertEqual(revision('v0.13.0-787-ge2b99a91-dirty-20261011_100000-recore'), 'v0.13.0-787-ge2b99a91')
 
+    def test_build_suffix_accepts_hyphenated_hostnames(self):
+        target = 'v0.13.0-787-ge2b99a91'
+        for hostname in ('recore', 'recore-voron', 'recore-kossel-a6', 'recore-a6.local'):
+            for dirty in ('', '-dirty'):
+                with self.subTest(hostname=hostname, dirty=dirty):
+                    self.assertEqual(revision(target + dirty + '-20261012_193607-' + hostname), target)
+        self.assertNotEqual(revision('v0.13.0-786-g461c4e37-20261012_193607-recore-voron'), target)
+
+    def test_build_script_uses_same_revision_comparison(self):
+        source = (SOURCE.parents[4] / 'bin/rebuild-firmware').read_text()
+        block = source.split("<<'PYFLASH'", 1)[1].split('PYFLASH', 1)[0]
+        import ast
+        function = next(node for node in ast.parse(block).body
+                        if isinstance(node, ast.FunctionDef) and node.name == 'rev')
+        namespace = {'re': __import__('re')}
+        exec(compile(ast.Module(body=[function], type_ignores=[]), '<needs_flash>', 'exec'), namespace)
+        for value in ('v0.13.0-787-ge2b99a91-dirty',
+                      'v0.13.0-787-ge2b99a91-20261012_193607-recore-voron',
+                      'v0.13.0-786-g461c4e37-20261012_193607-recore-kossel-a6'):
+            self.assertEqual(namespace['rev'](value), revision(value))
+
     def test_mixed_mcus_remain_updateable(self):
         u = updater()
         u.mcus['mcu'] = u.host
