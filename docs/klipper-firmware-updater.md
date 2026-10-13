@@ -21,6 +21,27 @@ reporting success. Printing and paused printers are refused. A failed flash
 can retry a cached binary when its running MCU revision remains stale.
 There are no web service stop/restart controls for interrupting a flash.
 
+## Edited firmware options
+
+The override files in `config/firmware/` (`ar100.config`, `stm32.config`,
+`rp2040.config`, created with starter comments) are editable in Fluidd and
+Mainsail. `rebuild-firmware` records, after flashing, a hash of each file's
+option lines (`/opt/firmware/<role>.applied`); comments and blank lines do not
+count. When a file differs from that record - including an override that was
+removed or reverted - the entry offers an update at an unchanged Klipper
+revision and says which file changed. Mainsail decides from `commits_behind`
+and not the hashes, so each pending reason is also listed there, as a line
+that is not a Git commit.
+
+The Update button builds and flashes only what changed: a firmware whose
+Klipper commit and effective config match what is installed is skipped (the
+`-dirty` suffix is ignored). The compiler output is streamed into the update
+dialog. Success is reported only once the build has recorded the requested
+file contents as flashed and Klipper has reconnected; matching revision
+strings do not establish that the options were applied. A flash that failed
+after a successful build is retried on the next run, even for a config-only
+change.
+
 The image keeps the existing application pins: Klipper starts at
 461c4e3722c3a897fba1c6b3f0780a5315043842 (v0.13.0-786). This leaves a software
 update for Recore-CI's existing validation flow; firmware is then a separate
