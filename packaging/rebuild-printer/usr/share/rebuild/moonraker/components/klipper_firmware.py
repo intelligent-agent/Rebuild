@@ -15,7 +15,7 @@ SERVICE = 'rebuild-firmware'
 
 
 def revision(value):
-    value = re.sub(r'-\d{8}_\d{6}-[^-]+$', '', value)
+    value = re.sub(r'-\d{8}_\d{6}-[A-Za-z0-9][A-Za-z0-9.-]*$', '', value)
     return value.removesuffix('-dirty')
 
 
