@@ -18,6 +18,15 @@
 #                                                  there is, and its value
 #   /opt/firmware/<variant>.{bin,uf2,config}       what was built, from what
 #
+# What runs on the MCUs is recorded, so the update entry in Fluidd and Mainsail
+# can tell when the user's config has moved on (#159), even at the same Klipper:
+#   /opt/firmware/<role>.applied     hash of the user's option lines (see
+#                                    firmware-kconfig.py digest) that the
+#                                    flashed firmware was built from
+#   /opt/firmware/<variant>.flashed-config
+#                                    hash of the full config that was flashed
+# Both are written only once the firmware is on the MCU, never by a build alone.
+#
 # A variant is rebuilt only when the Klipper checkout or its effective config
 # changed since the installed binary was built (--force: always). A build that
 # fails or does not fit leaves the installed firmware as it was. Flashing is
@@ -119,7 +128,20 @@ PYFLASH
 }
 
 user_folder() {
+    local r
     install -d -o "$OWNER" -g "$OWNER" "$USERDIR"
+    # Files to open in Fluidd or Mainsail and add lines to. Comments are not
+    # changes, so each is still the stock firmware until it has an option line.
+    for r in ar100 stm32 rp2040; do
+        [ -e "$USERDIR/$r.config" ] && continue
+        cat >"$USERDIR/$r.config" <<STARTER
+# Your changes to the $r firmware, on top of Rebuild's stock config.
+# Add the lines you want different, copied from $r.reference, e.g.
+#   CONFIG_WANT_BUTTONS=n
+# Then use the Klipper firmware Update button to rebuild and flash.
+STARTER
+        chown "$OWNER:$OWNER" "$USERDIR/$r.config"
+    done
     [ -f "$USERDIR/README" ] && return
     cat >"$USERDIR/README" <<'EOF'
 Firmware for the Recore's MCUs, built on the printer by rebuild-firmware.
@@ -131,10 +153,11 @@ Firmware for the Recore's MCUs, built on the printer by rebuild-firmware.
                      Regenerated on every build - copy lines from it.
 
 Roles: ar100, stm32 (whichever STM32 this board has), rp2040 (toolhead).
-A missing <role>.config means Rebuild's stock config.
+A missing or empty <role>.config means Rebuild's stock config.
 
-To build and flash: use the Klipper firmware Update button in Fluidd or
-Mainsail. The log is logs/rebuild-firmware.log. A build
+To build and flash: save your changes, then use the Klipper firmware Update
+button in Fluidd or Mainsail. It offers an update whenever a <role>.config
+differs from what is flashed. The log is logs/rebuild-firmware.log. A build
 that fails or does not fit leaves the installed firmware as it was, and
 nothing is flashed while the printer prints.
 EOF
@@ -164,11 +187,20 @@ prepare_tree() {
     TREE=$src
 }
 
-# config_for VARIANT -> $WORK/<variant>/{stock,effective}.config
+# config_for VARIANT -> $WORK/<variant>/{stock,effective}.config, and
+# user.digest: what the user's file was when this build read it
 config_for() {
     local v=$1 dir=$WORK/$1 user
-    user=$USERDIR/$(role_of "$v").config
     mkdir -p "$dir"
+    # One read of the file, so the build and its digest agree even if it is
+    # saved again meanwhile.
+    user=$dir/user.config
+    if [ -f "$USERDIR/$(role_of "$v").config" ]; then
+        cp "$USERDIR/$(role_of "$v").config" "$user"
+    else
+        rm -f "$user"
+    fi
+    python3 "$HELPER" digest "$user" >"$dir/user.digest"
     cp "$STOCK/$v.config" "$dir/stock.config"
     kmake -s KCONFIG_CONFIG="$dir/stock.config" olddefconfig >/dev/null
     if [ -f "$user" ]; then
@@ -200,20 +232,45 @@ write_reference() {
     chown "$OWNER:$OWNER" "$USERDIR/$role.reference"
 }
 
+# mark_applied VARIANT: the MCU now runs the config that is installed for it
+mark_applied() {
+    local v=$1 role
+    role=$(role_of "$v")
+    sha256sum "$FIRMWARE/$v.config" | cut -d' ' -f1 >"$FIRMWARE/$v.flashed-config"
+    cp "$WORK/$v/user.digest" "$FIRMWARE/$role.applied"
+}
+
+# flashed_stale VARIANT: the installed build has a config the MCU was not
+# flashed with - a flash failed after a build that changed only the config,
+# which the Klipper revision alone would not show. No record, no claim.
+flashed_stale() {
+    local v=$1
+    [ -f "$FIRMWARE/$v.flashed-config" ] && [ -f "$FIRMWARE/$v.config" ] &&
+        [ "$(cat "$FIRMWARE/$v.flashed-config")" != "$(sha256sum "$FIRMWARE/$v.config" | cut -d' ' -f1)" ]
+}
+
 # build VARIANT: 0 built and installed, 1 failed, 2 already current
 build() {
     local v=$1 dir=$WORK/$1 out=$WORK/$1/out version size max
     version=$(klipper_version)
+    # Current is judged by the commit, not by -dirty: Klipper adds that for an
+    # untracked module in klippy/extras (ours, linked by klipper-extras) as
+    # well as for edited sources, and it comes and goes without the firmware
+    # changing. Comparing it would rebuild and reflash MCUs nothing changed
+    # for. build --force rebuilds regardless.
     if [ -z "$FORCE" ] && [ -f "$FIRMWARE/$(installed "$v")" ] &&
        cmp -s "$dir/effective.config" "$FIRMWARE/$v.config" &&
-       [ "$(cat "$FIRMWARE/$v.klipper-version" 2>/dev/null)" = "$version" ]; then
+       [ "$(cat "$FIRMWARE/$v.klipper-version" 2>/dev/null | sed 's/-dirty$//')" = "${version%-dirty}" ]; then
         say "$v: current (Klipper $version, same config)"
         return 2
     fi
     say "$v: building with Klipper $version"
     rm -rf "$out"
-    if ! (cd "$TREE" && nice -n 10 make KCONFIG_CONFIG="$dir/effective.config" OUT="$out/" -j2) >"$dir/build.log" 2>&1; then
-        tail -20 "$dir/build.log" | sed 's/^/  /'
+    # The compiler's output goes to the log too, so the update dialog in Fluidd
+    # and Mainsail shows the build as it happens. pipefail: make's status.
+    if ! (cd "$TREE" && nice -n 10 make KCONFIG_CONFIG="$dir/effective.config" OUT="$out/" -j2) 2>&1 |
+            tee "$dir/build.log" | sed -u 's/^/  /'; then
+        say "  (the whole build output: $dir/build.log)"
         say "$v: build FAILED - the installed firmware is unchanged"
         return 1
     fi
@@ -280,14 +337,22 @@ cmd_build() {
             0) changed+=("$v") ;;
             1) failed=1 ;;
             2) if [ -z "$NOFLASH" ]; then
-                   rc=0; needs_flash "$v" || rc=$?
-                   case $rc in
-                       0) say "$v: cached build is current, but running firmware differs - retrying flash"
-                          changed+=("$v") ;;
-                       1) ;; # Already running this version, or no such MCU attached.
-                       *) say "$v: cannot read running firmware - not flashing"
-                          failed=1 ;;
-                   esac
+                   if flashed_stale "$v"; then
+                       say "$v: the built config was never flashed - flashing it"
+                       changed+=("$v")
+                   else
+                       rc=0; needs_flash "$v" || rc=$?
+                       case $rc in
+                           0) say "$v: cached build is current, but running firmware differs - retrying flash"
+                              changed+=("$v") ;;
+                           # Already running this version, or no such MCU attached; so
+                           # also this config, whatever the user's file says now (an
+                           # option at its default, an ignored one: nothing to flash).
+                           1) mark_applied "$v" ;;
+                           *) say "$v: cannot read running firmware - not flashing"
+                              failed=1 ;;
+                       esac
+                   fi
                fi ;;
         esac
         [ -n "$ALL" ] || write_reference "$v"
@@ -313,6 +378,11 @@ cmd_build() {
         say "restarting Klipper to load the AR100 firmware"
         systemctl restart klipper
     fi
+    # Flashed, and Klipper restarted with it (flash-stm32 does that too): only a
+    # failed RP2040 flash is left out. A failed STM32 flash never gets here.
+    for v in "${changed[@]}"; do
+        [ "$v" = rp2040 ] && [ "$failed" -ne 0 ] || mark_applied "$v"
+    done
     say "build and flash steps finished"
     exit $failed
 }

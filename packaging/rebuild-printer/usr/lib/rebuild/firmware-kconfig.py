@@ -11,9 +11,15 @@
 #       A warning for each line in the user's file that did not take effect:
 #       an unknown option, one that cannot be set on this MCU, or one another
 #       option overrides.
+#   firmware-kconfig.py digest USERFILE
+#       What identifies the user's changes: a hash of the option lines, so
+#       comments and blank lines do not count. A missing or empty file
+#       is "stock". rebuild-firmware records it for what it flashed, and the
+#       Moonraker updater compares it with the file as it is now (#159).
 #
 # KLIPPER is the build copy of the Klipper tree. STOCK, EFFECTIVE and NEW
 # are complete configs, after olddefconfig.
+import hashlib
 import os
 import re
 import sys
@@ -120,6 +126,21 @@ def diff(klipper, stock, new):
             print(line(kconfiglib, sym, sym.str_value))
 
 
+def digest(userfile):
+    try:
+        with open(userfile) as f:
+            text = f.read()
+    except OSError:
+        return "stock"
+    # In file order: a later line for the same option wins.
+    wanted = [t.strip() for t in text.splitlines()
+              if (t.strip() and not t.strip().startswith("#"))
+              or re.match(r"\s*#\s*CONFIG_\w+ is not set", t)]
+    if not wanted:
+        return "stock"
+    return hashlib.sha256("\n".join(wanted).encode()).hexdigest()
+
+
 def check(klipper, effective, userfile):
     kconfiglib, kconf = load(klipper, effective)
     wanted = {}
@@ -146,6 +167,8 @@ if __name__ == "__main__":
         reference(*args)
     elif cmd == "diff" and len(args) == 3:
         diff(*args)
+    elif cmd == "digest" and len(args) == 1:
+        print(digest(*args))
     elif cmd == "check" and len(args) == 3:
         check(*args)
     else:
