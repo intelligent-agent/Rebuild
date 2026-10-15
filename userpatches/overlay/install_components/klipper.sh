@@ -58,6 +58,13 @@ install_klipper(){
     ${PYTHONDIR}/bin/pip install -r ${HOMEDIR}/klipper/scripts/klippy-requirements.txt
     ${PYTHONDIR}/bin/pip install numpy
 
+    # Compile Klipper's C helper now, not on the first start. klippy builds
+    # chelper/c_helper.so when it is missing, and a second process importing
+    # chelper during that window (first boot starts a lot at once) can load the
+    # half-written file: "c_helper.so: file too short" killed klippy for good
+    # on an a6 first boot (#168).
+    (cd ${HOMEDIR}/klipper/klippy && ${PYTHONDIR}/bin/python -c 'import chelper; chelper.get_ffi()')
+
     # Create systemd service file
     cat > /etc/systemd/system/klipper.service << EOF
 #Systemd service file for klipper

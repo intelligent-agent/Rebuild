@@ -732,6 +732,16 @@ give() { printf 'SETTINGS=1\n'; printf '%s\n' "$@"; }
     [ "$(grep -c "^\[update_manager led_effect\]" "$R/home/printer/printer_data/config/moonraker.conf")" -eq 1 ]
 }
 
+@test "software: an image without the helper ignores off and refuses on (barebone)" {
+    rm "$R/usr/lib/rebuild/software"
+    run bash -c "printf 'SETTINGS=1\nTIMEZONE=Europe/Oslo\nSOFTWARE_led_effect=off\n' | '$INSTALLER' configure"
+    [ "$status" -eq 0 ]
+    [ "$(cat "$R/etc/timezone")" = Europe/Oslo ]
+    run bash -c "printf 'SETTINGS=1\nSOFTWARE_led_effect=on\n' | '$INSTALLER' configure"
+    [ "$status" -ne 0 ]
+    [[ $output == *"this image has no optional software"* ]]
+}
+
 @test "software: no connection to GitHub changes nothing and says why" {
     touch "$R/.offline"
     run bash -c "printf 'SETTINGS=1\nSOFTWARE_led_effect=on\n' | '$INSTALLER' configure"

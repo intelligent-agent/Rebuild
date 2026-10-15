@@ -417,9 +417,18 @@ configure() {
         name=${key#SOFTWARE_}
         [[ $name =~ ^[a-z0-9_]+$ ]] || die "'$name' is not a name of optional software"
         case ${S[$key]} in
+            on|off) ;;
+            *) die "${key} '${S[$key]}' is not on or off" ;;
+        esac
+        # Only rebuild-printer ships the helper; the barebone image has none.
+        # Nothing is installed there, so off has nothing to remove.
+        if [ ! -x "$SOFTWARE" ]; then
+            [ "${S[$key]}" = off ] || die "this image has no optional software, so $name cannot be installed"
+            continue
+        fi
+        case ${S[$key]} in
             on) "$SOFTWARE" install "$name" ;;
             off) "$SOFTWARE" remove "$name" ;;
-            *) die "${key} '${S[$key]}' is not on or off" ;;
         esac
     done
 }

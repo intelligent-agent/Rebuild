@@ -1,0 +1,19 @@
+# Sourced by get-serial-number, get-recore-revision and get-recore-config.
+#
+# The board's config lives in a filesystem 17408 bytes into the eMMC boot
+# partition. Reflash reads it with that offset, so do the same here: not every
+# board has a partition table in front of it, and without one `losetup -P`
+# makes no p1 node to mount.
+CONFIG_DEV=${REBUILD_CONFIG_DEV:-/dev/mmcblk2boot0}
+CONFIG_MNT=${REBUILD_CONFIG_MNT:-/mnt/config}
+CONFIG_OFFSET=17408
+
+config_mount() {
+    mkdir -p "$CONFIG_MNT"
+    umount -q "$CONFIG_MNT" 2> /dev/null || true
+    mount -o "ro,loop,offset=$CONFIG_OFFSET" "$CONFIG_DEV" "$CONFIG_MNT"
+}
+
+config_umount() {
+    umount "$CONFIG_MNT"
+}
