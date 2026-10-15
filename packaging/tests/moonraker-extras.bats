@@ -36,3 +36,23 @@ setup() {
     [ ! -L "$MOONRAKER/moonraker/components/klipper_firmware.py" ]
     grep -qx '# user module' "$MOONRAKER/moonraker/components/klipper_firmware.py"
 }
+@test "an empty instance uuid file is removed so Moonraker writes a new one" {
+    : >"$PRINTER_DATA/.moonraker.uuid"
+    "$SCRIPT"
+    [ ! -e "$PRINTER_DATA/.moonraker.uuid" ]
+}
+@test "an instance uuid that has content is left alone" {
+    printf '58621f2a419143829d6af4f17309c30e' >"$PRINTER_DATA/.moonraker.uuid"
+    "$SCRIPT"
+    [ "$(cat "$PRINTER_DATA/.moonraker.uuid")" = 58621f2a419143829d6af4f17309c30e ]
+}
+@test "no uuid file at all is fine" {
+    "$SCRIPT"
+    [ ! -e "$PRINTER_DATA/.moonraker.uuid" ]
+}
+@test "the empty uuid file goes even when the rest of the script has nothing to do" {
+    rm "$PRINTER_DATA/config/moonraker.conf"
+    : >"$PRINTER_DATA/.moonraker.uuid"
+    "$SCRIPT"
+    [ ! -e "$PRINTER_DATA/.moonraker.uuid" ]
+}

@@ -7,6 +7,16 @@ DATA=${PRINTER_DATA:-/home/printer/printer_data}
 SOURCE=${MOONRAKER_EXTRAS_SRC:-/usr/share/rebuild/moonraker/components}
 TARGET=$MOONRAKER/moonraker/components
 CONFIG=$DATA/config/moonraker.conf
+# Moonraker makes .moonraker.uuid on its first start and reads it back on every
+# later one. A first start that stops between creating the file and writing the
+# UUID into it leaves it empty, and Moonraker then reads an empty UUID and dies
+# in its webcam component on every restart, for good (an a6 on the octoprint
+# image, 2026-10-15). An empty file holds nothing, so remove it and Moonraker
+# writes a new one. Before the checks below: it applies whatever else is missing.
+uuid=$DATA/.moonraker.uuid
+if [ -e "$uuid" ] && [ ! -s "$uuid" ]; then
+    rm -f "$uuid"
+fi
 [ -d "$TARGET" ] && [ -f "$CONFIG" ] || exit 0
 src=$SOURCE/klipper_firmware.py
 dst=$TARGET/klipper_firmware.py
