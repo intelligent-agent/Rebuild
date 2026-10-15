@@ -171,9 +171,16 @@ class FirmwareUpdater(BaseDeploy):
 
     async def require_idle(self):
         status = (await self.api('/printer/objects/query?print_stats&virtual_sdcard&idle_timeout'))['status']
-        if (status['print_stats']['state'] in ('printing', 'paused')
-                or status['virtual_sdcard']['is_active']
-                or status['idle_timeout']['state'] == 'Printing'):
+        # Klipper restarting, as it does right after a Klipper update, answers
+        # with these objects present but empty. That is "cannot tell", not
+        # "idle", and not a crash: it was a KeyError and a 500 on an a6.
+        try:
+            printing = status['print_stats']['state'] in ('printing', 'paused')
+            active = status['virtual_sdcard']['is_active']
+            moving = status['idle_timeout']['state'] == 'Printing'
+        except (KeyError, TypeError):
+            raise self.server.error('Firmware update refused: Klipper is not ready, so it cannot tell whether the printer is printing. Try again in a moment.')
+        if printing or active or moving:
             raise self.server.error('Firmware update refused: printer is printing, paused or moving')
 
     async def run_service(self):

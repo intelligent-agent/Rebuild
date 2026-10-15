@@ -106,6 +106,18 @@ class Tests(unittest.IsolatedAsyncioTestCase):
             await u.update()
         u.run_service.assert_not_called()
 
+    async def test_klipper_not_ready_is_refused_with_a_reason_not_a_crash(self):
+        # Right after a Klipper update the objects exist but are empty.
+        for status in ({'print_stats': {}, 'virtual_sdcard': {}, 'idle_timeout': {}},
+                       {'print_stats': {'state': 'standby'}, 'virtual_sdcard': {}, 'idle_timeout': {}},
+                       {}):
+            u = updater()
+            u.api = AsyncMock(return_value={'status': status})
+            u.run_service = AsyncMock()
+            with self.assertRaisesRegex(RuntimeError, 'not ready'):
+                await u.update()
+            u.run_service.assert_not_called()
+
     async def test_unknown_idle_state_is_refused(self):
         u = updater()
         u.api = AsyncMock(side_effect=RuntimeError('Moonraker unavailable'))
