@@ -50,10 +50,10 @@ jobs:
 
     - name: Test packages
       # bats in the same throwaway container build-debs uses: the runner has
-      # docker but not bats. git for the klipper-extras tests.
+      # docker but not bats. git for the klipper-extras tests, python3 for rebuild-firmware's printing().
       run: |
         docker run --rm -v "$PWD:/w" -w /w debian:trixie sh -c \
-          'apt-get update -qq && apt-get install -y -qq --no-install-recommends bats git >/dev/null && bats packaging/tests'
+          'apt-get update -qq && apt-get install -y -qq --no-install-recommends bats git python3 >/dev/null && bats packaging/tests'
 
     - name: Test Moonraker database migration
       run: |
