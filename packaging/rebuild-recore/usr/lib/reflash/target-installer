@@ -421,9 +421,13 @@ configure() {
             *) die "${key} '${S[$key]}' is not on or off" ;;
         esac
         # Only rebuild-printer ships the helper; the barebone image has none.
-        # Nothing is installed there, so off has nothing to remove.
+        # Nothing is installed there, so off has nothing to remove. On is skipped
+        # with a warning, not refused: the manifest is shared by every variant and
+        # lists SOFTWARE, so Reflash applies a stored software choice to whatever
+        # is installed, and failing here blocked every other setting change on a
+        # barebone board (the voron, 2026-10-15).
         if [ ! -x "$SOFTWARE" ]; then
-            [ "${S[$key]}" = off ] || die "this image has no optional software, so $name cannot be installed"
+            [ "${S[$key]}" = off ] || echo "WARNING: this image has no optional software, so $name was not installed" >&2
             continue
         fi
         case ${S[$key]} in
