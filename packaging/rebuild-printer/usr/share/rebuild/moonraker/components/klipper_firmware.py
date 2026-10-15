@@ -170,17 +170,22 @@ class FirmwareUpdater(BaseDeploy):
         return dict(line.split('=', 1) for line in text.splitlines() if '=' in line)
 
     async def require_idle(self):
-        status = (await self.api('/printer/objects/query?print_stats&virtual_sdcard&idle_timeout'))['status']
-        # Klipper restarting, as it does right after a Klipper update, answers
-        # with these objects present but empty. That is "cannot tell", not
-        # "idle", and not a crash: it was a KeyError and a 500 on an a6.
-        try:
-            printing = status['print_stats']['state'] in ('printing', 'paused')
-            active = status['virtual_sdcard']['is_active']
-            moving = status['idle_timeout']['state'] == 'Printing'
-        except (KeyError, TypeError):
+        status = (await self.api('/printer/objects/query?webhooks&print_stats&virtual_sdcard&idle_timeout'))['status']
+        # Two different empties. Klipper restarting, as it does right after a
+        # Klipper update, answers with nothing usable: that is "cannot tell",
+        # and it was a KeyError and a 500 on an a6. An image without a
+        # [virtual_sdcard], the OctoPrint one, answers with print_stats and
+        # virtual_sdcard present but empty for as long as Klipper runs; there is
+        # nothing it could be printing from, and OctoPrint's own jobs are
+        # checked by whatever drives the update.
+        if (status.get('webhooks') or {}).get('state', 'ready') != 'ready':
             raise self.server.error('Firmware update refused: Klipper is not ready, so it cannot tell whether the printer is printing. Try again in a moment.')
-        if printing or active or moving:
+        idle = status.get('idle_timeout') or {}
+        if 'state' not in idle:
+            raise self.server.error('Firmware update refused: Klipper is not ready, so it cannot tell whether the printer is printing. Try again in a moment.')
+        if ((status.get('print_stats') or {}).get('state') in ('printing', 'paused')
+                or (status.get('virtual_sdcard') or {}).get('is_active')
+                or idle['state'] == 'Printing'):
             raise self.server.error('Firmware update refused: printer is printing, paused or moving')
 
     async def run_service(self):
