@@ -106,6 +106,33 @@ class Tests(unittest.IsolatedAsyncioTestCase):
             await u.update()
         u.run_service.assert_not_called()
 
+    async def test_klipper_not_ready_is_refused_with_a_reason_not_a_crash(self):
+        # Right after a Klipper update: webhooks not ready, or objects missing.
+        for status in ({'webhooks': {'state': 'startup'}, 'print_stats': {}, 'virtual_sdcard': {}, 'idle_timeout': {}},
+                       {'webhooks': {'state': 'ready'}, 'print_stats': {}, 'virtual_sdcard': {}, 'idle_timeout': {}},
+                       {}):
+            u = updater()
+            u.api = AsyncMock(return_value={'status': status})
+            u.run_service = AsyncMock()
+            with self.assertRaisesRegex(RuntimeError, 'not ready'):
+                await u.update()
+            u.run_service.assert_not_called()
+
+    async def test_image_without_a_virtual_sdcard_is_not_blocked(self):
+        # The OctoPrint image has none: print_stats and virtual_sdcard stay
+        # empty with Klipper ready (a6, 2026-10-15). That is not "not ready".
+        u = updater()
+        u.api = AsyncMock(return_value={'status': {'webhooks': {'state': 'ready'}, 'print_stats': {}, 'virtual_sdcard': {},
+                                                   'idle_timeout': {'state': 'Idle'}}})
+        await u.require_idle()
+
+    async def test_moving_printer_is_refused_even_without_a_virtual_sdcard(self):
+        u = updater()
+        u.api = AsyncMock(return_value={'status': {'webhooks': {'state': 'ready'}, 'print_stats': {}, 'virtual_sdcard': {},
+                                                   'idle_timeout': {'state': 'Printing'}}})
+        with self.assertRaisesRegex(RuntimeError, 'refused'):
+            await u.require_idle()
+
     async def test_unknown_idle_state_is_refused(self):
         u = updater()
         u.api = AsyncMock(side_effect=RuntimeError('Moonraker unavailable'))
