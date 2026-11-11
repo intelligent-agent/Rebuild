@@ -267,11 +267,14 @@ jobs:
     - name: Run build
       run: ./rebuild.sh kernel-edge
 
+    # The upload action takes no path outside the workspace.
     - name: Keep the packages with the run
-      uses: actions/upload-artifact@v4
+      run: rm -rf kernel-edge-debs && cp -r ../kernel-edge-debs kernel-edge-debs
+
+    - uses: actions/upload-artifact@v4
       with:
         name: kernel-edge-debs
-        path: ../kernel-edge-debs/*.deb
+        path: kernel-edge-debs/*.deb
         if-no-files-found: error
 
     # Only when asked: this is what puts the kernel in front of boards on the
