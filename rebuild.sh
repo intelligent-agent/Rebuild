@@ -9,9 +9,15 @@ case $VERSION in
 barebone | mainsail | fluidd | octoprint)
     echo "🍰 Building $VERSION"
     ;;
+kernel-edge)
+    # Not an image: Armbian's edge kernel and device trees, built with
+    # Rebuild's kernel configuration (simpledrm built in, so the panel works),
+    # for hosting on feeds. The same Armbian tree and userpatches as an image.
+    echo "🍰 Building the edge kernel"
+    ;;
 *)
     echo "Wrong argument '$1'"
-    echo "Usage: $0 <barebone|mainsail|fluidd|octoprint> [cores]"
+    echo "Usage: $0 <barebone|mainsail|fluidd|octoprint|kernel-edge> [cores]"
     echo "  cores  number of CPU cores to give the build container."
     echo "         Defaults to all available ($(nproc))."
     exit 1
@@ -76,7 +82,9 @@ rm -rf "userpatches"
 
 cd "$ROOT_DIR"
 cp -r "userpatches" "${BUILD_DIR}"
-cp armbian/customize-image-"${VERSION}".sh "${BUILD_DIR}"/userpatches/customize-image.sh
+if [ "$VERSION" != kernel-edge ]; then
+    cp armbian/customize-image-"${VERSION}".sh "${BUILD_DIR}"/userpatches/customize-image.sh
+fi
 # NOTE: Armbian's patch/u-boot/u-boot-sunxi/allwinner-boot-splash.patch used to
 # be deleted here (since 1c0c889, Jun 2023, "Patch is not overrwritten"). It is
 # left in place now and adapted to instead - see
@@ -97,8 +105,11 @@ mkdir -p "${BUILD_DIR}"/userpatches/overlay/rebuild/
 echo "${NAME}" >"${BUILD_DIR}"/userpatches/overlay/rebuild/rebuild-version
 echo "${TAG}" >"${BUILD_DIR}"/userpatches/overlay/rebuild/rebuild-tag
 
-# Rebuild's own files, as the packages customize-image.sh installs.
-packaging/build-debs "${BUILD_DIR}"/userpatches/overlay/debs "${TAG}"
+# Rebuild's own files, as the packages customize-image.sh installs. A kernel
+# build has no image to install them in.
+if [ "$VERSION" != kernel-edge ]; then
+    packaging/build-debs "${BUILD_DIR}"/userpatches/overlay/debs "${TAG}"
+fi
 
 cd "$BUILD_DIR"
 
@@ -120,6 +131,30 @@ cd "$BUILD_DIR"
 # The cgroup parent is added by the optional rebuild-cgroup Armbian extension.
 # DOCKER_EXTRA_ARGS arrives from the environment as one scalar array member,
 # so it must contain exactly one Docker argument here.
+if [ "$VERSION" = kernel-edge ]; then
+    # Only the two packages boards install; BRANCH on the command line wins
+    # over config-rebuild.conf's BRANCH=current. Cleaned first so the output
+    # holds nothing but this build's kernel.
+    rm -rf output/debs/linux-image-edge-* output/debs/linux-dtb-edge-* \
+        output/debs/linux-headers-edge-*
+    DOCKER_EXTRA_ARGS="--cpus=${cores}" ./compile.sh kernel rebuild BRANCH=edge
+    OUT_DIR="${ROOT_DIR}/../kernel-edge-debs"
+    rm -rf "$OUT_DIR" && mkdir -p "$OUT_DIR"
+    shopt -s nullglob
+    debs=(output/debs/linux-image-edge-*.deb output/debs/linux-dtb-edge-*.deb)
+    shopt -u nullglob
+    if [ "${#debs[@]}" -ne 2 ]; then
+        echo "Expected a kernel and a device tree package, found ${#debs[@]}: ${debs[*]}" >&2
+        exit 1
+    fi
+    # Named name_version_arch.deb, as rebuild-publish and the other releases
+    # expect (Armbian appends its input hashes to the file name).
+    for f in "${debs[@]}"; do
+        cp -- "$f" "$OUT_DIR/$(dpkg-deb -f "$f" Package)_$(dpkg-deb -f "$f" Version)_$(dpkg-deb -f "$f" Architecture).deb"
+    done
+    echo "🍰 Finished building the edge kernel: $(ls "$OUT_DIR" | tr '\n' ' ')"
+    exit 0
+fi
 DOCKER_EXTRA_ARGS="--cpus=${cores}" ./compile.sh rebuild
 # This build tree is reused. An image left by an earlier failed staging step
 # must not be selected together with (or instead of) the new image.

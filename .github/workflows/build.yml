@@ -43,6 +43,11 @@ on:
           - mainsail
           - octoprint
           - all
+          - kernel-edge
+      publish:
+        description: 'kernel-edge only: publish the packages to trixie-dev'
+        type: boolean
+        default: false
       label:
         description: 'Title for this run (blank = the default)'
         type: string
@@ -245,3 +250,37 @@ jobs:
         artifacts: ../images/rebuild-fluidd-v*.img.xz
         token: ${{ secrets.GITHUB_TOKEN }}
         prerelease: true
+
+  # Armbian's edge kernel and device trees with Rebuild's kernel configuration
+  # (simpledrm built in, so the panel works), as packages for feeds. Only on
+  # request: it is not part of an image or of `all`. Not released with a tag.
+  build-kernel-edge:
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.event.inputs.variant == 'kernel-edge'
+    runs-on: [self-hosted, rebuild]
+    steps:
+    - uses: actions/checkout@v5
+      with:
+        fetch-depth: 0
+
+    - name: Run build
+      run: ./rebuild.sh kernel-edge
+
+    - name: Keep the packages with the run
+      uses: actions/upload-artifact@v4
+      with:
+        name: kernel-edge-debs
+        path: ../kernel-edge-debs/*.deb
+        if-no-files-found: error
+
+    # Only when asked: this is what puts the kernel in front of boards on the
+    # suite. trixie-dev only; a release to trixie is promoted on feeds.
+    - name: Publish to trixie-dev
+      if: github.event.inputs.publish == 'true'
+      run: |
+        if [ ! -x "$HOME/bin/rebuild-publish" ]; then
+          echo "::error::no rebuild-publish on this runner"
+          exit 1
+        fi
+        "$HOME/bin/rebuild-publish" trixie-dev ../kernel-edge-debs

@@ -3,6 +3,12 @@
 # config so Armbian's recore.csc is used as it is.
 
 function post_family_config__rebuild_pin_kernel() {
+    # Only the current branch is pinned. The edge kernel (built for hosting,
+    # not in an image) follows Armbian's own edge version.
+    if [[ "${BRANCH}" != "current" ]]; then
+        display_alert "Kernel not pinned: branch is ${BRANCH}" "rebuild" "info"
+        return 0
+    fi
     display_alert "Pin the kernel to a known-good point release" "rebuild" "info"
     declare -g KERNEL_MAJOR_MINOR="6.18"
     declare -g KERNELPATCHDIR="archive/sunxi-6.18"
