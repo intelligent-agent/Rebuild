@@ -69,7 +69,7 @@ cd $BUILD_DIR
 # U-Boot board patches and BL31 in DRAM (#10853), and the A5/A6 GPU clock,
 # thermal trips and crash log (#10940) - byte for byte, so none of it is
 # copied any more (#117).
-ARMBIAN_REF="813ae7cf3ccd40df1d287733e1838ed0812ceeb8"
+ARMBIAN_REF="2d3dd98fb4a86d4d884cec4fc2f5de28a37a8736"
 git fetch --tags --prune
 git reset --hard
 # `git reset --hard` restores the files Armbian tracks but keeps any it does

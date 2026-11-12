@@ -12,7 +12,7 @@ function post_family_config__rebuild_pin_kernel() {
     display_alert "Pin the kernel to a known-good point release" "rebuild" "info"
     declare -g KERNEL_MAJOR_MINOR="6.18"
     declare -g KERNELPATCHDIR="archive/sunxi-6.18"
-    declare -g KERNELBRANCH="tag:v6.18.54"
+    declare -g KERNELBRANCH="tag:v6.18.60"
 }
 
 function format_partitions__rebuild_boot_ro() {
