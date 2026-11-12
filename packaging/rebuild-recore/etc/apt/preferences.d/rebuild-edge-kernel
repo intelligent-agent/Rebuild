@@ -1,0 +1,12 @@
+# Armbian's edge kernel has no screen on Recore: it is built without simpledrm,
+# which the panel needs (U-Boot's framebuffer is handed over to it). Rebuild
+# builds the same kernel with simpledrm built in and hosts it on feeds. Armbian's
+# own package carries a higher version, so without this apt would offer it as an
+# upgrade and take the screen away.
+#
+# 900 is above the default 500, so the feeds package is the candidate. It is
+# below 1000 on purpose: a board that already has another edge kernel is not
+# downgraded behind its owner's back.
+Package: linux-image-edge-sunxi64 linux-dtb-edge-sunxi64
+Pin: origin feeds.iagent.no
+Pin-Priority: 900
